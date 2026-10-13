@@ -3,7 +3,7 @@
 //   si no hay cobertura (o tarda más de 4 s), se abre la última guardada.
 // - Las librerías y las fuentes se guardan la primera vez y después se usan desde el móvil.
 // - Lo demás (IA, Firebase, GitHub, OneSignal, el tiempo…) va siempre directo a internet.
-const CACHE = 'hergar-f11-v138';
+const CACHE = 'hgapp-v138';
 const APP = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 const LIBS = [
   'https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js',
@@ -26,7 +26,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const ks = await caches.keys();
-    await Promise.all(ks.filter(k => k.startsWith('hergar-f11-') && k !== CACHE).map(k => caches.delete(k)));
+    await Promise.all(ks.filter(k => k.startsWith('hgapp-') && k !== CACHE).map(k => caches.delete(k)));
     await self.clients.claim();
   })());
 });
