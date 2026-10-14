@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    142                                            ║
+  ║  Versión:    143                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1760,7 +1760,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v142</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v143</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -6051,6 +6051,21 @@
     let onFieldIds = [];
     let benchIds = [];
     let matchRunning = false;
+    // ── v143 · al abrir la app, el visor vuelve a apuntar al partido que hay en la app (si se compartía).
+    // Evita que se quede mostrando otro partido publicado desde otro móvil o desde la app vacía (p. ej. tras la mudanza).
+    (function () {
+        let intentos = 0;
+        const t = setInterval(() => {
+            intentos++;
+            if (window.__hergarFirebaseSet) {
+                clearInterval(t);
+                try {
+                    if (!compartirEnVivo) { const cod = localStorage.getItem('hergar_F11_matchShareCode'); if (cod && (partidoEmpezado || matchFinished)) { matchShareCode = cod; compartirEnVivo = true; } }
+                    if (compartirEnVivo && matchShareCode) publicarPartidoFirebase();
+                } catch (e) { console.warn('Visor:', e); }
+            } else if (intentos > 40) clearInterval(t);
+        }, 500);
+    })();
     // ── v138 · PWA: funcionar sin cobertura, guardar los datos para siempre y pantalla encendida en el partido ──
     (function () {
         const enWeb = /^https?:$/.test(location.protocol);
