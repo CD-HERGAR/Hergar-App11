@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    139                                            ║
+  ║  Versión:    140                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1760,7 +1760,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v139</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v140</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -1823,6 +1823,7 @@
                     <option value="echa">🫂 Se le echa de menos</option>
                     <option value="wpa">🏆 Victorias añadidas</option>
                     <option value="tirosCampo">🎯 Tiros con él en el campo</option>
+                    <option value="companeros">🧲 Efecto en los demás</option>
                     <option value="goles">⚽ Goles</option>
                     <option value="asistencias">👟 Asistencias</option>
                     <option value="minutos">⏱ Minutos</option>
@@ -1871,6 +1872,10 @@
             <div class="glass" style="border-radius:14px; padding:14px; margin-top:12px;">
                 <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; color:#f5a623; margin-bottom:10px;">🧱 EL MURO</div>
                 <div id="muroContainer"></div>
+            </div>
+            <div class="glass" style="border-radius:14px; padding:14px; margin-top:12px;">
+                <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; color:#f5a623; margin-bottom:10px;">🧲 HACE MEJORES A LOS DEMÁS</div>
+                <div id="companerosContainer"></div>
             </div>
         </div>
 
@@ -3905,6 +3910,102 @@
 
 
 
+    // ── v140 · HACE MEJORES A LOS DEMÁS (misma función en la app y en el visor) ──
+    // Impacto medio de los compañeros por 70' con el niño en el campo frente a sin él. Sale de las sinergias de la
+    // temporada: por cada pareja se guarda el impacto que suman los dos mientras coinciden (impN) y el tiempo (segsN).
+    // A ese impacto se le quita la parte del propio niño (su impacto medio por minuto × el tiempo juntos) y queda lo de
+    // los compañeros. "Sin él" = todo lo que hacen los compañeros en la temporada menos lo que hicieron con él.
+    const COMP_MIN_JUGADOS = 70, COMP_MIN_SIN = 35;
+    function compImp(h) { const m = h.mins || 0; return h.imp !== undefined ? (Number(h.imp) || 0) : (Number(h.impPond) || 0) * m / 70; }
+    function compFmt(v) { return v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ','); }
+    function compDec(v) { return v == null ? '—' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace('.', ','); }
+    function compEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    function companerosTemporada(t) {
+        const js = Object.values((t && t.jugadores) || {});
+        const ps = (t && t.partidos) || [];
+        const sin = (t && t.sinergias) || {};
+        const tot = {};
+        js.forEach(j => { let m = 0, imp = 0; (j.historial || []).forEach(h => { m += h.mins || 0; imp += compImp(h); }); tot[j.id] = { m, imp }; });
+        // minutos que ha jugado el equipo (duración de cada partido)
+        let minEq = 0;
+        ps.forEach(p => {
+            let d = 0; const mt = /^(\d+):/.exec(String(p.duracion || '')); if (mt) d = parseInt(mt[1], 10);
+            js.forEach(j => { const h = (j.historial || []).find(x => x.fecha === p.fecha && x.rival === p.rival); if (h && (h.mins || 0) > d) d = h.mins; });
+            minEq += d || 70;
+        });
+        const par = (a, b) => sin[`${a}_${b}`] || sin[`${b}_${a}`] || null;
+        let cTodos = 0, mTodos = 0;
+        js.forEach(y => { cTodos += tot[y.id].imp; mTodos += tot[y.id].m; });
+        const res = {};
+        js.forEach(x => {
+            const tx = tot[x.id];
+            const rX = tx.m > 0 ? tx.imp / tx.m : 0;
+            let cCon = 0, mCon = 0;
+            js.forEach(y => {
+                if (y.id === x.id) return;
+                const P = par(x.id, y.id);
+                if (!P || !(Number(P.segsN) > 0)) return;
+                const tm = Number(P.segsN) / 60;
+                cCon += (Number(P.impN) || 0) - rX * tm; mCon += tm;
+            });
+            const cSin = (cTodos - tx.imp) - cCon, mSin = (mTodos - tx.m) - mCon;
+            const off = Math.max(0, minEq - tx.m);
+            const con = mCon > 0 ? cCon / mCon * 70 : null, sinV = mSin > 0 ? cSin / mSin * 70 : null;
+            const ok = tx.m >= COMP_MIN_JUGADOS && off >= COMP_MIN_SIN && con != null && sinV != null && mSin >= COMP_MIN_SIN;
+            res[x.id] = { j: x, mins: tx.m, off, con, sin: sinV, efecto: ok ? con - sinV : null, motivo: tx.m < COMP_MIN_JUGADOS ? 'pocos' : (!ok ? 'siempre' : '') };
+        });
+        return res;
+    }
+    // El que más hace mejorar a los demás ahora mismo (solo si su efecto es positivo)
+    function mejorCompaneroId(t) {
+        try {
+            const r = Object.values(companerosTemporada(t)).filter(x => x.efecto != null && x.efecto > 0).sort((a, b) => b.efecto - a.efecto)[0];
+            return r ? String(r.j.id) : null;
+        } catch (e) { return null; }
+    }
+    function companerosHTML(t, acento, soloPositivos) {
+        acento = acento || '#2ed573';
+        const R = Object.values(companerosTemporada(t));
+        const con = R.filter(x => x.efecto != null).sort((a, b) => b.efecto - a.efecto);
+        const lista = soloPositivos ? con.filter(x => x.efecto > 0) : con;
+        if (!lista.length) return `<div style="font-size:12px; color:#94a3b8; line-height:1.5;">${soloPositivos ? 'Aún no hay datos suficientes.' : `Aún no hay datos suficientes (hace falta ${COMP_MIN_JUGADOS}' jugados y ${COMP_MIN_SIN}' del equipo sin él).`}</div>`;
+        const maxAbs = Math.max(0.01, ...lista.map(x => Math.abs(x.efecto)));
+        const filas = lista.map((x, i) => {
+            const v = x.efecto, col = soloPositivos ? acento : (v >= 0 ? '#2ed573' : '#ff6b7a');
+            const w = Math.round(Math.abs(v) / maxAbs * (soloPositivos ? 100 : 50));
+            const barra = soloPositivos ? `left:0; width:${w}%;` : (v >= 0 ? `left:50%; width:${w}%;` : `right:50%; width:${w}%;`);
+            const nom = compEsc(((x.j.name || '').split(' ')[0]) || '¿?');
+            return `<div style="display:grid; grid-template-columns:22px 1fr 60px; gap:8px; align-items:center; padding:7px 0; border-top:${i ? '1px solid rgba(255,255,255,.06)' : '0'};">
+                <div style="font-size:11px; color:#94a3b8; font-weight:700; text-align:center;">${i + 1}</div>
+                <div style="min-width:0;"><div style="font-size:13px; font-weight:700; color:#e2e8f0;">${nom}</div>
+                    <div style="font-size:10.5px; color:#94a3b8; margin-top:1px;">Con él ${compDec(x.con)} · sin él ${compDec(x.sin)}</div>
+                    <div style="position:relative; height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:5px; overflow:hidden;"><div style="position:absolute; top:0; bottom:0; ${barra} background:${col}; border-radius:3px;"></div></div></div>
+                <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; text-align:right; color:${col};">${compFmt(v)}</div></div>`;
+        }).join('');
+        const siempre = soloPositivos ? [] : R.filter(x => x.efecto == null && x.motivo === 'siempre').map(x => compEsc((x.j.name || '').split(' ')[0]));
+        return `<div style="font-size:11px; line-height:1.45; color:#94a3b8; margin-bottom:6px;">Impacto medio de los compañeros por 70' <b style="color:#e2e8f0;">con él</b> en el campo y <b style="color:#e2e8f0;">sin él</b>. La diferencia es lo que mejora (o empeora) a los demás.</div>`
+            + filas
+            + (siempre.length ? `<div style="font-size:10.5px; color:#64748b; margin-top:8px; line-height:1.4;">Sin comparación (casi siempre en el campo): ${siempre.join(', ')}.</div>` : '')
+            + `<div style="font-size:10.5px; color:#94a3b8; margin-top:8px; line-height:1.45;">${soloPositivos ? 'Solo salen los que suman. ' : ''}Mínimo ${COMP_MIN_JUGADOS}' jugados y ${COMP_MIN_SIN}' del equipo sin él. Cuenta todo el impacto de los compañeros: sus acciones, sus goles y asistencias y lo que les toca por los goles y tiros con ellos en el campo.</div>`;
+    }
+    // Línea de la ficha del niño
+    function companeroJugadorHTML(t, j, soloPositivos, acento) {
+        if (!t || !j) return '';
+        const r = companerosTemporada(t)[j.id];
+        if (!r || r.efecto == null || (soloPositivos && r.efecto <= 0)) return '';
+        const col = soloPositivos ? (acento || '#f5a623') : (r.efecto >= 0 ? '#2ed573' : '#ff6b7a');
+        const lider = mejorCompaneroId(t) === String(j.id);
+        return `<div style="margin-top:10px; background:rgba(255,255,255,.04); border-radius:10px; padding:10px 12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;"><span style="font-size:12.5px; color:#e2e8f0;">🧲 Con él, sus compañeros</span><b style="font-family:'Montserrat',sans-serif; color:${col};">${compFmt(r.efecto)} por 70'</b></div>
+            <div style="font-size:10.5px; color:#94a3b8; margin-top:3px;">Impacto medio de los compañeros: ${compDec(r.con)} con él · ${compDec(r.sin)} sin él${lider ? ' · <b style="color:#f5a623;">el mejor compañero del momento</b>' : ''}</div></div>`;
+    }
+    function companerosExplicacionHTML() {
+        return `<div style="font-size:12.5px; line-height:1.55; color:#e2e8f0; padding-top:6px;">
+            <p style="margin:0 0 8px;"><strong>Hace mejores a los demás:</strong> impacto medio de los compañeros por cada 70 minutos mientras el niño está en el campo, menos el de cuando no está. Si sale positivo, con él los demás rinden más.</p>
+            <p style="margin:0 0 8px;">Sale de las parejas de las sinergias: lo que suman dos niños mientras coinciden, quitando la parte del propio niño (su impacto medio por minuto). Cuenta todo el impacto de los compañeros: acciones, goles, asistencias y lo que les toca por los goles y tiros con ellos en el campo.</p>
+            <p style="margin:0;">Hacen falta ${COMP_MIN_JUGADOS}' jugados y ${COMP_MIN_SIN}' del equipo sin él; quien casi siempre juega no se puede comparar. 🧲 en la plantilla marca al mejor compañero del momento. En el visor solo salen los efectos positivos.</p></div>`;
+    }
+
     // ── v139 · LO QUE EL ACTA NECESITA DEL PARTIDO EN CURSO (se guarda con el partido en la temporada) ──
     function capturarDescansoActa() {
         try {
@@ -4590,6 +4691,7 @@
             + csTarjeta('MOMENTOS, MOMENTO CLAVE Y EL MURO', momentosExplicacionHTML()) // v134
             + csTarjeta('MÉTRICAS DE LOS PROFESIONALES', proExplicacionHTML()) // v135
             + csTarjeta('EFECTO DEL BANQUILLO', banquilloExplicacionHTML()) // v137
+            + csTarjeta('HACE MEJORES A LOS DEMÁS', companerosExplicacionHTML()) // v140
             + csTarjeta('CÓMO SE ORDENA EL RANKING',
                 `<div style="font-size:12.5px; line-height:1.55; color:#e2e8f0; padding-top:6px;">
                     <p style="margin:0 0 8px;"><strong>Impacto por 70 min</strong> = impacto acumulado ÷ minutos jugados × 70.</p>
@@ -6972,6 +7074,7 @@
             + (origen === 'temporada' ? (() => { try { return proJugadorHTML(getTemporada(), getLiga(), (getTemporada().jugadores || {})[id], REGLAS_IMPACTO.minMinutosRanking, '#2ed573'); } catch (e) { console.error('Victorias añadidas:', e); return ''; } })() : '') // v135
             + (origen === 'temporada' ? (() => { try { return claveEchaHTML(getTemporada(), (getTemporada().jugadores || {})[id], '#2ed573'); } catch (e) { console.error('Momento clave:', e); return ''; } })() : '') // v134
             + (origen === 'temporada' ? (() => { try { return puntosMasMenosHTML(getTemporada(), (getTemporada().jugadores || {})[id], REGLAS_IMPACTO.minMinutosRanking, '#2ed573'); } catch (e) { console.error('Puntos/más-menos:', e); return ''; } })() : '') // v133
+            + (origen === 'temporada' ? (() => { try { return companeroJugadorHTML(getTemporada(), (getTemporada().jugadores || {})[id], false); } catch (e) { console.error('Compañeros:', e); return ''; } })() : '') // v140
             + (origen === 'temporada' ? (() => { try { return pesoJugadorHTML(getTemporada(), (getTemporada().jugadores || {})[id], REGLAS_IMPACTO.minMinutosRanking, '#2ed573'); } catch (e) { console.error('Peso:', e); return ''; } })() : '') // v132
             + (origen === 'temporada' ? sociosJugadorHTML(getTemporada(), ((getTemporada().jugadores || {})[id] || playersData[id] || {}).name) : '') // v87
             + (origen === 'temporada' ? lineasJugadorHTML((getTemporada().jugadores || {})[id]) : ''); // v94
@@ -10972,6 +11075,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (tabId==='tabTempRanking') renderRanking('impacto',document.querySelector('.sort-btn.active'));
         if (tabId==='tabTempPartidos') renderPartidos();
         if (tabId==='tabTempPlantilla') renderPlantillaTabla('dorsal');
+        if (tabId==='tabTempSinergias') { try { document.getElementById('companerosContainer').innerHTML = companerosHTML(getTemporada(), '#2ed573', false); } catch (e) { console.error('Compañeros:', e); } } // v140
         if (tabId==='tabTempSinergias') { renderSinergias(); try { document.getElementById('sociedadesContainer').innerHTML = sociedadesHTML(getTemporada()); } catch (e) { console.error(e); } try { document.getElementById('muroContainer').innerHTML = muroHTML(getTemporada(), '#2ed573'); } catch (e) { console.error('Muro:', e); } } // v134
         if (tabId==='tabTempMinutos') { try { document.getElementById('minutosGolesContainer').innerHTML = tramosGolHTML(getTemporada(), 'atr'); } catch (e) { console.error(e); } try { document.getElementById('momentosEquipoContainer').innerHTML = momentosEquipoHTML(getTemporada(), '#2ed573'); } catch (e) { console.error('Momentos:', e); } try { document.getElementById('marcadorEquipoContainer').innerHTML = marcadorEquipoHTML(getTemporada(), '#2ed573'); document.getElementById('tirosEquipoContainer').innerHTML = tirosEquipoHTML(getTemporada(), '#2ed573'); } catch (e) { console.error('Marcador/tiros:', e); } } // v134 + v135
         if (tabId==='tabTempBanquillo') { try { document.getElementById('banquilloContainer').innerHTML = banquilloHTML(getTemporada(), '#2ed573', 'bqa'); } catch (e) { console.error('Banquillo:', e); } } // v137
@@ -11007,6 +11111,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const claveT = esClave ? momentoClaveTemporada(t) : null, echaT = esEcha ? echaDeMenosTemporada(t) : null;
         const valClave = j => (claveT && claveT[j.id]) || null, valEcha = j => (echaT && echaT[j.id]) || null;
         // v135: Victorias añadidas (todos los que han marcado o asistido) y Cuota de tiros con él en el campo (mínimo de minutos)
+        const esComp = criterio === 'companeros'; // v140
+        const compT = esComp ? companerosTemporada(t) : null;
+        const valComp = j => (compT && compT[j.id]) || null;
         const esWpa = criterio === 'wpa', esTC = criterio === 'tirosCampo';
         const wpaT = esWpa ? wpaTemporada(t, getLiga()) : null, tcT = esTC ? tirosCampoTemporada(t) : null;
         const valWpa = j => (wpaT && wpaT.jugadores[j.id]) || null, valTC = j => (tcT && tcT.jugadores[j.id]) || null;
@@ -11025,6 +11132,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (esWpa) principales = principales.filter(j => valWpa(j) && valWpa(j).lista.length > 0);
         if (esTC) principales = principales.filter(j => valTC(j) && valTC(j).cuota !== null && valTC(j).mins >= REGLAS_IMPACTO.minMinutosRanking);
         const sinEcha = esEcha ? principales.filter(j => !valEcha(j) || valEcha(j).dif === null) : [];
+        const sinComp = esComp ? principales.filter(j => !valComp(j) || valComp(j).efecto === null) : []; // v140
+        if (esComp) principales = principales.filter(j => valComp(j) && valComp(j).efecto !== null);
         if (esEcha) principales = principales.filter(j => valEcha(j) && valEcha(j).dif !== null);
         const sorted = principales.sort((a,b)=>{
             if (esPesoCuota) return (valPeso(b) ?? -99) - (valPeso(a) ?? -99);
@@ -11033,6 +11142,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             if (esTC) return valTC(b).cuota - valTC(a).cuota;
             if (esClave) { const A = valClave(a), B = valClave(b); return (B.goles + B.asist) - (A.goles + A.asist) || B.goles - A.goles; }
             if (esEcha) return valEcha(b).dif - valEcha(a).dif;
+            if (esComp) return valComp(b).efecto - valComp(a).efecto;
             if (esPuntos) { const A = valPts(a), B = valPts(b); return B.puntos - A.puntos || B.decisivos - A.decisivos || B.ptsAsist - A.ptsAsist || B.goles - A.goles; }
             if (esImpacto) return impactoPor70(b) - impactoPor70(a);
             if (criterio==='notaIA') { const nA=(a.notaIApartidos||0)>0?(a.notaIAacum||0)/(a.notaIApartidos||1):0; const nB=(b.notaIApartidos||0)>0?(b.notaIAacum||0)/(b.notaIApartidos||1):0; return nB-nA; }
@@ -11051,7 +11161,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const vM = esMM ? valMM(j) : null, vPt = esPuntos ? valPts(j) : null;
             const vC = esClave ? valClave(j) : null, vE = esEcha ? valEcha(j) : null;
             const vW = esWpa ? valWpa(j) : null, vT = esTC ? valTC(j) : null;
-            const statVal = esWpa ? `<span style="color:${vW.v >= 0 ? '#2ed573' : '#ff6b7a'};">${proFmt(vW.v, 2)}</span>`
+            const vCo = esComp ? valComp(j) : null;
+            const statVal = esComp ? `<span style="color:${vCo.efecto >= 0 ? '#2ed573' : '#ff6b7a'};">${compFmt(vCo.efecto)}</span>`
+                : esWpa ? `<span style="color:${vW.v >= 0 ? '#2ed573' : '#ff6b7a'};">${proFmt(vW.v, 2)}</span>`
                 : esTC ? `<span style="color:${tcT.media == null || vT.cuota >= tcT.media ? '#2ed573' : '#ff6b7a'};">${proPct(vT.cuota)}</span>`
                 : esClave ? `<span style="color:#f5a623;">${vC.goles + vC.asist}</span>`
                 : esEcha ? `<span style="color:${vE.dif >= 0 ? '#2ed573' : '#ff6b7a'};">${(vE.dif >= 0 ? '+' : '−') + Math.abs(vE.dif).toFixed(1).replace('.', ',')}</span>`
@@ -11063,7 +11175,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 : criterio==='notaIA' ? (notaMedia || '-')
                 : criterio==='minutos' ? (j.minutos+"'")
                 : (j[criterio]??'0');
-            const statLabel = esWpa ? `victorias · ${vW.goles}G ${vW.asist}A`
+            const statLabel = esComp ? `con ${compDec(vCo.con)} · sin ${compDec(vCo.sin)}`
+                : esWpa ? `victorias · ${vW.goles}G ${vW.asist}A`
                 : esTC ? `${vT.f} de ${vT.f + vT.c} tiros · ${vT.mins}'`
                 : esClave ? `${vC.goles}G · ${vC.asist}A clave`
                 : esEcha ? `pts/p ${momFmt1(vE.ppCon)} con · ${momFmt1(vE.ppSin)} sin`
@@ -11091,7 +11204,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (esImpacto && sorted.length === 0) {
             html = `<p style="color:#52665c; font-size:12px; padding:10px;">Aún nadie llega a ${minRanking} minutos acumulados.</p>`;
         }
-        if (esWpa) {
+        if (esComp) {
+            html = `<div style="font-size:11px; line-height:1.45; color:#94a3b8; margin:0 0 8px;">Impacto medio de los compañeros por 70' con él en el campo menos sin él. Mínimo ${COMP_MIN_JUGADOS}' jugados y ${COMP_MIN_SIN}' del equipo sin él.${sinComp.length ? ` Sin comparación (casi siempre en el campo o pocos minutos): ${sinComp.length}.` : ''}</div>` + (html || '<p style="color:#52665c; font-size:12px; padding:10px;">Aún no hay datos suficientes.</p>');
+        } else if (esWpa) {
             html = `<div style="font-size:11px; line-height:1.45; color:#94a3b8; margin:0 0 8px;">Cuánto subieron sus goles y asistencias la probabilidad de ganar. +1,00 es una victoria entera; la asistencia se lleva la mitad.${wpaT.sinOrden ? ` ${wpaT.sinOrden} ${wpaT.sinOrden === 1 ? 'partido sin' : 'partidos sin'} el minuto de los goles no cuenta${wpaT.sinOrden === 1 ? '' : 'n'}.` : ''}${wpaT.conLiga ? '' : ' Sin datos de la Liga: se usa un nivel medio para los rivales.'}</div>` + (html || '<p style="color:#52665c; font-size:12px; padding:10px;">Aún no hay goles con minuto.</p>');
         } else if (esTC) {
             html = `<div style="font-size:11px; line-height:1.45; color:#94a3b8; margin:0 0 8px;">De los tiros de los dos equipos mientras juega, cuántos son del Hergar. Media del equipo: ${proPct(tcT.media)}. Se cuenta desde la v135 (${tcT.partidos} ${tcT.partidos === 1 ? 'partido' : 'partidos'}); mínimo ${REGLAS_IMPACTO.minMinutosRanking} minutos.</div>` + (html || '<p style="color:#52665c; font-size:12px; padding:10px;">Empezará a salir tras el próximo partido.</p>');
@@ -11137,6 +11252,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             minutos: (a,b) => (b.j.minutos||0) - (a.j.minutos||0),
         };
         filas.sort(orden[criterio] || orden.dorsal);
+        const mejorCompApp = mejorCompaneroId(t); // v140
         if (filas.length === 0) {
             document.getElementById('plantillaTablaContainer').innerHTML = '<p style="color:#52665c; font-size:12px; padding:10px;">Aún no hay jugadores en la plantilla.</p>';
             return;
@@ -11147,7 +11263,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const impStr = (j.minutos||0) > 0 ? impacto.toFixed(1) : '—';
             return `<tr onclick="abrirCromoModal('temporada', ${p.id})" style="cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05);">
                 <td style="padding:9px 8px; color:#8da499; font-weight:700;">${p.dorsal}</td>
-                <td style="padding:9px 8px; color:#e7efe9; font-weight:700; white-space:nowrap;">${p.name}${p.invitado ? `<span class="tag-sube">⬆ ${escSube((p.equipoOrigen || '').toUpperCase())}</span>` : ''}</td>
+                <td style="padding:9px 8px; color:#e7efe9; font-weight:700; white-space:nowrap;">${p.name}${mejorCompApp === String(p.id) ? ' <span title="Mejor compañero del momento: con él, los demás rinden más" style="font-size:12px;">🧲</span>' : ''}${p.invitado ? `<span class="tag-sube">⬆ ${escSube((p.equipoOrigen || '').toUpperCase())}</span>` : ''}</td>
                 <td style="padding:9px 8px; text-align:center;">${j.partidos||0}</td>
                 <td style="padding:9px 8px; text-align:center;">${j.minutos||0}'</td>
                 <td style="padding:9px 8px; text-align:center;">${j.goles||0}</td>
@@ -11173,7 +11289,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                     </thead>
                     <tbody>${filaHtml}</tbody>
                 </table>
-            </div>`;
+            </div>${mejorCompApp ? `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">🧲 Mejor compañero del momento: con él en el campo, los demás rinden más (Sinergias → Hace mejores a los demás).</div>` : ''}`;
     }
 
     // ── v71 · INFORME IA GUARDADO EN CADA PARTIDO DE LA TEMPORADA ─────────────────
