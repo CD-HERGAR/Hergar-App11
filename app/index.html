@@ -10026,6 +10026,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 <div style="font-size:11px; color:#64748b; word-break:break-all; margin-top:4px;">${ltEsc(url)}</div>
             </div>
             <a href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" style="display:block; margin-top:12px; text-align:center; background:#25d366; color:#fff; text-decoration:none; padding:13px; border-radius:12px; font-weight:800; font-size:14px;">📲 Mandar por WhatsApp</a>
+            <a href="https://wa.me/?text=${encodeURIComponent(`🧪 PRUEBA (no sale en el visor) · HERGAR vs ${rival}:\n${url}&prueba=1\n\nCódigo: ${cfg.pin}`)}" target="_blank" style="display:block; margin-top:8px; text-align:center; background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.45); color:#f5c26b; text-decoration:none; padding:11px; border-radius:12px; font-weight:800; font-size:13px;">🧪 Mandar enlace de PRUEBA (no sale en el visor)</a>
             <div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Si cambias la convocatoria o el once antes del partido, vuelve a pulsar «Pasar al delegado»: se actualiza con el mismo enlace y código. Después del partido, pulsa «📥 Partido del delegado» en la pantalla de partido.</div>
             <button onclick="dlgCerrar()" style="margin-top:12px; width:100%; min-height:46px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#e2e8f0; font-weight:700;">Cerrar</button>`);
     }
@@ -10145,7 +10146,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         catch (e) { console.error('Delegado:', e); try { ltRestaurar(backup); } catch (e2) { console.error(e2); } }
         finally { reproduciendoPrevio = false; }
         if (!ok) { alert('Algo ha fallado al cargar el partido del delegado. No se ha cambiado nada.'); return; }
-        localStorage.setItem(DLG_PEND_KEY, JSON.stringify({ code, fecha: st.fecha || null }));
+        localStorage.setItem(DLG_PEND_KEY, JSON.stringify({ code, fecha: st.fecha || null, prueba: !!st.prueba }));
         try { ocultarProximoPartido(true); } catch (e) {}
         document.getElementById('scoreLocal').innerText = goalsLocal;
         document.getElementById('scoreRival').innerText = goalsRival;
@@ -10155,6 +10156,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         try { actualizarUIPrevia(); } catch (e) {}
         renderPlayers();
         try { actualizarLiveStats(); } catch (e) {}
+        if (st.prueba) { alert(`🧪 Partido de PRUEBA del delegado cargado: HERGAR ${goalsLocal} - ${goalsRival}.\n\nMíralo todo lo que quieras (también el 🤖 análisis IA). No se puede guardar en la temporada ni sale en el visor. Cuando acabes, pulsa «Nuevo partido».`); return; }
         alert(`✅ Partido del delegado cargado: HERGAR ${goalsLocal} - ${goalsRival}.\n\nRevísalo (puedes corregir como siempre), pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL. Al finalizar, el visor se pone al día con tus datos.`);
     }
     window.cargarPartidoDelegado = cargarPartidoDelegado;
@@ -10162,7 +10164,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     // Al pulsar FINAL en un partido cargado del delegado: se publica en el mismo código, así el visor sigue en ese partido
     function dlgAdoptarCodigo() {
         const p = dlgPendiente();
-        if (!p || !p.code || p.adoptado) return;
+        if (!p || !p.code || p.adoptado || p.prueba) return;
         matchShareCode = p.code;
         localStorage.setItem('hergar_F11_matchShareCode', p.code);
         compartirEnVivo = true;
@@ -11945,6 +11947,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     }
 
     function transferirPartidoATemporada() {
+        { const dp = dlgPendiente(); if (dp && dp.prueba) { alert('🧪 Este es un partido de PRUEBA del delegado: no se guarda en la temporada. Pulsa «Nuevo partido» para dejarlo.'); return; } } // v157
         if (partidoYaTransferido) {
             alert("⚠️ Este partido ya fue añadido a la temporada.");
             return;
