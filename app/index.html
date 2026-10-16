@@ -1555,6 +1555,7 @@
                 <div id="previaRow" class="controls-row" style="flex-wrap:wrap; display:none;">
                     <button id="publicarAlineacionBtn" style="flex:1; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 8px;">📣 PUBLICAR ALINEACIÓN</button>
                     <button id="llegueTardeBtn" onclick="ltAbrir()" style="flex:1 1 100%; background:linear-gradient(135deg,#e67e22,#d35400); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 10px;">⏩ LLEGUÉ TARDE</button>
+                    <button id="delegadoCargarBtn" onclick="cargarPartidoDelegado()" style="flex:1 1 100%; background:linear-gradient(135deg,#1f7a4b,#14532d); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 10px;">📥 PARTIDO DEL DELEGADO</button>
                     <button id="avisarAlineacionBtn" style="flex:0 0 auto; display:none; background:rgba(30,41,59,0.6); color:#cbd5e1; border-radius:12px; font-weight:700; font-size:11px; border:1px solid rgba(255,255,255,0.12); padding:10px 10px;">🔔 AVISAR</button>
                 </div>
                 <div class="controls-row" style="flex-wrap:nowrap;">
@@ -1600,6 +1601,7 @@
             <div style="margin:6px 0 14px;">
                 <button id="publicarConvocatoriaBtn" onclick="publicarConvocatoria()" style="width:100%; padding:11px; background:linear-gradient(135deg,#2ed573,#27ae60); color:#04140a; border:none; border-radius:10px; font-weight:800; font-size:13px; cursor:pointer;">📋 Publicar convocatoria</button>
                 <div id="convocatoriaPubStatus" style="font-size:11px; color:#8da499; margin-top:6px; min-height:14px;"></div>
+                <button id="pasarDelegadoBtn" onclick="pasarAlDelegado()" style="width:100%; margin-top:8px; padding:11px; background:rgba(46,213,115,0.10); color:#2ed573; border:1px solid rgba(46,213,115,0.45); border-radius:10px; font-weight:800; font-size:13px; cursor:pointer;">📲 Pasar al delegado (si no vas a estar)</button>
                 <button id="sincronizarPlantillaBtn" onclick="sincronizarPlantillaVisor()" style="width:100%; margin-top:8px; padding:10px; background:rgba(255,255,255,0.06); color:#e7efe9; border:1px solid rgba(255,255,255,0.1); border-radius:10px; font-weight:700; font-size:12px; cursor:pointer;">🔄 Sincronizar plantilla con el visor</button>
                 <div id="sincronizarPlantillaStatus" style="font-size:11px; color:#8da499; margin-top:6px; min-height:14px;"></div>
             </div>
@@ -1760,7 +1762,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v156</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v157</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -8903,6 +8905,7 @@
         pauseTimer();
         matchFinished = true;
         if (!finalizadoEn) finalizadoEn = Date.now(); // v107
+        try { dlgAdoptarCodigo(); } catch (e) {} // v157: partido del delegado → se publica en su mismo código
         aplicarBonusPorteriaCero(); // v67: bonus de portería a cero (antes del MVP y de guardar)
         document.getElementById("startPauseBtn").disabled = true;
         document.getElementById("halfTimeBtn").disabled = true;
@@ -9951,6 +9954,223 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         ltActualizarBtnAnular();
     }
     setTimeout(() => { ltActualizarBtnAnular(); setInterval(ltActualizarBtnAnular, 1000); }, 3000);
+
+    // ── v157 · PARTIDO DEL DELEGADO ─────────────────────────────────────────
+    // Otro padre apunta el partido con la página delegado.html del visor. «📲 Pasar al delegado» publica en
+    // matches/CÓDIGO los convocados, el once y el sistema con un código de 4 cifras; el delegado sube ahí mismo lo
+    // que apunta (el visor lo ve en directo). «📥 Partido del delegado» lo descarga y la app vuelve a "jugar" el
+    // partido segundo a segundo con las mismas funciones que en directo (como «Llegué tarde»). Queda en la pantalla
+    // de partido, parado al final: se revisa, se pide el análisis IA y se pulsa FINAL como siempre.
+    const DLG_KEY = 'hergar_F11_delegado';           // { code, pin } del último partido pasado al delegado
+    const DLG_PEND_KEY = 'hergar_F11_delegadoPend';   // { code, fecha } partido cargado del delegado pendiente de FINAL/guardar
+    const DLG_URL = 'https://javigarblanc-blip.github.io/Hergar-Live/delegado.html';
+    function dlgLeer(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+    function dlgPendiente() { return dlgLeer(DLG_PEND_KEY); }
+    function dlgModal(html) {
+        let m = document.getElementById('dlgModal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'dlgModal';
+            m.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,.75); display:flex; align-items:flex-end; justify-content:center; overscroll-behavior-y:contain;';
+            m.onclick = (e) => { if (e.target === m) dlgCerrar(); };
+            document.body.appendChild(m);
+        }
+        m.innerHTML = `<div style="background:#111827; width:100%; max-width:520px; max-height:90dvh; overflow:auto; border-radius:18px 18px 0 0; border:1px solid rgba(255,255,255,.1); padding:18px 16px 26px; color:#e2e8f0; font-size:13px; line-height:1.5;">${html}</div>`;
+        m.style.display = 'flex';
+    }
+    function dlgCerrar() { const m = document.getElementById('dlgModal'); if (m) m.style.display = 'none'; }
+    window.dlgCerrar = dlgCerrar;
+
+    async function pasarAlDelegado() {
+        if (partidoEmpezado || matchFinished) { alert('Esto se hace en la previa, antes de empezar el partido. Si ya terminó, pulsa antes «Nuevo partido».'); return; }
+        const conv = Object.values(playersData).filter(p => p && p.convocado);
+        if (conv.length < 11) { alert('Convoca primero al menos 11 jugadores.'); return; }
+        if (!window.__hergarFirebaseSet || !window.__hergarFirebaseGet) { alert('La conexión con la nube aún no está lista. Espera unos segundos y vuelve a pulsar.'); return; }
+        try { prepararPizarraPrevia(); saveState(); } catch (e) {}
+        const rival = (document.getElementById('rivalNameInput')?.value || 'RIVAL').trim() || 'RIVAL';
+        let cfg = dlgLeer(DLG_KEY);
+        if (cfg && cfg.code) {
+            const r = await window.__hergarFirebaseGet('matches/' + cfg.code);
+            const st = r && r.ok && r.val && r.val.delegado && r.val.delegado.st;
+            if (st && st.fase && st.fase !== 'alineacion') {
+                if (!confirm(`El delegado ya ha empezado a apuntar el partido del código ${cfg.code} (${r.val.delegado.rival || ''}).\n\n¿Preparar un partido NUEVO con otro enlace y otro código?`)) return;
+                cfg = null;
+            } else if (cfg.rival && cfg.rival !== rival) cfg = null; // otro partido: enlace nuevo
+        }
+        if (!cfg) cfg = { code: generarCodigoPartido(), pin: String(1000 + Math.floor(Math.random() * 9000)) };
+        cfg.rival = rival;
+        const form = document.getElementById('formationSelector')?.value || '4-2-3-1';
+        const once = onFieldIds.length === 11 && onFieldIds.every(id => playersData[id] && playersData[id].convocado) ? onFieldIds.slice() : null;
+        let hora = '', fecha = '', campo = '';
+        try { const c = contextoLigaIA(rival); if (c) { hora = c.hora || ''; fecha = (c.lp && c.lp.fechaPartido) || ''; campo = (c.campo && c.campo.nombre) || ''; } } catch (e) {}
+        const convocados = conv.sort((a, b) => (a.dorsal || 99) - (b.dorsal || 99)).map(p => ({ id: p.id, name: p.name, dorsal: p.dorsal == null ? '' : p.dorsal }));
+        const jug = {};
+        convocados.forEach(p => { jug[p.id] = { name: p.name, dorsal: p.dorsal, enCampo: !!(once && once.includes(p.id)), enBanquillo: !(once && once.includes(p.id)), esPortero: !!(once && once[0] === p.id), minutos: 0, goles: 0, asistencias: 0, impacto: 0, impactoPond: 0 }; });
+        const payload = {
+            secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), rival, golesLocal: 0, golesRival: 0, minuto: 0, parte: 1,
+            matchRunning: false, matchFinished: false, previa: true, formacion: form,
+            onFieldIds: once || [], benchIds: convocados.map(p => p.id).filter(id => !(once && once.includes(id))), jugadores: jug, eventos: [],
+            delegado: { v: 1, pin: cfg.pin, rival, fecha, hora, campo, formacion: form, once: once || [], convocados, creado: Date.now() }
+        };
+        const res = await window.__hergarFirebaseSet('matches/' + cfg.code, payload);
+        if (!res || !res.ok) { alert('❌ No se pudo preparar en la nube: ' + ((res && res.error) || 'error desconocido')); return; }
+        localStorage.setItem(DLG_KEY, JSON.stringify(cfg));
+        const url = `${DLG_URL}?m=${cfg.code}`;
+        const texto = `⚽ Para apuntar el partido HERGAR vs ${rival}:\n${url}\n\nCódigo: ${cfg.pin}`;
+        dlgModal(`
+            <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:#2ed573;">📲 Listo para el delegado</div>
+            <div style="color:#94a3b8; margin:4px 0 12px;">HERGAR vs ${ltEsc(rival)} · ${convocados.length} convocados · ${once ? 'con tu alineación (1-' + ltEsc(form) + ')' : 'sin alineación: la hará él'}</div>
+            <div style="background:#0b1220; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; text-align:center;">
+                <div style="font-size:11px; color:#94a3b8;">CÓDIGO PARA EL DELEGADO</div>
+                <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:34px; letter-spacing:8px; color:#fff;">${cfg.pin}</div>
+                <div style="font-size:11px; color:#64748b; word-break:break-all; margin-top:4px;">${ltEsc(url)}</div>
+            </div>
+            <a href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" style="display:block; margin-top:12px; text-align:center; background:#25d366; color:#fff; text-decoration:none; padding:13px; border-radius:12px; font-weight:800; font-size:14px;">📲 Mandar por WhatsApp</a>
+            <div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Si cambias la convocatoria o el once antes del partido, vuelve a pulsar «Pasar al delegado»: se actualiza con el mismo enlace y código. Después del partido, pulsa «📥 Partido del delegado» en la pantalla de partido.</div>
+            <button onclick="dlgCerrar()" style="margin-top:12px; width:100%; min-height:46px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#e2e8f0; font-weight:700;">Cerrar</button>`);
+    }
+    window.pasarAlDelegado = pasarAlDelegado;
+
+    // Aplica un suceso del delegado con las mismas funciones que en directo
+    function dlgAplicar(e) {
+        const MAP = { tp: 'DISPARO_PUERTA', tf: 'DISPARO_FUERA', pc: 'PASE_CLAVE', pa: 'PASE_AREA', def: 'DEFENSA', reg: 'REGATE' };
+        const j = e.j != null ? Number(e.j) : null;
+        selectedPlayerId = null; activeActionPlayerId = null; pendingAction = null;
+        switch (e.k) {
+            case 'gol':
+                if (!playersData[j]) break;
+                activeActionPlayerId = j; pendingAction = 'GOL'; registrarAccionJugador();
+                if (e.a != null && playersData[Number(e.a)]) { activeActionPlayerId = Number(e.a); pendingAction = 'ASISTENCIA'; registrarAccionJugador(); }
+                break;
+            case 'tp': case 'tf': case 'pc': case 'pa': case 'def': case 'reg':
+                if (!playersData[j]) break;
+                activeActionPlayerId = j; pendingAction = MAP[e.k]; registrarAccionJugador();
+                break;
+            case 'golR': pendingAction = 'GOL_RIVAL'; registrarAccionRival(); break;
+            case 'tfR': pendingAction = 'TIRO_RIVAL_FUERA'; registrarAccionRival(); break;
+            case 'par': case 'parD':
+                if (onFieldIds[0] && playersData[onFieldIds[0]]) { activeActionPlayerId = onFieldIds[0]; registrarParada(e.k === 'parD' ? 'dificil' : 'normal'); }
+                else { pendingAction = 'TIRO_RIVAL_PUERTA'; registrarAccionRival(); }
+                break;
+            case 'cf': document.getElementById('cornerFavorBtn').onclick(); break;
+            case 'cc': document.getElementById('cornerContraBtn').onclick(); break;
+            case 'am': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionYellowBtn').onclick(); } break;
+            case 'ro': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionRedBtn').onclick(); } break;
+            case 'sub': selectedPlayerId = Number(e.s); handleBenchPlayerClick(Number(e.e)); break;
+            case 'swap': selectedPlayerId = null; handleFieldPlayerClick(j); handleFieldPlayerClick(Number(e.x)); break;
+            case 'form': {
+                const sel = document.getElementById('formationSelector');
+                if (sel && e.f && [...sel.options].some(o => o.value === e.f)) { sel.value = e.f; sel.onchange(); }
+                break;
+            }
+        }
+        selectedPlayerId = null; activeActionPlayerId = null; pendingAction = null;
+    }
+    function dlgTramo(evs, desde, hasta) {
+        let i = 0;
+        for (let t = desde; t <= hasta; t++) {
+            accumulatedSeconds = t;
+            while (i < evs.length && Math.max(desde, Number(evs[i].t) || 0) <= t) { dlgAplicar(evs[i]); i++; }
+            if (t < hasta) procesarUnSegundo();
+        }
+        while (i < evs.length) { dlgAplicar(evs[i]); i++; }
+    }
+    function dlgReproducir(st) {
+        const evs = (Array.isArray(st.ev) ? st.ev : Object.values(st.ev || {})).filter(Boolean).map((e, n) => Object.assign({ n }, e));
+        const orden = (a, b) => (Number(a.t) || 0) - (Number(b.t) || 0) || a.n - b.n;
+        const e1 = evs.filter(e => Number(e.p) !== 2).sort(orden), e2 = evs.filter(e => Number(e.p) === 2).sort(orden);
+        const fin1 = Math.max(0, Math.min(90 * 60, Number(st.fin1 != null ? st.fin1 : (st.parte === 2 ? 2100 : st.acum)) || 0));
+        const hay2 = Number(st.parte) === 2 || e2.length > 0;
+        const fin2 = hay2 ? Math.max(2100, Math.min(120 * 60, Number(st.fin2 != null ? st.fin2 : st.acum) || 2100)) : null;
+        Object.values(playersData).forEach(p => { if (p) { p.golesRecibidos = 0; p.tirosPuertaEnPorteria = 0; } });
+        minutoV145 = { c: {}, a: {}, last: {} };
+        congelarAlineacionInicial();
+        partidoEmpezado = true;
+        matchRunning = false; matchStartTimestamp = null; accumulatedSeconds = 0; ultimoSegundoProcesado = 0;
+        dlgTramo(e1, 0, fin1);
+        let fin = fin1;
+        if (hay2) {
+            ltCruzarDescanso();
+            accumulatedSeconds = 2100;
+            dlgTramo(e2, 2100, fin2);
+            fin = fin2;
+        }
+        accumulatedSeconds = fin; ultimoSegundoProcesado = fin;
+        if (st.horaInicio) horaInicioPartido = st.horaInicio;
+        substitutionTimeline.unshift(`[0'] 📲 Partido apuntado por el delegado`);
+        actionHistory.length = 0;
+    }
+
+    async function cargarPartidoDelegado() {
+        if (partidoEmpezado || matchFinished) { alert('Primero pulsa «Nuevo partido» para dejar la pantalla de partido libre, y vuelve a pulsar «📥 Partido del delegado».'); return; }
+        if (!window.__hergarFirebaseGet) { alert('La conexión con la nube aún no está lista. Espera unos segundos.'); return; }
+        const cfg = dlgLeer(DLG_KEY);
+        let code = cfg && cfg.code;
+        const escrito = prompt('Código del enlace del delegado (las 5 letras del final del enlace, después de m=):', code || '');
+        if (escrito === null) return;
+        code = String(escrito).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!code) return;
+        const r = await window.__hergarFirebaseGet('matches/' + code);
+        const d = r && r.ok && r.val && r.val.delegado;
+        if (!d) { alert(r && !r.ok ? '❌ No se pudo leer de la nube: ' + r.error : 'No hay ningún partido del delegado con ese código.'); return; }
+        const st = d.st;
+        if (!st || !st.fase || st.fase === 'alineacion') { alert('El delegado todavía no ha empezado el partido.'); return; }
+        if (st.fase !== 'final' && !confirm('El delegado aún NO ha pulsado «Final» (el partido puede seguir en juego).\n\n¿Cargarlo igualmente tal y como está ahora?')) return;
+        // Jugadores: tienen que estar en la plantilla de este móvil (mismos ids)
+        const conv = (Array.isArray(d.convocados) ? d.convocados : Object.values(d.convocados || {})).filter(Boolean);
+        const faltan = conv.filter(p => !playersData[p.id]).map(p => `${p.dorsal} ${p.name}`);
+        if (faltan.length) { alert('Estos convocados no están en la plantilla de este móvil, así que no se puede cargar:\n\n' + faltan.join('\n') + '\n\nSi los subiste de otro equipo, súbelos otra vez y vuelve a intentarlo.'); return; }
+        const once = (Array.isArray(st.onceInicial) ? st.onceInicial : Object.values(st.onceInicial || {})).map(Number);
+        if (once.length !== 11 || once.some(id => !playersData[id])) { alert('Al partido del delegado le falta la alineación inicial. No se puede cargar.'); return; }
+        const evs = (Array.isArray(st.ev) ? st.ev : Object.values(st.ev || {})).filter(Boolean);
+        const n = k => evs.filter(e => e.k === k).length;
+        const minFin = Math.floor(Number(st.fase === 'final' ? (st.parte === 2 ? st.fin2 : st.fin1) : st.acum) / 60) || 0;
+        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta · 💨 ${n('tf')} fuera\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
+        const backup = ltBackup();
+        // Previa: convocatoria, once, banquillo, sistema y rival del delegado
+        if (compartirEnVivo) desactivarCompartirPartido(); // la alineación publicada de este móvil no debe pisar al visor
+        const ids = new Set(conv.map(p => Number(p.id)));
+        Object.values(playersData).forEach(p => { if (p) p.convocado = ids.has(Number(p.id)); });
+        onFieldIds = once.slice();
+        benchIds = [...ids].filter(id => !once.includes(id)).sort((a, b) => (playersData[a].dorsal || 99) - (playersData[b].dorsal || 99));
+        expulsadosIds = [];
+        const sel = document.getElementById('formationSelector');
+        const fIni = st.formInicial || d.formacion;
+        if (sel && fIni && [...sel.options].some(o => o.value === fIni)) sel.value = fIni;
+        formacionLineaPrevia = sel ? sel.value : fIni;
+        const rivIn = document.getElementById('rivalNameInput'); if (rivIn && d.rival) rivIn.value = String(d.rival).slice(0, 12);
+        let ok = false;
+        reproduciendoPrevio = true;
+        try { dlgReproducir(st); ok = true; }
+        catch (e) { console.error('Delegado:', e); try { ltRestaurar(backup); } catch (e2) { console.error(e2); } }
+        finally { reproduciendoPrevio = false; }
+        if (!ok) { alert('Algo ha fallado al cargar el partido del delegado. No se ha cambiado nada.'); return; }
+        localStorage.setItem(DLG_PEND_KEY, JSON.stringify({ code, fecha: st.fecha || null }));
+        try { ocultarProximoPartido(true); } catch (e) {}
+        document.getElementById('scoreLocal').innerText = goalsLocal;
+        document.getElementById('scoreRival').innerText = goalsRival;
+        const sb = document.getElementById('startPauseBtn'); if (sb) { sb.innerText = '▶ REANUDAR'; sb.style.background = '#f5a623'; }
+        updateTimerDisplay();
+        saveState();
+        try { actualizarUIPrevia(); } catch (e) {}
+        renderPlayers();
+        try { actualizarLiveStats(); } catch (e) {}
+        alert(`✅ Partido del delegado cargado: HERGAR ${goalsLocal} - ${goalsRival}.\n\nRevísalo (puedes corregir como siempre), pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL. Al finalizar, el visor se pone al día con tus datos.`);
+    }
+    window.cargarPartidoDelegado = cargarPartidoDelegado;
+
+    // Al pulsar FINAL en un partido cargado del delegado: se publica en el mismo código, así el visor sigue en ese partido
+    function dlgAdoptarCodigo() {
+        const p = dlgPendiente();
+        if (!p || !p.code || p.adoptado) return;
+        matchShareCode = p.code;
+        localStorage.setItem('hergar_F11_matchShareCode', p.code);
+        compartirEnVivo = true;
+        p.adoptado = true;
+        localStorage.setItem(DLG_PEND_KEY, JSON.stringify(p));
+    }
+    function dlgFechaPartido() { const p = dlgPendiente(); return (p && p.fecha) || null; }
+    function dlgOlvidarPendiente() { try { localStorage.removeItem(DLG_PEND_KEY); } catch (e) {} }
     document.getElementById("actionPenaltiBtn").onclick = abrirPenaltiFavor;
     document.getElementById("penaltiRivalBtn").onclick = () => { document.getElementById("penaltiRivalModal").style.display = "flex"; };
 
@@ -11731,7 +11951,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
         const t = getTemporada();
         const rivalName = document.getElementById("rivalNameInput")?.value||"RIVAL";
-        const fechaHoy = new Date().toLocaleDateString('es-ES');
+        const fechaHoy = dlgFechaPartido() || new Date().toLocaleDateString('es-ES'); // v157: el día que lo apuntó el delegado
         const diff = goalsLocal - goalsRival;
         const resultado = diff>0?'V':diff<0?'D':'E';
         const candidatosMvp = Object.values(playersData).filter(p=>p.convocado&&Math.floor(p.minutosAcumulados/60)>=10);
@@ -13831,6 +14051,7 @@ ${separador}`;
     // botón oculto (display:none) que exigía un SEGUNDO toque invisible para confirmar,
     // por lo que "Nuevo partido" desde el menú no hacía nada.
     function ejecutarNuevoPartido() {
+        try { dlgOlvidarPendiente(); } catch (e) {} // v157
         // Guardar el once inicial del partido actual antes de resetear
         if (titularesIniciales.length === 11) {
             localStorage.setItem("hergar_F11_lastOnce", JSON.stringify(titularesIniciales));
