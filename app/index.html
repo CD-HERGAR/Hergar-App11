@@ -1762,7 +1762,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v157</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v160</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -1803,6 +1803,7 @@
             <button id="tabTempPlantillaBtn" class="tab-temp active" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempPlantilla',this)">👥 Plantilla</button>
             <button id="tabTempRankingBtn" class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempRanking',this)">📈 Ranking</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempPartidos',this)">📅 Partidos</button>
+            <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempMedias',this)">📊 Medias</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempSinergias',this)">🔗 Sinergias</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempRachas',this)">🔥 Rachas</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempMinutos',this)">⏱ Minutos</button>
@@ -1921,6 +1922,14 @@
                 <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; color:#f5a623; margin-bottom:4px;">🧭 CONTEXTO</div>
                 <div style="font-size:11px; color:#94a3b8; line-height:1.5; margin-bottom:10px;">Cómo le va al equipo según dónde, cuándo y contra quién juega. Sale solo del calendario y los campos de la Liga y del tiempo de cada partido.</div>
                 <div id="contextoContainer"></div>
+            </div>
+        </div>
+
+        <!-- v160 · 📊 Medias por partido -->
+        <div id="tabTempMedias" class="tab-temp-content" style="display:none;">
+            <div class="glass" style="border-radius:14px; padding:14px;">
+                <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px; letter-spacing:1px; color:#f5a623; margin-bottom:8px;">📊 MEDIAS POR PARTIDO</div>
+                <div id="mediasContainer"></div>
             </div>
         </div>
 
@@ -3884,6 +3893,153 @@
         h += `<details style="margin-top:10px;"><summary style="font-size:11.5px; font-weight:700; color:${acento}; cursor:pointer;">ℹ️ Cómo se calcula</summary>${snExplicacionHTML()}</details>`;
         return h;
     }
+    // ── v160 · 📊 MEDIAS POR PARTIDO (misma función en la app y en el visor) ──
+    // Cómo es un partido medio del Hergar, con filtro Temporada / Últimos 5 / Casa / Fuera.
+    // Cada dato sale solo de los partidos que lo tienen: los cargados a mano solo tienen goles,
+    // los fueras de juego se apuntan desde la v117 y el detalle por partes desde la v139.
+    function mdNum(v) { return Number(v) || 0; }
+    function mdFmt(v) { return v == null ? '—' : v.toFixed(1).replace('.', ','); }
+    function mdNota(n) { return `de ${n} ${n === 1 ? 'partido' : 'partidos'}`; }
+    function mdConTiros(p) { return !p.manual && p.tirosNuestrosPuerta != null; }
+    function mdCasa(p, liga) {
+        try { const rv = proRivalLiga(liga, p); if (rv && typeof rv.casa === 'boolean') return rv.casa; } catch (e) {}
+        const c = p.contexto || {};
+        return typeof c.casa === 'boolean' ? c.casa : null;
+    }
+    function mdCalcular(t, S) {
+        const pj = S.length;
+        const live = S.filter(mdConTiros);
+        const sum = (arr, f) => arr.reduce((s, p) => s + f(p), 0);
+        const media = (arr, f) => arr.length ? sum(arr, f) / arr.length : null;
+        const gf = media(S, p => mdNum(p.golesLocal)), gc = media(S, p => mdNum(p.golesRival));
+        const pts = media(S, p => momPuntos(mdNum(p.golesLocal), mdNum(p.golesRival)));
+        // tiros (a puerta nunca menos que los goles, como en las estadísticas de cada partido)
+        const tnP = p => Math.max(mdNum(p.tirosNuestrosPuerta), mdNum(p.golesLocal));
+        const trP = p => Math.max(mdNum(p.tirosRivalesPuerta), mdNum(p.golesRival));
+        const tn = p => tnP(p) + mdNum(p.tirosNuestrosFuera), tr = p => trP(p) + mdNum(p.tirosRivalesFuera);
+        const conFj = live.filter(p => p.fuerasJuegoNuestros != null || p.fuerasJuegoRival != null);
+        const filas = live.length ? [
+            ['Disparos', media(live, tn), media(live, tr), live.length],
+            ['A puerta', media(live, tnP), media(live, trP), live.length],
+            ['Córners', media(live, p => mdNum(p.cornersFavor)), media(live, p => mdNum(p.cornersContra)), live.length],
+            ['Faltas cometidas', media(live, p => mdNum(p.faltasContra)), media(live, p => mdNum(p.faltasFavor)), live.length]
+        ] : [];
+        if (conFj.length) filas.push(['Fueras de juego', media(conFj, p => mdNum(p.fuerasJuegoNuestros)), media(conFj, p => mdNum(p.fuerasJuegoRival)), conFj.length]);
+        // tarjetas del Hergar: de los partidos con el detalle de acciones de cada niño
+        const js = Object.values((t && t.jugadores) || {});
+        let tarj = 0, conTarj = 0;
+        live.forEach(p => {
+            let hay = false, n = 0;
+            js.forEach(j => { const h = ptsHistDe(j, p); if (h && h.acc) { hay = true; n += mdNum(h.acc.am) + mdNum(h.acc.ro); } });
+            if (hay) { conTarj++; tarj += n; }
+        });
+        // indicadores
+        const sTn = sum(live, tn), sTr = sum(live, tr), sTrP = sum(live, trP);
+        const sGl = sum(live, p => mdNum(p.golesLocal)), sGr = sum(live, p => mdNum(p.golesRival));
+        const cuota = sTn + sTr ? sTn / (sTn + sTr) : null;
+        const acierto = sTn ? sGl / sTn : null;
+        const paradas = sTrP ? Math.max(0, sTrP - sGr) / sTrP : null;
+        // impacto del equipo: suma del impacto de todos los niños en cada partido
+        const impPart = S.map(p => { let s = 0, hay = false; js.forEach(j => { const h = ptsHistDe(j, p); if (h && (h.mins || 0) > 0) { hay = true; s += pesoImpDe(h); } }); return hay ? s : null; }).filter(x => x != null);
+        const imp = impPart.length ? impPart.reduce((a, b) => a + b, 0) / impPart.length : null;
+        // por partes (desde la v139 cada partido guarda cómo iba al descanso)
+        const conP = live.filter(p => p.acta && p.acta.descanso);
+        let partes = null;
+        if (conP.length) {
+            const d = p => p.acta.descanso;
+            const m1 = f => media(conP, p => mdNum(f(d(p), true)));
+            const m2 = f => media(conP, p => mdNum(f(p, false)) - mdNum(f(d(p), true)));
+            const G = { gl: (x, a) => a ? x.gl : x.golesLocal, gr: (x, a) => a ? x.gr : x.golesRival,
+                tn: (x, a) => a ? mdNum(x.tnP) + mdNum(x.tnF) : mdNum(x.tirosNuestrosPuerta) + mdNum(x.tirosNuestrosFuera),
+                tr: (x, a) => a ? mdNum(x.trP) + mdNum(x.trF) : mdNum(x.tirosRivalesPuerta) + mdNum(x.tirosRivalesFuera),
+                cf: (x, a) => a ? x.cf : x.cornersFavor };
+            partes = { n: conP.length, filas: [['Goles a favor', 'gl'], ['Goles en contra', 'gr'], ['Disparos Hergar', 'tn'], ['Disparos rival', 'tr'], ['Córners a favor', 'cf']].map(([l, k]) => [l, m1(G[k]), Math.max(0, m2(G[k]))]) };
+        }
+        return { pj, live: live.length, gf, gc, pts, filas, tarj: conTarj ? tarj / conTarj : null, conTarj, cuota, acierto, paradas, imp, nImp: impPart.length, partes };
+    }
+    function mdFilaHTML(label, h, r, n, nLive) {
+        const max = Math.max(h || 0, r || 0, 0.01);
+        const w = v => Math.round((v || 0) / max * 100);
+        return `<div style="padding:5px 0;">
+            <div style="display:grid; grid-template-columns:48px 1fr 48px; align-items:baseline;">
+                <span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; color:#ff5577;">${mdFmt(h)}</span>
+                <span style="text-align:center; font-size:11.5px; font-weight:700; color:#cbd5e1;">${label}${n !== nLive ? `<span style="display:block; font-size:9.5px; font-weight:600; color:#64748b;">${mdNota(n)}</span>` : ''}</span>
+                <span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; color:#cbd5e1;">${mdFmt(r)}</span>
+            </div>
+            <div style="display:flex; gap:4px; height:7px; margin-top:4px;">
+                <div style="flex:1; display:flex; justify-content:flex-end; background:rgba(255,255,255,.04); border-radius:4px; overflow:hidden;"><div style="width:${w(h)}%; background:rgb(180,20,56); border-radius:4px;"></div></div>
+                <div style="flex:1; display:flex; background:rgba(255,255,255,.04); border-radius:4px; overflow:hidden;"><div style="width:${w(r)}%; background:#64748b; border-radius:4px;"></div></div>
+            </div>
+        </div>`;
+    }
+    function mdVistaHTML(t, S, txtVista, acento) {
+        if (!S.length) return `<div style="font-size:12px; color:#94a3b8; padding:10px 0;">Aún no hay partidos ${txtVista}.</div>`;
+        const M = mdCalcular(t, S);
+        const caja = (v, c, txt) => `<div style="background:rgba(255,255,255,.04); border-radius:10px; padding:9px 8px; text-align:center;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:22px; color:${c};">${v}</div><div style="font-size:10px; color:#94a3b8; margin-top:2px;">${txt}</div></div>`;
+        const caja2 = (v, c, txt) => `<div style="background:rgba(255,255,255,.04); border-radius:10px; padding:9px 10px;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:22px; color:${c};">${v}</div><div style="font-size:10.5px; line-height:1.3; color:#94a3b8; margin-top:2px;">${txt}</div></div>`;
+        const pct = x => x == null ? '—' : Math.round(x * 100) + ' %';
+        let h = `<div style="font-size:11px; color:#cbd5e1; text-align:center; margin:2px 0 10px;">${M.pj} ${M.pj === 1 ? 'partido' : 'partidos'} ${txtVista}${M.live !== M.pj ? ` · ${M.live} con estadísticas en directo` : ''}</div>
+            <div style="display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px;">
+                ${caja(mdFmt(M.gf), '#ff5577', 'goles a favor')}${caja(mdFmt(M.gc), '#cbd5e1', 'goles en contra')}${caja(mdFmt(M.pts), '#f5a623', 'puntos')}
+            </div>`;
+        if (M.filas.length) {
+            h += `<div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:800; font-size:10px; letter-spacing:1px; margin:14px 2px 2px;"><span style="color:#ff5577;">HERGAR</span><span style="color:#94a3b8;">RIVALES</span></div>`;
+            h += `<div style="font-size:10px; color:#64748b; text-align:center; margin-bottom:2px;">${mdNota(M.live)} con estadísticas</div>`;
+            h += M.filas.map(([l, a, b, n]) => mdFilaHTML(l, a, b, n, M.live)).join('');
+            if (M.tarj != null) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px;">🟨🟥 <b>${mdFmt(M.tarj)}</b> tarjetas del Hergar por partido <span style="color:#64748b;">(${mdNota(M.conTarj)})</span></div>`;
+        } else {
+            h += `<div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Son partidos cargados a mano: no tienen tiros, córners ni faltas apuntados.</div>`;
+        }
+        const ind = [];
+        if (M.cuota != null) ind.push(caja2(pct(M.cuota), M.cuota >= .5 ? '#2ed573' : '#ff6b7a', 'cuota de tiros: de los disparos del partido, cuántos son nuestros'));
+        if (M.acierto != null) ind.push(caja2(pct(M.acierto), '#f5a623', 'acierto: goles por cada disparo'));
+        if (M.paradas != null) ind.push(caja2(pct(M.paradas), '#5dade2', 'paradas: de los tiros a puerta del rival'));
+        if (M.imp != null) ind.push(caja2((M.imp >= 0 ? '+' : '−') + mdFmt(Math.abs(M.imp)), M.imp >= 0 ? '#2ed573' : '#ff6b7a', 'impacto medio del equipo por partido'));
+        if (ind.length) h += `<div style="font-size:11px; font-weight:800; color:${acento}; letter-spacing:.5px; margin:14px 0 6px;">🎯 INDICADORES</div><div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px;">${ind.join('')}</div>
+            <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin-top:6px;">Impacto del equipo: la suma del impacto de todos los niños en el partido. La media de cada niño está en el Ranking.</div>`;
+        if (M.partes) {
+            h += `<div style="font-size:11px; font-weight:800; color:${acento}; letter-spacing:.5px; margin:14px 0 2px;">🪞 1.ª PARTE vs 2.ª PARTE</div>
+                <div style="font-size:10.5px; color:#94a3b8; margin-bottom:4px;">Media ${mdNota(M.partes.n)} con el detalle por partes (se guarda desde la v139).</div>
+                <div style="display:grid; grid-template-columns:1fr 70px 70px; font-size:9.5px; font-weight:800; letter-spacing:1px; color:#64748b; padding-bottom:4px;"><span></span><span style="text-align:center;">1.ª PARTE</span><span style="text-align:center;">2.ª PARTE</span></div>`
+                + M.partes.filas.map(([l, a, b]) => `<div style="display:grid; grid-template-columns:1fr 70px 70px; align-items:center; padding:7px 0; border-top:1px solid rgba(255,255,255,.05);"><span style="font-size:12px; color:#cbd5e1;">${l}</span><span style="text-align:center; font-family:'Montserrat',sans-serif; font-weight:800; font-size:13px; color:#e2e8f0;">${mdFmt(a)}</span><span style="text-align:center; font-family:'Montserrat',sans-serif; font-weight:800; font-size:13px; color:#e2e8f0;">${mdFmt(b)}</span></div>`).join('');
+        }
+        return h;
+    }
+    function mediasPartidoHTML(t, liga, acento) {
+        acento = acento || '#f5a623';
+        const ps = ((t && t.partidos) || []).filter(Boolean);
+        if (!ps.length) return `<div style="font-size:12px; color:#94a3b8;">Sin partidos en la temporada todavía.</div>`;
+        const casa = ps.filter(p => mdCasa(p, liga) === true), fuera = ps.filter(p => mdCasa(p, liga) === false);
+        const vistas = [
+            ['temp', 'Temporada', ps, 'en la temporada'],
+            ['ult5', 'Últimos 5', ps.slice(-5), 'recientes'],
+            ['casa', 'Casa', casa, 'en casa'],
+            ['fuera', 'Fuera', fuera, 'fuera de casa']
+        ];
+        const on = `border:1px solid ${acento}; background:rgba(245,166,35,.14); color:${acento};`;
+        const off = 'border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03); color:#94a3b8;';
+        const base = "min-height:44px; border-radius:10px; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; cursor:pointer; padding:0 4px;";
+        const botones = vistas.map(([k, l, S], i) => `<button type="button" data-md-btn="${k}" onclick="mediasVer(this,'${k}')" style="${base} ${i === 0 ? on : off}">${l}${k === 'casa' || k === 'fuera' ? ` (${S.length})` : ''}</button>`).join('');
+        const sinCasa = ps.length - casa.length - fuera.length;
+        const paneles = vistas.map(([k, , S, txt], i) => `<div data-md-vista="${k}" style="display:${i === 0 ? 'block' : 'none'};">${mdVistaHTML(t, S, txt, acento)}${(k === 'casa' || k === 'fuera') && sinCasa ? `<div style="font-size:10.5px; color:#64748b; margin-top:8px;">${sinCasa} ${sinCasa === 1 ? 'partido no se sabe' : 'partidos no se sabe'} si fue en casa o fuera (no casa con la Liga).</div>` : ''}</div>`).join('');
+        return `<div class="medias-box" data-md-on="${on.replace(/"/g, '&quot;')}" data-md-off="${off}">
+            <div style="font-size:11px; line-height:1.5; color:#94a3b8; margin-bottom:10px;">Cómo es un partido medio del Hergar. Cada dato sale solo de los partidos que lo tienen: los cargados a mano solo tienen goles.</div>
+            <div style="display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:6px; margin-bottom:6px;">${botones}</div>
+            ${paneles}
+        </div>`;
+    }
+    function mediasVer(btn, k) {
+        const box = btn.closest('.medias-box');
+        if (!box) return;
+        const on = box.getAttribute('data-md-on'), off = box.getAttribute('data-md-off');
+        box.querySelectorAll('[data-md-vista]').forEach(el => { el.style.display = el.getAttribute('data-md-vista') === k ? 'block' : 'none'; });
+        box.querySelectorAll('[data-md-btn]').forEach(b => {
+            const s = b.getAttribute('style').replace(on, '').replace(off, '').trim();
+            b.setAttribute('style', s + ' ' + (b.getAttribute('data-md-btn') === k ? on : off));
+        });
+    }
+    if (typeof window !== 'undefined') window.mediasVer = mediasVer;
+
     // ── v154 · ESTADÍSTICAS DE CADA PARTIDO (misma función en la app y en el visor) ──
     // Las barras HERGAR vs rival del «Último partido», para cualquier partido de la temporada, más paradas, acierto,
     // cuota de tiros, tiempo por marcador, tarjetas y la suerte/nivel de la v153. Los partidos cargados a mano
@@ -5220,13 +5376,30 @@
     }
     function sinergiaPor70(segsN, impN) { return segsN > 0 ? impN / (segsN / 60) * 70 : 0; }
 
+    // v159 · Nota orientativa (≈) para las parejas en observación: lo medido (impN) + los minutos sin medir (partidos
+    // anteriores a la v69, «Corregir minutos») estimados con el impacto actual por minuto de cada niño en la temporada.
+    // No dice si se entienden: solo sirve de orientación y NO entra en el ranking. ritmos = { id: impacto por minuto }
+    function sinergiaEstimada(d, ritmos) {
+        if (!ritmos) return null;
+        const rA = ritmos[d.idA], rB = ritmos[d.idB];
+        const minsT = (d.segs || 0) / 60;
+        if (rA == null || rB == null || minsT < 1) return null;
+        const sinMedir = Math.max(0, minsT - d.minsN);
+        return (d.impN + sinMedir * (rA + rB)) / Math.max(minsT, d.minsN) * 70;
+    }
+    function ritmosTemporada(t) {
+        const r = {};
+        Object.values((t && t.jugadores) || {}).forEach(j => { if ((j.minutos || 0) > 0) r[j.id] = (j.impactoAcum || 0) / j.minutos; });
+        return r;
+    }
+
     // Lista de sinergias (Temporada y partido en vivo). pares = { clave: { segs, segsN, impN } }
-    function htmlSinergias(pares, nombres, compacto) {
+    function htmlSinergias(pares, nombres, compacto, ritmos) {
         const R = REGLAS_IMPACTO.minMinutosSinergia;
         const lista = Object.entries(pares).map(([clave, d]) => {
             const [idA, idB] = clave.split('_').map(Number);
             const minsN = (d.segsN || 0) / 60;
-            return { idA, idB, minsN, minsTot: Math.floor((d.segs || 0) / 60), por70: sinergiaPor70(d.segsN || 0, d.impN || 0) };
+            return { idA, idB, minsN, segs: d.segs || 0, impN: d.impN || 0, minsTot: Math.floor((d.segs || 0) / 60), por70: sinergiaPor70(d.segsN || 0, d.impN || 0) };
         }).filter(d => d.minsTot > 0 || d.minsN >= 1);
         if (lista.length === 0) return '<p style="color:#52665c; font-size:12px; padding:10px;">Sin datos aún.</p>';
         const medidas = lista.filter(d => d.minsN >= R).sort((a, b) => b.por70 - a.por70);
@@ -5264,11 +5437,11 @@
         if (observ.length > 0) {
             html += `<div style="margin-top:12px; padding:10px 12px; border:1px dashed rgba(255,255,255,0.18); border-radius:12px;">
                 <div style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; letter-spacing:.08em; color:#e2e8f0;">EN OBSERVACIÓN</div>
-                <div style="font-size:10.5px; line-height:1.4; color:#94a3b8; margin:2px 0 6px;">Menos de ${R}' juntos medidos con este cálculo (los partidos anteriores a la v69 no tienen este dato).</div>
-                ${observ.map(d => `<div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(255,255,255,0.06); font-size:11.5px; color:#cbd5e1;">
+                <div style="font-size:10.5px; line-height:1.4; color:#94a3b8; margin:2px 0 6px;">Menos de ${R}' juntos medidos. Los primeros partidos de la temporada no tienen este dato: se ven los minutos juntos totales y los medidos.${ritmos ? ' La nota ≈ es orientativa (lo que falta se estima con el impacto de cada uno) y no entra en la lista: entran al llegar a ' + R + "' medidos." : ''}</div>
+                ${observ.map(d => { const est = sinergiaEstimada(d, ritmos); return `<div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(255,255,255,0.06); font-size:11.5px; color:#cbd5e1;">
                     <span>${nombres[d.idA] || 'ID' + d.idA} <span style="color:#52665c;">↔</span> ${nombres[d.idB] || 'ID' + d.idB}</span>
-                    <span style="color:#94a3b8; font-family:monospace; white-space:nowrap;">${d.minsTot}' · —</span>
-                </div>`).join('')}
+                    <span style="color:#94a3b8; font-family:monospace; white-space:nowrap;">${d.minsTot}' · ${Math.floor(d.minsN)}' med. · ${est == null ? '—' : '<span style="color:#cbd5e1;">≈ ' + est.toFixed(2) + '</span>'}</span>
+                </div>`; }).join('')}
             </div>`;
         }
         return html;
@@ -5463,7 +5636,7 @@
             + csTarjeta('EFECTO DE EQUIPO', equipo, `Se aplica a los jugadores que están en el campo. Goleadas: si el equipo marca más de ${e.golesSinReparto || 4}, cada gol a favor vale ${e.golesSinReparto || 4} ÷ goles totales para todos, caiga cuando caiga (en un 8-0, 0,50 cada gol). Así juegan igual la 1.ª y la 2.ª parte.`)
             + csTarjeta('PORTERÍA A CERO', porteria, 'Se suma al pulsar FINAL a quien estuvo en el campo sin que el equipo encajara. Es proporcional a sus minutos: minutos ÷ 70.', true)
             + csTarjeta('PENALTIS', penaltis)
-            + csTarjeta('SINERGIAS', `<div style="font-size:12.5px; line-height:1.55; color:#e2e8f0; padding-top:6px;">Impacto que suman los dos jugadores de una pareja <strong>mientras coinciden en el campo</strong>, por cada 70 minutos juntos. Hacen falta <strong>${R.minMinutosSinergia} minutos juntos</strong> medidos para entrar en la lista; las parejas que no llegan aparecen en observación. Solo cuentan los partidos jugados con este cálculo (desde la v69).</div>`)
+            + csTarjeta('SINERGIAS', `<div style="font-size:12.5px; line-height:1.55; color:#e2e8f0; padding-top:6px;">Impacto que suman los dos jugadores de una pareja <strong>mientras coinciden en el campo</strong>, por cada 70 minutos juntos. Hacen falta <strong>${R.minMinutosSinergia} minutos juntos</strong> medidos para entrar en la lista; las parejas que no llegan aparecen en observación. Solo cuentan los partidos jugados con este cálculo (desde la v69). En observación se ve una nota orientativa ≈: lo medido más una estimación de lo que falta con el impacto por minuto de cada uno; no dice si se entienden y no entra en la lista.</div>`)
             + csTarjeta('PESO EN EL EQUIPO', pesoExplicacionHTML(R.minMinutosRanking)) // v132
             + csTarjeta('PUNTOS DE LOS GOLES Y MÁS/MENOS', puntosMasMenosExplicacionHTML(R.minMinutosRanking)) // v133
             + csTarjeta('MOMENTOS, MOMENTO CLAVE Y EL MURO', momentosExplicacionHTML()) // v134
@@ -12153,6 +12326,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (tabId==='tabTempBanquillo') { try { document.getElementById('banquilloContainer').innerHTML = banquilloHTML(getTemporada(), '#2ed573', 'bqa'); } catch (e) { console.error('Banquillo:', e); } } // v137
         if (tabId==='tabTempRachas') renderRachas();
         if (tabId==='tabTempContexto') { try { document.getElementById('contextoContainer').innerHTML = contextoAppHTML(); refrescarContexto(true); } catch (e) { console.error(e); } } // v97
+        if (tabId==='tabTempMedias') { try { document.getElementById('mediasContainer').innerHTML = mediasPartidoHTML(getTemporada(), getLiga(), '#f5a623'); } catch (e) { console.error('Medias:', e); } } // v160
         if (tabId==='tabTempSuerte') { try { document.getElementById('suerteNivelContainer').innerHTML = suerteNivelHTML(getTemporada(), getLiga(), '#2ed573'); } catch (e) { console.error('Suerte y nivel:', e); } } // v153
         if (tabId==='tabTempComparativa') renderComparativa();
         if (tabId==='tabTempOnceIdeal') renderOnceIdeal(document.getElementById('onceIdealFormacion').value);
@@ -13129,7 +13303,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const nombres = {};
         Object.values(playersData).forEach(p => { nombres[p.id] = `#${p.dorsal} ${p.name.split(' ')[0]}`; });
         Object.values(t.jugadores || {}).forEach(j => { if (!nombres[j.id]) nombres[j.id] = `#${j.dorsal} ${j.name.split(' ')[0]}`; });
-        container.innerHTML = htmlSinergias(pares, nombres, false);
+        container.innerHTML = htmlSinergias(pares, nombres, false, ritmosTemporada(t)); // v159: ≈ en observación
     }
 
     function renderRachas() {
