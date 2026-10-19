@@ -1680,7 +1680,7 @@
                     <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Las familias pueden descargar el acta en el visor</span>
                     <input id="actaVisorChk" type="checkbox" onchange="guardarActaVisor(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
                 </label>
-                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">En el visor sale sin el más/menos de cada niño. Tú la descargas siempre desde Temporada → Partidos.</div>
+                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">En el visor sale completa, igual que la tuya (visor v168 o posterior). Tú la descargas siempre desde la pestaña Partidos.</div>
             </div>
             <!-- v119 · VÍDEOS DE LOS GOLES -->
             <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
@@ -1762,14 +1762,14 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v161</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v162</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
 <div id="temporadaModal" style="display:none; position:absolute; top:0; left:0; width:100%; min-height:100vh; min-height:100svh; z-index:9000; background:rgba(0,0,0,0.88);">
     <div style="background:#111827; margin:12px auto 24px; width:calc(100% - 24px); max-width:650px; border-radius:16px; border:1px solid rgba(142,68,173,0.3); padding:20px; box-shadow:0 8px 32px rgba(0,0,0,0.8);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; position:relative;">
-            <span style="color:#f5a623; font-size:14px; font-weight:900; letter-spacing:2px; font-family:'Montserrat',sans-serif;">🏆 TEMPORADA OFICIAL</span>
+            <span id="temporadaTitulo" style="color:#f5a623; font-size:14px; font-weight:900; letter-spacing:2px; font-family:'Montserrat',sans-serif;">🏆 TEMPORADA OFICIAL</span>
             <div style="display:flex; gap:6px;">
                 <button id="temporadaMasBtn" style="background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px; padding:6px 12px; font-weight:700; border:1px solid rgba(255,255,255,0.05);">⋯</button>
                 <button id="closeTemporadaBtn" style="background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px; padding:6px 14px; font-weight:700; border:1px solid rgba(255,255,255,0.05);">✕ CERRAR</button>
@@ -1802,7 +1802,7 @@
         <div style="display:flex; gap:6px; margin-bottom:14px; overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
             <button id="tabTempPlantillaBtn" class="tab-temp active" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempPlantilla',this)">👥 Plantilla</button>
             <button id="tabTempRankingBtn" class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempRanking',this)">📈 Ranking</button>
-            <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempPartidos',this)">📅 Partidos</button>
+            <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" id="tabTempPartidosBtn" onclick="switchTabTemp('tabTempPartidos',this)">📅 Partidos</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempMedias',this)">📊 Medias</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempSinergias',this)">🔗 Sinergias</button>
             <button class="tab-temp" style="flex-shrink:0; white-space:nowrap;" onclick="switchTabTemp('tabTempRachas',this)">🔥 Rachas</button>
@@ -15023,16 +15023,18 @@ ${separador}`;
 <div class="bottom-tabbar">
     <button id="tabPartidoBtn" class="bottom-tab active"><span class="ic">🏟️</span>Partido</button>
     <button id="tabEnVivoBtn" class="bottom-tab"><span class="ic">📊</span>En vivo</button>
-    <button id="tabTemporadaBtn" class="bottom-tab"><span class="ic">🏆</span>Temporada</button>
+    <button id="tabTemporadaBtn" class="bottom-tab"><span class="ic">📅</span>Partidos</button>
     <button id="tabLigaBtn" class="bottom-tab"><span class="ic">📋</span>Liga</button>
-    <button id="tabMasBtn" class="bottom-tab"><span class="ic">⋯</span>Más</button>
+    <button id="tabMasBtn" class="bottom-tab"><span class="ic">⚙️</span>Ajustes</button>
 </div>
 <div id="masSheet" class="mas-sheet">
+    <button class="mas-item" id="masVisorBtn" style="color:#2ed573; font-weight:800;"><span class="ic">📊</span>Ver los datos en el visor</button>
     <button class="mas-item" id="masConvBtn"><span class="ic">⚙️</span>Convocatoria y plantilla</button>
     <button class="mas-item" id="masCompartirEnlaceBtn"><span class="ic">📲</span>Compartir enlace del visor</button>
     <button class="mas-item" id="masComoSeCalculaBtn"><span class="ic">❔</span>¿Cómo se calcula el impacto?</button>
     <button class="mas-item" id="masContrasteBtn"><span class="ic">☀️</span>Alto contraste</button>
     <button class="mas-item" id="masNuevoBtn"><span class="ic">🔄</span>Nuevo partido</button>
+    <button class="mas-item" id="masAnalisisBtn" style="color:#94a3b8;"><span class="ic">👁️</span>Pantallas de análisis en la app: ocultas</button>
 </div>
 
 <!-- FICHA DE DATOS (estadísticas reales medias) — estilos con prefijo fd- para no chocar con nada existente -->
@@ -17943,6 +17945,56 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         }
     });
 
+</script>
+<script>
+    // ── v162 · LA APP, PARA EL CAMPO ─────────────────────────────────────────
+    // Todo lo que se mete o se modifica sigue igual. Lo que se esconde son las pantallas de mirar datos, que ya están en
+    // el visor: las subpestañas de análisis de Temporada (queda Partidos, con su menú ⋯ de correcciones) y las de En vivo
+    // (quedan Stats, con minutos y goles, y Rotación). No se borra nada: Ajustes → «Pantallas de análisis en la app» las
+    // vuelve a enseñar. Los cálculos y lo que se publica al visor no cambian.
+    (function () {
+        const CLAVE = 'hergar_verAnalisisApp';
+        const LIVE_OCULTAS = ['tabGeolocalizacion', 'tabMomentum', 'tabLiveSinergias', 'tabPerfil'];
+        const ver = () => { try { return localStorage.getItem(CLAVE) === '1'; } catch (e) { return false; } };
+        const clave = (el) => { const m = (el.getAttribute('onclick') || '').match(/'([^']*)'/); return m ? m[1] : ''; };
+        function aplicar() {
+            const on = ver();
+            document.querySelectorAll('.tab-temp').forEach(b => { b.style.display = (on || clave(b) === 'tabTempPartidos') ? '' : 'none'; });
+            const pb = document.getElementById('tabTempPartidosBtn');
+            if (pb && pb.parentElement) pb.parentElement.style.display = on ? 'flex' : 'none';
+            const tit = document.getElementById('temporadaTitulo');
+            if (tit) tit.textContent = on ? '🏆 TEMPORADA OFICIAL' : '📅 PARTIDOS DE LA TEMPORADA';
+            document.querySelectorAll('#liveStatsModal .tab-btn').forEach(b => { b.style.display = (on || !LIVE_OCULTAS.includes(clave(b))) ? '' : 'none'; });
+            const hdr = document.querySelector('#liveStatsModal .tabs-header');
+            if (hdr) hdr.style.gridTemplateColumns = on ? 'repeat(4,1fr)' : 'repeat(2,1fr)';
+            if (!on) {
+                const act = document.querySelector('#liveStatsModal .tab-btn.active');
+                if (act && LIVE_OCULTAS.includes(clave(act))) switchLiveTab('tabRendimiento', document.querySelector("#liveStatsModal .tab-btn[onclick*='tabRendimiento']"));
+                if (document.getElementById('temporadaModal').style.display === 'block') switchTabTemp('tabTempPartidos', pb);
+            }
+            const cs = document.getElementById('masComoSeCalculaBtn');
+            if (cs) cs.style.display = on ? '' : 'none';
+            const tg = document.getElementById('masAnalisisBtn');
+            if (tg) tg.innerHTML = `<span class="ic">👁️</span>Pantallas de análisis en la app: ${on ? 'visibles' : 'ocultas'}`;
+        }
+        // Con las pantallas ocultas, cualquier intento de abrir otra subpestaña de Temporada acaba en Partidos
+        const original = window.switchTabTemp;
+        window.switchTabTemp = function (tabId, btn) {
+            if (!ver() && tabId !== 'tabTempPartidos') { tabId = 'tabTempPartidos'; btn = document.getElementById('tabTempPartidosBtn'); }
+            return original(tabId, btn);
+        };
+        document.getElementById('masVisorBtn').onclick = () => {
+            cerrarMasSheet();
+            window.open(LIVE_VIEWER_BASE_URL, '_blank');
+        };
+        document.getElementById('masAnalisisBtn').onclick = () => {
+            const on = ver();
+            if (!on && !confirm('¿Volver a enseñar en la app las pantallas de análisis (Ranking, Sinergias, Rachas, Momentum…)?\n\nTodo eso está también en el visor.')) return;
+            try { localStorage.setItem(CLAVE, on ? '0' : '1'); } catch (e) {}
+            aplicar();
+        };
+        aplicar();
+    })();
 </script>
 </body>
 </html>
