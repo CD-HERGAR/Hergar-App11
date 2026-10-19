@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e14">
+<title>Hergar · Prueba de voz</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<style>
+:root{
+  --bg:#0a0e14; --panel:#121923; --panel2:#18212d; --line:rgba(255,255,255,.08);
+  --fg:#e2e8f0; --muted:#7c8a9c; --dim:#4b5868;
+  --hergar:rgb(180,20,56); --ok:#2ed573; --ok-soft:rgba(46,213,115,.10); --ok-line:rgba(46,213,115,.35);
+  --rival:#ff6b78; --rival-soft:rgba(255,71,87,.10); --rival-line:rgba(255,71,87,.35); --warn:#f5a623;
+  --f-display:'Montserrat',system-ui,sans-serif; --f-body:'Inter',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45;overscroll-behavior-y:contain}
+body{padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(30px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+main{max-width:520px;margin:0 auto;display:grid;gap:14px}
+h1,h2{font-family:var(--f-display);margin:0}
+h1{font-size:20px;font-weight:900}
+h2{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:10px}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.pill.ok{color:var(--ok);border-color:var(--ok-line)}
+.pill.bad{color:var(--rival);border-color:var(--rival-line)}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.seg button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:12px 10px;font:600 14px var(--f-body);text-align:left;cursor:pointer}
+.seg button small{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}
+.seg button[aria-pressed="true"]{border-color:var(--ok);background:var(--ok-soft)}
+.opts{display:grid;gap:8px}
+.opts label{display:flex;gap:10px;align-items:center}
+.opts input{width:20px;height:20px;accent-color:var(--ok)}
+.big{appearance:none;border:none;width:100%;border-radius:18px;padding:22px;font:900 18px var(--f-display);letter-spacing:.05em;color:#fff;background:var(--hergar);cursor:pointer}
+.big.stop{background:#2a3442}
+.row{display:flex;gap:8px}
+.row button{flex:1}
+.sec{appearance:none;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:12px;font:700 13px var(--f-body);cursor:pointer}
+.status{font:800 13px var(--f-display);letter-spacing:.06em;text-transform:uppercase;text-align:center;padding:8px;border-radius:10px;background:var(--panel2);color:var(--muted)}
+.status.on{color:var(--ok)}
+.status.armed{color:#000;background:var(--warn)}
+.res{border-radius:14px;padding:14px;min-height:92px;display:grid;gap:4px;align-content:center;border:1px dashed var(--line)}
+.res.ok{background:var(--ok-soft);border:1px solid var(--ok-line)}
+.res.rv{background:var(--rival-soft);border:1px solid var(--rival-line)}
+.res .heard{font-size:12px;color:var(--muted)}
+.res .what{font:800 18px var(--f-display)}
+.res .why{font-size:13px;color:var(--muted)}
+.list{display:grid;gap:4px;font-size:13px;max-height:220px;overflow:auto}
+.list div{padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03);display:flex;gap:8px}
+.list b{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums;min-width:44px}
+.list .x{text-decoration:line-through;color:var(--dim)}
+.list .rv{color:var(--rival)}
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:6px}
+.diag{font:12px/1.45 ui-monospace,Menlo,monospace;color:var(--muted);max-height:260px;overflow:auto;white-space:pre-wrap;background:var(--bg);border-radius:10px;padding:10px;border:1px solid var(--line)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats div{background:var(--panel2);border-radius:10px;padding:8px 4px}
+.stats b{display:block;font:900 20px var(--f-display);font-variant-numeric:tabular-nums}
+.stats span{font-size:11px;color:var(--muted)}
+textarea{width:100%;min-height:200px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font:13px/1.5 ui-monospace,Menlo,monospace}
+.note{font-size:12px;color:var(--muted);margin:0}
+.steps{margin:0;padding-left:20px;display:grid;gap:6px;font-size:14px}
+details summary{cursor:pointer;font:800 11px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);list-style:none}
+details summary::after{content:' ▸'}
+details[open] summary::after{content:' ▾'}
+#bolsillo{position:fixed;inset:0;background:#000;z-index:100;display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none}
+#bolsillo div{color:#222;font:700 13px var(--f-body);text-align:center;padding:20px}
+#bolsillo .hold{color:#555}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+  <header style="display:grid;gap:4px">
+    <h1>Prueba de voz</h1>
+    <p class="note">Página de pruebas, aparte de la app. No toca los datos del equipo: solo lee nombres y dorsales.</p>
+  </header>
+
+  <section class="card">
+    <h2>Estado</h2>
+    <div class="pills" id="pills"></div>
+  </section>
+
+  <section class="card">
+    <h2>Cómo escuchar</h2>
+    <div class="seg">
+      <button type="button" id="mContinua" aria-pressed="true">Escucha continua<small>Di «Apunta, …»</small></button>
+      <button type="button" id="mAuricular" aria-pressed="false">Botón del auricular<small>Toca el auricular y habla</small></button>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="optVoz" checked> Confirmar por voz en el auricular</label>
+      <label><input type="checkbox" id="optPitido" checked> Pitido corto cuando está atento a la frase</label>
+      <label id="lblLocal"><input type="checkbox" id="optLocal"> Intentar sin internet (si el móvil lo permite)</label>
+    </div>
+    <button class="big" id="btnStart" type="button">EMPEZAR PRUEBA</button>
+    <div class="status" id="estado">Parado</div>
+  </section>
+
+  <section class="card">
+    <h2>Última frase</h2>
+    <div class="res" id="res"><div class="why">Pulsa Empezar y di, por ejemplo: «Apunta, gol de Adrián, asiste Leo».</div></div>
+    <div class="row">
+      <button class="sec" id="btnBolsillo" type="button">🕶 Modo bolsillo</button>
+      <button class="sec" id="btnAnula" type="button">↩ Anular última</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Apuntado</h2>
+    <div class="list" id="lista"><div class="empty">Nada todavía</div></div>
+  </section>
+
+  <section class="card">
+    <h2>Diagnóstico</h2>
+    <div class="stats">
+      <div><b id="sMin">0'</b><span>escuchando</span></div>
+      <div><b id="sReinicios">0</b><span>reinicios</span></div>
+      <div><b id="sBat">–</b><span>batería gastada</span></div>
+    </div>
+    <div class="diag" id="diag">Aquí se anota todo lo que oye la app, los cortes y los errores.</div>
+    <button class="sec" id="btnCopiar" type="button">📋 Copiar informe para Claude</button>
+    <textarea id="informe" hidden readonly></textarea>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Qué probar</summary>
+      <ol class="steps" style="margin-top:10px">
+        <li>Conecta los auriculares, pulsa <b>Empezar prueba</b> y acepta el micrófono.</li>
+        <li>Di varias frases: «Apunta, gol de Adrián, asiste Leo», «Apunta, a puerta nueve», «Apunta, rival córner», «Anula».</li>
+        <li>Prueba también «Apunta» solo, espera el pitido y di la acción.</li>
+        <li>Pulsa <b>Modo bolsillo</b>, guarda el móvil 5–10 minutos y sigue hablando. Para salir, mantén el dedo 2 segundos.</li>
+        <li>Pon la tele o la radio de fondo para ver si se cuela algo.</li>
+        <li>Cambia a <b>Botón del auricular</b>: un toque en el auricular y habla, sin «Apunta».</li>
+        <li>Pon el modo avión un momento para ver qué pasa sin internet.</li>
+        <li>Al acabar, <b>Copiar informe</b> y pégamelo en el chat.</li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Plantilla y apodos</summary>
+      <div style="display:grid;gap:8px;margin-top:10px">
+        <p class="note" id="origenPlantilla"></p>
+        <p class="note">Una línea por niño: dorsal, nombre y, si quieres, apodos separados por coma. Ejemplo: <code>9 Alejandro alex, jandro</code>. Pon <code>*</code> al final del portero.</p>
+        <textarea id="txtPlantilla" spellcheck="false"></textarea>
+        <div class="row">
+          <button class="sec" id="btnGuardarPl" type="button">Guardar plantilla</button>
+          <button class="sec" id="btnRecargarPl" type="button">Volver a leer de la app</button>
+        </div>
+      </div>
+    </details>
+  </section>
+</main>
+
+<div id="bolsillo" hidden><div>Modo bolsillo<br>La app sigue escuchando<br><br><span class="hold" id="holdTxt">Mantén el dedo 2 s para salir</span></div></div>
+
+<script>
+// ===================== PARSER (mismo que el boceto) =====================
+let ROSTER=[]; let PORTERO=1;
+// Acciones: id, etiqueta, frases (se prueban de la más larga a la más corta), tipo
+const ACC = [
+  // Hergar con dorsal
+  {id:'GOL',      lab:'⚽ Gol',               t:'h', f:['gol']},
+  {id:'PENALTI',  lab:'🎯 Gol de penalti',    t:'h', f:['gol de penalti','penalti']},
+  {id:'ASIST',    lab:'👟 Asistencia',        t:'h', f:['asistencia']},
+  {id:'PASE_AREA',lab:'📯 Pase al área',      t:'h', f:['pase al area','centro']},
+  {id:'PASE_CLAVE',lab:'🔑 Pase clave',       t:'h', f:['pase clave']},
+  {id:'PUERTA',   lab:'🎯 Disparo a puerta',  t:'h', f:['disparo a puerta','tiro a puerta','a puerta']},
+  {id:'FUERA',    lab:'💨 Disparo fuera',     t:'h', f:['disparo fuera','tiro fuera','fuera']},
+  {id:'FJ',       lab:'🚩 Fuera de juego',    t:'h', f:['fuera de juego','orsay']},
+  {id:'REGATE',   lab:'🌀 Regate',            t:'h', f:['regate','jugada individual','jugada']},
+  {id:'DEF_CLAVE',lab:'🛡️⭐ Acción defensiva clave',t:'h', f:['defensa clave','robo clave']},
+  {id:'DEF',      lab:'🛡️ Acción defensiva',  t:'h', f:['defensa','robo','recupera']},
+  {id:'AMARILLA', lab:'🟨 Amarilla',          t:'h', f:['tarjeta amarilla','amarilla']},
+  {id:'ROJA',     lab:'🟥 Roja',              t:'h', f:['tarjeta roja','roja','expulsion']},
+  {id:'FALLO_IMP',lab:'💥 Fallo importante',  t:'h', f:['fallo importante','fallo grave']},
+  {id:'FALLO',    lab:'❌ Fallo',             t:'h', f:['fallo']},
+  // Portero, sin dorsal
+  {id:'PARADA_D', lab:'🧤⭐ Parada difícil',  t:'p', f:['parada dificil','paradon']},
+  {id:'PARADA',   lab:'🧤 Parada',            t:'p', f:['parada']},
+  // Equipo, sin dorsal
+  {id:'CORNER_F', lab:'⛳ Córner a favor',     t:'e', f:['corner a favor']},
+  {id:'FALTA_F',  lab:'🟢 Falta a favor',      t:'e', f:['falta a favor']},
+  // Rival, empieza por "rival"
+  {id:'R_GOL',    lab:'Gol rival',            t:'r', f:['gol']},
+  {id:'R_PEN',    lab:'Penalti en contra',    t:'r', f:['penalti']},
+  {id:'R_PUERTA', lab:'Tiro a puerta rival',  t:'r', f:['tiro a puerta','a puerta','tiro']},
+  {id:'R_CORNER', lab:'Córner rival',         t:'r', f:['corner']},
+  {id:'R_FALTA',  lab:'Falta rival',          t:'r', f:['falta']},
+  {id:'R_FJ',     lab:'Fuera de juego rival', t:'r', f:['fuera de juego','orsay']},
+];
+
+const NUM = {cero:0,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veinte:20};
+
+function norm(s){
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[¡!¿?.,;:«»"']/g,' ').replace(/\s+/g,' ').trim()
+    .split(' ').map(w=> NUM[w]!==undefined ? String(NUM[w]) : w).join(' ');
+}
+function nums(s){ return (s.match(/\b\d{1,2}\b/g)||[]).map(Number); }
+function findAct(text, tipos){
+  let best=null;
+  for(const a of ACC){ if(!tipos.includes(a.t)) continue;
+    for(const f of a.f){ const re=new RegExp('(^| )'+f+'( |$)');
+      if(re.test(text) && (!best || f.length>best.len)) best={a,len:f.length,f}; } }
+  return best;
+}
+
+// Referencia a jugador: dorsal o nombre (también apodo). Nombres con 5+ letras admiten una letra mal oída.
+function lev(a,b){ const m=[...Array(b.length+1).keys()];
+  for(let i=1;i<=a.length;i++){ let p=m[0]; m[0]=i;
+    for(let j=1;j<=b.length;j++){ const t=m[j]; m[j]=Math.min(m[j]+1,m[j-1]+1,p+(a[i-1]===b[j-1]?0:1)); p=t; } }
+  return m[b.length]; }
+const ACT_WORDS=new Set(ACC.flatMap(a=>a.f.join(' ').split(' ')).concat(['asiste','sale','entra','cambio','rival','del','de','por','a','al','el','la','apunta','apunto','apunte','anula','y','con']));
+function refs(t){
+  const out=[]; const w=t.split(' ');
+  w.forEach((tok,i)=>{
+    if(/^\d{1,2}$/.test(tok)){ out.push({i,d:+tok,by:'num',tok}); return; }
+    if(ACT_WORDS.has(tok)) return;
+    let hit=ROSTER.filter(p=>p.keys.includes(tok));
+    let fuzzy=false;
+    if(!hit.length && tok.length>=5){ hit=ROSTER.filter(p=>p.keys.some(k=>k.length>=5 && lev(tok,k)<=1)); fuzzy=hit.length>0; }
+    if(hit.length) out.push({i,cands:hit,by:'name',tok,fuzzy});
+  });
+  return out;
+}
+function resolve(r){
+  if(!r) return {err:'falta'};
+  if(r.by==='num'){ const p=ROSTER.find(x=>x.d===r.d); return p?{p}:{err:`El dorsal ${r.d} no está entre los convocados.`}; }
+  if(r.cands.length>1) return {err:`Hay ${r.cands.length} convocados que se llaman así (${r.cands.map(c=>'#'+c.d).join(', ')}). Usa el dorsal o el apodo.`};
+  return {p:r.cands[0]};
+}
+const who=p=>`${p.n} (#${p.d})`;
+
+function parse(raw){
+  const t = norm(raw);
+  if(!t) return {ok:false, why:'No se ha oído nada.'};
+  const w=t.split(' ');
+  const R=refs(t);
+  const after=(re)=>{ const k=w.findIndex(x=>re.test(x)); return k<0?null:R.find(r=>r.i>k); };
+
+  // Cambio: "cambio, sale Hugo, entra Bruno" o "cambio 8 por 14"
+  if(w[0]==='cambio'){
+    let s=after(/^sale$/), e=after(/^entra$/);
+    if(!s||!e){ s=R[0]; e=R[1]; }
+    if(!s||!e) return {ok:false, why:'Para un cambio di «cambio, sale Hugo, entra Bruno» (o con dorsales).'};
+    const a=resolve(s), b=resolve(e);
+    if(a.err) return {ok:false, why:a.err}; if(b.err) return {ok:false, why:b.err};
+    return {ok:true, kind:'h', text:`🔄 Cambio: sale ${who(a.p)}, entra ${who(b.p)}`};
+  }
+
+  // Rival
+  if(w[0]==='rival'){
+    const r=findAct(t.replace(/^rival ?/,''),['r']);
+    if(!r) return {ok:false, why:'Después de «rival» no se ha reconocido ninguna acción.'};
+    return {ok:true, kind:'r', id:r.a.id, text:r.a.lab};
+  }
+
+  // Equipo y portero sin jugador
+  const e=findAct(t,['e','p']);
+  if(e && e.a.t==='e') return {ok:true, kind:'h', id:e.a.id, text:e.a.lab};
+  if(e && e.a.t==='p'){ const g=ROSTER.find(x=>x.d===PORTERO); return {ok:true, kind:'h', id:e.a.id, text:g?`${e.a.lab} · ${who(g)}`:e.a.lab}; }
+
+  // Hergar con jugador
+  const a=findAct(t,['h']);
+  const asIdx=w.findIndex(x=>/^(asiste|asistencia)$/.test(x));
+  const main=R.find(r=>asIdx<0||r.i<asIdx) || null;
+  if(!a && !R.length) return {ok:false, why:'Sin acción ni jugador: parece un comentario.'};
+  if(!a) return {ok:false, why:'Hay un jugador pero ninguna acción reconocida.'};
+  if(!main) return {ok:false, why:`«${a.f}» sin dorsal ni nombre: no se apunta.`};
+  const m=resolve(main); if(m.err) return {ok:false, why:m.err};
+  const nota=main.fuzzy?` · entendido «${main.tok}»`:'';
+  if(a.a.id==='GOL'||a.a.id==='PENALTI'){
+    const ar=asIdx<0?null:R.find(r=>r.i>asIdx);
+    if(ar){ const x=resolve(ar); if(x.err) return {ok:false, why:'Asistente: '+x.err};
+      if(x.p===m.p) return {ok:false, why:'Goleador y asistente no pueden ser el mismo.'};
+      return {ok:true, kind:'h', id:a.a.id, text:`${a.a.lab} de ${who(m.p)} · asiste ${who(x.p)}`, nota}; }
+    return {ok:true, kind:'h', id:a.a.id, text:`${a.a.lab} de ${who(m.p)} · sin asistencia`, nota};
+  }
+  return {ok:true, kind:'h', id:a.a.id, text:`${a.a.lab} · ${who(m.p)}`, nota};
+}
+
+
+
+// ===================== PLANTILLA =====================
+const K_PL='hergar_voz_plantilla';
+const $=id=>document.getElementById(id);
+const normTxt=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+const EJEMPLO=`1 Mario *
+2 Hugo
+3 Daniel dani
+4 Pablo
+5 Lucas
+6 Martín
+7 Leo
+8 Álvaro
+9 Alejandro alex
+10 Adrián
+11 Marcos
+12 Iker
+13 Diego
+14 Bruno
+15 Nicolás nico
+16 Gonzalo`;
+function leerApp(){
+  try{
+    const raw=localStorage.getItem('hergar_F11_playersData'); if(!raw) return null;
+    let json=null; try{ json=LZString.decompressFromUTF16(raw); }catch(e){}
+    const pd=JSON.parse(json||raw);
+    const js=Object.values(pd).filter(p=>p&&p.name&&p.dorsal!=null);
+    if(!js.length) return null;
+    js.sort((a,b)=>a.dorsal-b.dorsal);
+    return js.map(p=>`${p.dorsal} ${p.name}${p.fuePortero?' *':''}`).join('\n');
+  }catch(e){ return null; }
+}
+function textoAPlantilla(t){
+  const out=[];
+  t.split('\n').forEach(l=>{
+    l=l.trim(); if(!l) return;
+    const port=/\*\s*$/.test(l); l=l.replace(/\*\s*$/,'').trim();
+    const m=l.match(/^(\d{1,2})\s+(\S+)\s*(.*)$/); if(!m) return;
+    const al=m[3].split(',').map(x=>x.trim()).filter(Boolean);
+    out.push({d:+m[1],n:m[2],al,port,keys:[m[2],...al].map(normTxt)});
+  });
+  return out;
+}
+function aplicarPlantilla(t){
+  ROSTER=textoAPlantilla(t);
+  const g=ROSTER.find(p=>p.port); PORTERO=g?g.d:(ROSTER[0]?ROSTER[0].d:1);
+}
+function cargarPlantilla(forzarApp){
+  let t=null, origen='';
+  if(!forzarApp){ try{ t=localStorage.getItem(K_PL); }catch(e){} if(t) origen='Plantilla guardada en esta prueba.'; }
+  if(!t){ t=leerApp(); if(t) origen='Leída de la app (nombre y dorsal). Añade apodos si quieres.'; }
+  if(!t){ t=EJEMPLO; origen='No he encontrado los datos de la app en este navegador: plantilla de ejemplo. Puedes escribir la tuya.'; }
+  $('txtPlantilla').value=t; $('origenPlantilla').textContent=origen; aplicarPlantilla(t);
+}
+$('btnGuardarPl').onclick=()=>{ const t=$('txtPlantilla').value; try{ localStorage.setItem(K_PL,t); }catch(e){} aplicarPlantilla(t); $('origenPlantilla').textContent=`Guardada: ${ROSTER.length} jugadores.`; };
+$('btnRecargarPl').onclick=()=>{ try{ localStorage.removeItem(K_PL); }catch(e){} cargarPlantilla(true); };
+cargarPlantilla(false);
+
+// ===================== DIAGNÓSTICO =====================
+const T0=Date.now(); let diagTxt=[]; let reinicios=0, escuchandoMs=0, desdeEscucha=null, batIni=null, batAct=null;
+const hhmm=()=>{ const d=new Date(); return d.toTimeString().slice(0,8); };
+function diag(msg){
+  diagTxt.push(`${hhmm()} ${msg}`); if(diagTxt.length>400) diagTxt.shift();
+  const el=$('diag'); el.textContent=diagTxt.slice(-80).join('\n'); el.scrollTop=el.scrollHeight;
+}
+function stats(){
+  const ms=escuchandoMs+(desdeEscucha?Date.now()-desdeEscucha:0);
+  $('sMin').textContent=Math.floor(ms/60000)+"'";
+  $('sReinicios').textContent=reinicios;
+  $('sBat').textContent=(batIni!=null&&batAct!=null)?Math.round((batIni-batAct)*100)+'%':'–';
+}
+setInterval(stats,5000);
+if(navigator.getBattery){ navigator.getBattery().then(b=>{ batAct=b.level; b.addEventListener('levelchange',()=>{batAct=b.level; diag(`batería ${Math.round(b.level*100)}%`);}); }).catch(()=>{}); }
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const soportaLocal=!!(SR && 'processLocally' in SR.prototype);
+if(!soportaLocal){ $('optLocal').disabled=true; $('lblLocal').style.opacity=.5; $('lblLocal').title='Este móvil no ofrece reconocimiento sin internet'; }
+let wakeLock=null;
+function pills(){
+  const p=[
+    [SR?'Reconocimiento de voz: sí':'Reconocimiento de voz: NO', SR?'ok':'bad'],
+    [navigator.onLine?'Internet: sí':'Sin internet', navigator.onLine?'ok':'bad'],
+    [wakeLock?'Pantalla encendida: sí':'Pantalla encendida: no', wakeLock?'ok':''],
+    ['mediaSession' in navigator?'Botón auricular: posible':'Botón auricular: no', 'mediaSession' in navigator?'ok':'bad'],
+    [soportaLocal?'Sin internet: posible':'Sin internet: no disponible', soportaLocal?'ok':''],
+    [ROSTER.length+' jugadores', ''],
+  ];
+  $('pills').innerHTML=p.map(([t,c])=>`<span class="pill ${c}">${t}</span>`).join('');
+}
+pills();
+window.addEventListener('online',()=>{diag('vuelve internet'); pills();});
+window.addEventListener('offline',()=>{diag('se va internet'); pills();});
+document.addEventListener('visibilitychange',()=>{
+  diag(document.hidden?'pantalla oculta / app en segundo plano':'pantalla visible de nuevo');
+  if(!document.hidden && corriendo) pedirWakeLock();
+});
+
+async function pedirWakeLock(){
+  try{ if(!('wakeLock' in navigator)) return;
+    wakeLock=await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release',()=>{ wakeLock=null; pills(); });
+  }catch(e){ diag('no se pudo mantener la pantalla encendida: '+e.name); }
+  pills();
+}
+
+// ===================== AUDIO: pitido y voz =====================
+let actx=null;
+function pitido(f=880,ms=120){
+  if(!$('optPitido').checked) return;
+  try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=f; g.gain.value=.15;
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+ms/1000);
+  }catch(e){}
+}
+let hablandoHasta=0;
+function decir(txt){
+  if(!$('optVoz').checked || !('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(txt); u.lang='es-ES'; u.rate=1.1;
+    const v=speechSynthesis.getVoices().find(v=>/^es(-|_)ES/i.test(v.lang)); if(v) u.voice=v;
+    hablandoHasta=Date.now()+8000;
+    u.onend=()=>{ hablandoHasta=Date.now()+700; };
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+const paraVoz=t=>t.replace(/\(#\d+\)/g,'').replace(/[^\p{L}\p{N}\s,·]/gu,'').replace(/\s*·\s*/g,', ').replace(/\s+/g,' ').trim();
+
+// ===================== APUNTAR =====================
+let apuntado=[];
+function pintarLista(){
+  if(!apuntado.length){ $('lista').innerHTML='<div class="empty">Nada todavía</div>'; return; }
+  $('lista').innerHTML=apuntado.slice().reverse().map(x=>`<div><b>${x.h}</b><span class="${x.anulado?'x':(x.kind==='r'?'rv':'')}">${esc(x.text)}${x.anulado?' · anulado':''}</span></div>`).join('');
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function mostrar(raw,r){
+  const el=$('res');
+  if(!r.ok){ el.className='res'; el.innerHTML=`<div class="heard">Oído: «${esc(raw)}»</div><div class="what" style="font-size:15px;color:var(--muted)">No se apunta</div><div class="why">${esc(r.why)}</div>`; return; }
+  el.className='res '+(r.kind==='r'?'rv':'ok');
+  el.innerHTML=`<div class="heard">Oído: «${esc(raw)}»</div><div class="what">${esc(r.text)}</div>${r.nota?`<div class="why">${esc(r.nota)}</div>`:''}`;
+}
+function procesarFrase(raw,origen){
+  const r=parse(raw);
+  mostrar(raw,r);
+  if(r.ok){
+    apuntado.push({...r,h:hhmm().slice(0,5),anulado:false}); pintarLista();
+    diag(`✔ APUNTADO (${origen}): ${r.text}`); decir(paraVoz(r.text));
+  }else{
+    diag(`✘ no apuntado (${origen}): ${r.why}`); decir('No entendido');
+  }
+}
+function anular(origen){
+  const u=[...apuntado].reverse().find(x=>!x.anulado);
+  if(!u){ decir('No hay nada que anular'); return; }
+  u.anulado=true; pintarLista(); diag(`↩ anulado (${origen}): ${u.text}`); decir('Anulado. '+paraVoz(u.text));
+  const el=$('res'); el.className='res'; el.innerHTML=`<div class="what" style="font-size:15px">Anulado: ${esc(u.text)}</div>`;
+}
+$('btnAnula').onclick=()=>anular('botón');
+
+// ===================== RECONOCIMIENTO =====================
+let modo='continua', corriendo=false, rec=null, armadoHasta=0, ultimoFin=0;
+const WAKE=/\b(apunta|apunto|apunte|apuntar)\b/;
+const ANULA=/\b(anula|anular|anulalo|borra|borralo)\b/;
+
+function setEstado(t,cls){ const e=$('estado'); e.textContent=t; e.className='status '+(cls||''); }
+function crearRec(continuo){
+  const r=new SR(); r.lang='es-ES'; r.continuous=continuo; r.interimResults=false; r.maxAlternatives=1;
+  if(soportaLocal && $('optLocal').checked){ try{ r.processLocally=true; }catch(e){} }
+  return r;
+}
+
+// ---- Modo 1: escucha continua con palabra de activación ----
+function textoTrasWake(t){ const m=t.match(WAKE); return m? t.slice(m.index+m[0].length).trim() : null; }
+function oirContinua(raw){
+  const t=norm(raw);
+  if(Date.now()<hablandoHasta){ diag(`(ignorado mientras habla la app) «${raw}»`); return; }
+  diag(`oído: «${raw}»`);
+  if(ANULA.test(t) && t.split(' ').length<=3){ anular('voz'); return; }
+  const tras=textoTrasWake(t);
+  if(tras!==null){
+    if(tras.length<2){ armadoHasta=Date.now()+6000; setEstado('Atento: di la acción','armed'); pitido(); diag('palabra «Apunta» sola: esperando la acción 6 s'); setTimeout(()=>{ if(Date.now()>=armadoHasta && corriendo) setEstado('Escuchando · di «Apunta…»','on'); },6100); return; }
+    armadoHasta=0; setEstado('Escuchando · di «Apunta…»','on'); procesarFrase(tras,'apunta'); return;
+  }
+  if(Date.now()<armadoHasta){ armadoHasta=0; setEstado('Escuchando · di «Apunta…»','on'); procesarFrase(raw,'tras apunta'); return; }
+  // sin palabra de activación: no se apunta (es lo que debe pasar con la grada)
+}
+function arrancarContinua(){
+  if(!corriendo) return;
+  try{
+    rec=crearRec(true);
+    rec.onstart=()=>{ desdeEscucha=Date.now(); if(ultimoFin){ diag(`escucha reactivada tras ${Date.now()-ultimoFin} ms`); } else diag('escucha iniciada'); setEstado('Escuchando · di «Apunta…»','on'); };
+    rec.onresult=ev=>{ for(let i=ev.resultIndex;i<ev.results.length;i++){ if(ev.results[i].isFinal) oirContinua(ev.results[i][0].transcript); } };
+    rec.onerror=ev=>{ diag('error: '+ev.error+(ev.error==='network'?' (necesita internet)':'')+(ev.error==='not-allowed'?' (micrófono denegado)':''));
+      if(ev.error==='not-allowed'||ev.error==='service-not-allowed'||ev.error==='language-not-supported'){ parar(); } };
+    rec.onend=()=>{ if(desdeEscucha){ escuchandoMs+=Date.now()-desdeEscucha; desdeEscucha=null; }
+      ultimoFin=Date.now(); if(corriendo){ reinicios++; stats(); setTimeout(arrancarContinua, navigator.onLine||$('optLocal').checked?150:2000); } };
+    rec.start();
+  }catch(e){ diag('no arranca: '+e.message); setTimeout(arrancarContinua,1000); }
+}
+
+// ---- Modo 2: botón del auricular (Media Session) ----
+let audioSil=null, recUno=null;
+function wavSilencio(seg=2){
+  const sr=8000,n=sr*seg,b=new ArrayBuffer(44+n*2),v=new DataView(b);
+  const w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  return URL.createObjectURL(new Blob([b],{type:'audio/wav'}));
+}
+async function prepararAuricular(){
+  if(!('mediaSession' in navigator)){ diag('este navegador no permite captar el botón del auricular'); return; }
+  audioSil=audioSil||new Audio(wavSilencio()); audioSil.loop=true;
+  try{ await audioSil.play(); diag('sesión de audio activa: toca el auricular'); }catch(e){ diag('no se pudo activar el audio: '+e.name); }
+  navigator.mediaSession.metadata=new MediaMetadata({title:'Hergar · Prueba de voz',artist:'Toca el auricular para apuntar'});
+  const h=accion=>()=>{ diag('botón del auricular: '+accion); if(audioSil&&audioSil.paused) audioSil.play().catch(()=>{}); navigator.mediaSession.playbackState='playing'; escucharUnaFrase(); };
+  ['play','pause','nexttrack','previoustrack','stop'].forEach(a=>{ try{ navigator.mediaSession.setActionHandler(a,h(a)); }catch(e){} });
+  navigator.mediaSession.playbackState='playing';
+}
+function soltarAuricular(){
+  if('mediaSession' in navigator){ ['play','pause','nexttrack','previoustrack','stop'].forEach(a=>{ try{ navigator.mediaSession.setActionHandler(a,null); }catch(e){} }); }
+  if(audioSil){ audioSil.pause(); }
+}
+function escucharUnaFrase(){
+  if(!corriendo||recUno) return;
+  pitido(); setEstado('Habla ahora','armed');
+  try{
+    recUno=crearRec(false); let oido='';
+    rec=recUno;
+    recUno.onstart=()=>{ desdeEscucha=Date.now(); };
+    recUno.onresult=ev=>{ oido=Array.from(ev.results).map(r=>r[0].transcript).join(' '); };
+    recUno.onerror=ev=>{ diag('error: '+ev.error); };
+    recUno.onend=()=>{ if(desdeEscucha){ escuchandoMs+=Date.now()-desdeEscucha; desdeEscucha=null; }
+      recUno=null; rec=null; if(corriendo) setEstado('Esperando el auricular','on');
+      if(!oido){ diag('no se oyó nada'); decir('No he oído nada'); return; }
+      diag(`oído: «${oido}»`);
+      const t=norm(oido); if(ANULA.test(t)&&t.split(' ').length<=3){ anular('auricular'); return; }
+      const tras=textoTrasWake(t); procesarFrase(tras!==null&&tras.length>1?tras:oido,'auricular'); };
+    recUno.start();
+  }catch(e){ recUno=null; diag('no arranca: '+e.message); }
+}
+
+// ---- Empezar / parar ----
+async function empezar(){
+  if(!SR){ setEstado('Este navegador no tiene reconocimiento de voz'); diag('Sin SpeechRecognition. Abre la página en Chrome.'); return; }
+  corriendo=true; reinicios=0; ultimoFin=0; $('btnStart').textContent='PARAR PRUEBA'; $('btnStart').classList.add('stop');
+  if(batIni==null && batAct!=null) batIni=batAct;
+  diag(`=== empieza · modo ${modo==='continua'?'escucha continua':'botón del auricular'} · ${navigator.onLine?'con':'sin'} internet${$('optLocal').checked?' · pidiendo sin internet':''} ===`);
+  await pedirWakeLock();
+  try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)(); actx.resume(); }catch(e){}
+  if('speechSynthesis' in window){ speechSynthesis.getVoices(); }
+  if(modo==='continua'){ arrancarContinua(); }
+  else { await prepararAuricular(); setEstado('Esperando el auricular','on'); }
+}
+function parar(){
+  corriendo=false; armadoHasta=0;
+  try{ rec&&rec.abort(); }catch(e){} rec=null; recUno=null;
+  soltarAuricular();
+  if(desdeEscucha){ escuchandoMs+=Date.now()-desdeEscucha; desdeEscucha=null; }
+  try{ wakeLock&&wakeLock.release(); }catch(e){} wakeLock=null; pills();
+  $('btnStart').textContent='EMPEZAR PRUEBA'; $('btnStart').classList.remove('stop'); setEstado('Parado');
+  diag('=== parado ==='); stats();
+}
+$('btnStart').onclick=()=> corriendo?parar():empezar();
+function setModo(m){
+  if(corriendo) parar();
+  modo=m; $('mContinua').setAttribute('aria-pressed',m==='continua'); $('mAuricular').setAttribute('aria-pressed',m==='auricular');
+}
+$('mContinua').onclick=()=>setModo('continua');
+$('mAuricular').onclick=()=>setModo('auricular');
+
+// ---- Modo bolsillo ----
+let holdT=null;
+$('btnBolsillo').onclick=()=>{ $('bolsillo').hidden=false; diag('modo bolsillo activado'); };
+const bol=$('bolsillo');
+bol.addEventListener('pointerdown',e=>{ e.preventDefault(); $('holdTxt').textContent='Sigue manteniendo…'; holdT=setTimeout(()=>{ bol.hidden=true; diag('modo bolsillo desactivado'); $('holdTxt').textContent='Mantén el dedo 2 s para salir'; },2000); });
+['pointerup','pointercancel','pointerleave'].forEach(ev=>bol.addEventListener(ev,()=>{ clearTimeout(holdT); $('holdTxt').textContent='Mantén el dedo 2 s para salir'; }));
+bol.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+bol.addEventListener('contextmenu',e=>e.preventDefault());
+
+// ---- Informe ----
+$('btnCopiar').onclick=()=>{
+  stats();
+  const cab=[
+    'INFORME PRUEBA DE VOZ HERGAR',
+    `Fecha: ${new Date().toLocaleString('es-ES')}`,
+    `Navegador: ${navigator.userAgent}`,
+    `Instalada como app: ${matchMedia('(display-mode: standalone)').matches?'sí':'no'}`,
+    `Escuchando: ${$('sMin').textContent} · reinicios: ${reinicios} · batería gastada: ${$('sBat').textContent}`,
+    `Sin internet posible: ${soportaLocal?'sí':'no'} · Botón auricular posible: ${'mediaSession' in navigator?'sí':'no'}`,
+    `Apuntado: ${apuntado.filter(x=>!x.anulado).length} · anulado: ${apuntado.filter(x=>x.anulado).length}`,
+    '--- registro ---'
+  ];
+  const txt=cab.concat(diagTxt).join('\n');
+  const ta=$('informe');
+  const ok=()=>{ $('btnCopiar').textContent='✔ Copiado: pégalo en el chat'; setTimeout(()=>$('btnCopiar').textContent='📋 Copiar informe para Claude',3000); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok).catch(()=>{ ta.hidden=false; ta.value=txt; ta.select(); }); }
+  else { ta.hidden=false; ta.value=txt; ta.select(); }
+};
+</script>
+</body>
+</html>
