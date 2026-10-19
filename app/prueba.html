@@ -27,7 +27,28 @@
     (function () {
         const PRE = 'PRUEBA__';
         const S = Storage.prototype, g = S.getItem, st = S.setItem, rm = S.removeItem;
-        S.getItem = function (k) { return this === window.localStorage ? g.call(this, PRE + k) : g.call(this, k); };
+        // El código de la copia en la nube es el de verdad (para encontrar tus copias); subir está desactivado
+        S.getItem = function (k) {
+            if (this !== window.localStorage) return g.call(this, k);
+            const v = g.call(this, PRE + k);
+            if (v === null && k === 'hergar_F11_nubeToken') return g.call(this, k);
+            return v;
+        };
+        // Primera vez (o al pedirlo): copia tus datos reales de este móvil a la prueba, sin tocarlos
+        function copiarReales() {
+            const claves = [];
+            for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && !k.startsWith(PRE) && /^hergar/i.test(k)) claves.push(k); }
+            claves.forEach(k => st.call(localStorage, PRE + k, g.call(localStorage, k))); // primero la lista: al añadir claves cambia el orden
+            return claves.length;
+        }
+        window.__pruebaCopiados = 0;
+        if (g.call(localStorage, PRE + 'hergar_F11_playersData') === null) window.__pruebaCopiados = copiarReales();
+        window.__pruebaRecopiar = () => {
+            if (!confirm('¿Volver a copiar a la prueba tus datos reales de este móvil?\n\nSe borra todo lo que hayas hecho en la prueba. Tus datos reales no se tocan.')) return;
+            const viejas = []; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(PRE)) viejas.push(k); }
+            viejas.forEach(k => rm.call(localStorage, k));
+            copiarReales(); location.reload();
+        };
         S.setItem = function (k, v) { return this === window.localStorage ? st.call(this, PRE + k, v) : st.call(this, k, v); };
         S.removeItem = function (k) { return this === window.localStorage ? rm.call(this, PRE + k) : rm.call(this, k); };
         Object.defineProperty(window, '__hergarFirebaseSet', { configurable: false, get() { return () => Promise.resolve({ ok: true }); }, set() {} });
@@ -39,9 +60,11 @@
         };
         document.addEventListener('DOMContentLoaded', () => {
             const b = document.createElement('div');
-            b.textContent = '🧪 MODO PRUEBA · no se publica nada';
-            b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:#7c3aed;color:#fff;text-align:center;font:800 11px Montserrat,sans-serif;letter-spacing:1px;padding:3px 0 calc(3px);pointer-events:none;';
+            b.innerHTML = '<span>🧪 MODO PRUEBA · no se publica nada</span><button type="button" onclick="__pruebaRecopiar()" style="margin-left:8px;background:#fff;color:#7c3aed;border:none;border-radius:6px;padding:2px 8px;font:800 10.5px Montserrat,sans-serif;">↻ Copiar mis datos</button>';
+            b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:#7c3aed;color:#fff;text-align:center;font:800 11px Montserrat,sans-serif;letter-spacing:.5px;padding:4px 0;display:flex;align-items:center;justify-content:center;';
             document.body.appendChild(b);
+            if (window.__pruebaCopiados) setTimeout(() => alert('🧪 Copia de prueba lista: he copiado aquí tus datos de este móvil (plantilla, temporada, Liga).\n\nLo que hagas en la prueba no toca tus datos reales ni se publica.'), 600);
+            else if (g.call(localStorage, PRE + 'hergar_F11_playersData') === null) setTimeout(() => alert('🧪 No he encontrado datos de la app en este navegador.\n\nRestáuralos desde la nube: Ajustes → Convocatoria y plantilla → Editar plantilla y configuración → Restaurar desde la nube, y pega tu código de copia si no aparece.'), 600);
         });
     })();
 </script>
