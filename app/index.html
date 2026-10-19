@@ -1762,7 +1762,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v162</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v163</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -17994,6 +17994,207 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             aplicar();
         };
         aplicar();
+    })();
+</script>
+<style>
+    /* ── v163 · RECOGIDA DE DATOS EN DIRECTO ── */
+    .portero-panel { display: none; margin-top: 14px; }
+    .portero-panel.visible { display: block; }
+    .portero-panel-title { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #60a5fa; margin-bottom: 8px; }
+    .paradas-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .paradas-btns button { min-height: 56px; border-radius: 12px; font-weight: 800; font-size: 14px; color: #fff; background: #1e40af; border: none; }
+    .paradas-btns .btn-parada-dificil { background: #1e3a8a; border: 2px solid #93c5fd; }
+    #playerActionsModal { align-items: flex-end !important; justify-content: center; }
+    #playerActionsModal .player-actions-modal { margin: 0; width: 100%; max-width: 480px; border-radius: 20px 20px 0 0; padding: 14px 12px calc(14px + env(safe-area-inset-bottom)); border-top: 2px solid #f5a623; max-height: 92vh; overflow-y: auto; }
+    #playerActionsModal h3 { text-align: center; margin: 0 0 4px !important; }
+    .actions-modal-grid.v163 { display: block; margin-top: 6px; } /* sin !important: para el portero se oculta con style.display */
+    .v163-fam { border-radius: 12px; padding: 7px; margin-top: 7px; text-align: left; }
+    .v163-fam .lbl { font-size: 10.5px; font-weight: 800; letter-spacing: .8px; margin: 0 0 5px 3px; }
+    .v163-fila { display: grid; gap: 6px; }
+    .v163-fila.c2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .v163-fila.c3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .v163-fila.c4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+    .actions-modal-grid.v163 button.v163-b { height: auto !important; min-height: 54px; padding: 6px 4px !important; text-align: center !important; border-radius: 11px; font-weight: 800; font-size: 13.5px; color: #fff; border: none; background: #334155; line-height: 1.2; transform: none !important; }
+    .actions-modal-grid.v163 button.v163-b:active { filter: brightness(1.25); }
+    .v163-tiro { background: rgba(34,197,94,.10); } .v163-tiro .lbl { color: #4ade80; } .v163-tiro button.v163-b { background: #166534 !important; }
+    .v163-tiro button.v163-gol { background: #15803d !important; box-shadow: inset 0 0 0 2px #4ade80; }
+    .v163-pase { background: rgba(59,130,246,.10); } .v163-pase .lbl { color: #93c5fd; } .v163-pase button.v163-b { background: #1e40af !important; }
+    .v163-def { background: rgba(249,115,22,.10); } .v163-def .lbl { color: #fdba74; } .v163-def button.v163-b { background: #9a3412 !important; }
+    .v163-otros .lbl { color: #64748b; } .v163-otros button.v163-b { background: #1e293b !important; color: #cbd5e1 !important; font-size: 12px !important; min-height: 46px !important; }
+    .v163-extra { display: none; margin-top: 6px; } .v163-extra.on { display: grid; }
+    #closeActionsModalBtn { margin-top: 10px !important; padding: 12px !important; }
+    /* En directo: toda la ficha se toca (sin el «…»), fichas algo más bajas para que quepa el once */
+    body.en-directo .btn-card-action { display: none !important; }
+    body.en-directo .soccer-field { aspect-ratio: 1 / 1.25 !important; }
+    body.en-directo .player-token { width: 64px !important; height: 58px !important; }
+    body.en-directo .player-token .card-name-main { font-size: 10.5px !important; }
+    body.v163-cambio .player-token { outline: 2px dashed rgba(245,166,35,.6); }
+    body.v163-cambio .bench-card { outline: 2px dashed rgba(245,166,35,.6); }
+    #v163CambioBtn { position: fixed; right: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 9500; display: none; min-height: 50px; padding: 0 18px; border-radius: 25px; border: none; background: #f5a623; color: #1a1a1a; font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+    body.en-directo #v163CambioBtn { display: block; }
+    body.v163-cambio #v163CambioBtn { background: #475569; color: #fff; }
+    #v163CambioAviso { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top)); z-index: 9500; display: none; background: #f5a623; color: #1a1a1a; border-radius: 12px; padding: 10px 12px; font-weight: 800; font-size: 13px; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+    body.v163-cambio #v163CambioAviso { display: block; }
+    #v163Toast { position: fixed; left: 12px; right: 12px; top: calc(10px + env(safe-area-inset-top)); z-index: 10600; display: none; align-items: center; justify-content: space-between; gap: 10px; background: #f5a623; color: #1a1a1a; border-radius: 12px; padding: 10px 12px; font-weight: 800; font-size: 13.5px; box-shadow: 0 8px 24px rgba(0,0,0,.55); }
+    #v163Toast.on { display: flex; }
+    #v163Toast button { background: #1a1a1a; color: #f5a623; border: none; border-radius: 9px; padding: 9px 12px; font-weight: 900; font-size: 13px; flex-shrink: 0; }
+    #v163AsistModal { position: fixed; inset: 0; z-index: 10550; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.75); }
+    #v163AsistModal.on { display: flex; }
+    #v163AsistModal .caja { width: 100%; max-width: 480px; background: #111827; border-radius: 20px 20px 0 0; border-top: 2px solid #4ade80; padding: 14px 12px calc(14px + env(safe-area-inset-bottom)); }
+    #v163AsistModal .tit { text-align: center; font-family: 'Montserrat', sans-serif; font-weight: 900; color: #fff; font-size: 15px; margin-bottom: 10px; }
+    #v163AsistModal .lista { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }
+    #v163AsistModal button { min-height: 50px; border-radius: 11px; border: none; background: #1e40af; color: #fff; font-weight: 800; font-size: 13.5px; }
+    #v163AsistModal button.nadie { width: 100%; margin-top: 8px; background: #1e293b; color: #94a3b8; }
+</style>
+<button id="v163CambioBtn" type="button">🔄 Cambio</button>
+<div id="v163CambioAviso">Toca al que sale y después al que entra</div>
+<div id="v163Toast" role="status" aria-live="polite"><span id="v163ToastTxt"></span><button type="button" id="v163ToastUndo">Deshacer</button></div>
+<div id="v163AsistModal" role="dialog" aria-modal="true" aria-label="¿Quién asistió?"><div class="caja"><div class="tit" id="v163AsistTit">⚽ Gol · ¿quién asistió?</div><div class="lista" id="v163AsistLista"></div><button type="button" class="nadie" id="v163AsistNadie">Sin asistencia</button></div></div>
+<script>
+    // ── v163 · RECOGIDA DE DATOS EN DIRECTO ──────────────────────────────────
+    // Antes de empezar (previa): igual que siempre, tocar dos fichas las intercambia para colocar la pizarra.
+    // Desde «Iniciar»: tocar cualquier parte de la ficha abre sus acciones; los cambios, con el botón «🔄 Cambio».
+    // Panel de acciones por familias y en posiciones fijas; disparos directos; gol con pregunta de asistencia;
+    // aviso con «Deshacer» tras cada acción. Arregla el panel de paradas, que salía también a los jugadores de campo.
+    (function () {
+        let modoCambio = false;
+        const enDirecto = () => partidoEmpezado && !matchFinished;
+        function refrescarModo() {
+            const on = enDirecto();
+            document.body.classList.toggle('en-directo', on);
+            if (!on && modoCambio) salirCambio();
+        }
+        function salirCambio() {
+            modoCambio = false;
+            document.body.classList.remove('v163-cambio');
+            document.getElementById('v163CambioBtn').textContent = '🔄 Cambio';
+        }
+        document.getElementById('v163CambioBtn').onclick = () => {
+            if (modoCambio) { selectedPlayerId = null; salirCambio(); renderPlayers(); return; }
+            modoCambio = true; selectedPlayerId = null;
+            document.body.classList.add('v163-cambio');
+            document.getElementById('v163CambioBtn').textContent = '✕ Cancelar';
+            document.getElementById('v163CambioAviso').textContent = 'Cambio: toca al que sale';
+            renderPlayers();
+        };
+
+        // Tocar una ficha: acciones en directo, intercambio en la previa o en modo cambio
+        const origCampo = handleFieldPlayerClick;
+        window.handleFieldPlayerClick = function (id) {
+            if (enDirecto() && !modoCambio) { openActionsModal({ stopPropagation() {}, preventDefault() {} }, id); return; }
+            const r = origCampo(id);
+            if (modoCambio) {
+                if (selectedPlayerId === null) { salirCambio(); renderPlayers(); }
+                else {
+                    const p = playersData[selectedPlayerId];
+                    document.getElementById('v163CambioAviso').textContent = `Sale ${p ? p.name.split(' ')[0] : ''}: toca al que entra (banquillo o campo)`;
+                    const b = document.getElementById('benchContainer');
+                    if (b) setTimeout(() => b.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+                }
+            }
+            return r;
+        };
+        const origBanquillo = handleBenchPlayerClick;
+        window.handleBenchPlayerClick = function (id) {
+            if (enDirecto() && !modoCambio) {
+                document.getElementById('v163CambioAviso').textContent = 'Cambio: toca al que sale';
+                modoCambio = true; document.body.classList.add('v163-cambio');
+                document.getElementById('v163CambioBtn').textContent = '✕ Cancelar';
+                return;
+            }
+            const r = origBanquillo(id);
+            if (modoCambio && selectedPlayerId === null) salirCambio();
+            return r;
+        };
+        const origRender = renderPlayers;
+        window.renderPlayers = function () { refrescarModo(); return origRender.apply(this, arguments); };
+        setInterval(refrescarModo, 1000);
+
+        // Panel de acciones por familias (se mueven los botones de siempre, con su misma lógica)
+        const grid = document.querySelector('.actions-modal-grid');
+        const B = (id, txt, extraClase) => { const b = document.getElementById(id); b.removeAttribute('style'); b.className = 'v163-b' + (extraClase ? ' ' + extraClase : ''); b.textContent = txt; return b; };
+        const nuevo = (id, txt, fn) => { const b = document.createElement('button'); b.type = 'button'; b.id = id; b.className = 'v163-b'; b.textContent = txt; b.onclick = fn; return b; };
+        const fam = (clase, titulo, cols, botones) => { const d = document.createElement('div'); d.className = 'v163-fam ' + clase; d.innerHTML = `<p class="lbl">${titulo}</p>`; const f = document.createElement('div'); f.className = 'v163-fila ' + cols; botones.forEach(b => f.appendChild(b)); d.appendChild(f); return d; };
+        const fila = (id, cols, botones) => { const f = document.createElement('div'); f.id = id; f.className = 'v163-fila v163-extra ' + cols; botones.forEach(b => f.appendChild(b)); return f; };
+        // queueAction cierra la ventanita vieja de disparo; aquí se cierra el panel de acciones
+        const disparoDirecto = (tipo) => { document.getElementById('playerActionsModal').style.display = 'none'; queueAction(tipo); };
+        const tiro = fam('v163-tiro', 'TIRO', 'c3', [B('actionGoalBtn', '⚽ Gol', 'v163-gol'), nuevo('v163PuertaBtn', '🎯 A puerta', () => disparoDirecto('DISPARO_PUERTA')), nuevo('v163FueraBtn', '💨 Sin peligro', () => disparoDirecto('DISPARO_FUERA'))]);
+        const pase = fam('v163-pase', 'PASE Y JUGADA', 'c3', [B('actionPassKeyBtn', '🔑 Pase clave'), B('actionPassAreaBtn', '📯 Pase al área'), B('actionDribbleBtn', '🌀 Regate')]);
+        const def = fam('v163-def', 'DEFENSA', 'c2', [B('actionDefenseBtn', '🛡️ Defensa'), B('actionDefenseKeyBtn', '🛡️⭐ Def. clave')]);
+        const toggle = (idFila) => () => { ['v163FilaTarjetas', 'v163FilaMas'].forEach(f => { const el = document.getElementById(f); el.classList.toggle('on', f === idFila && !el.classList.contains('on')); }); };
+        const otros = fam('v163-otros', 'OTROS', 'c4', [B('actionFueraJuegoBtn', '🚩 F. juego'), B('actionFalloBtn', '❌ Fallo'), nuevo('v163TarjetaBtn', '🟨 Tarjeta', toggle('v163FilaTarjetas')), nuevo('v163MasBtn', '⋯ Más', toggle('v163FilaMas'))]);
+        otros.appendChild(fila('v163FilaTarjetas', 'c2', [B('actionYellowBtn', '🟨 Amarilla'), B('actionRedBtn', '🟥 Roja (expulsión)')]));
+        otros.appendChild(fila('v163FilaMas', 'c3', [B('actionPenaltiBtn', '🎯 Penalti'), B('actionAssistBtn', '👟 Asistencia'), B('actionFalloImpBtn', '💥 Fallo importante')]));
+        const viejoDisparo = document.getElementById('actionDisparoBtn');
+        grid.innerHTML = ''; grid.classList.add('v163');
+        [tiro, pase, def, otros].forEach(x => grid.appendChild(x));
+        if (viejoDisparo) { viejoDisparo.style.display = 'none'; grid.appendChild(viejoDisparo); }
+        document.getElementById('closeActionsModalBtn').textContent = 'Volver al campo';
+
+        const origAbrir = openActionsModal;
+        window.openActionsModal = function (e, id) {
+            ['v163FilaTarjetas', 'v163FilaMas'].forEach(f => document.getElementById(f).classList.remove('on'));
+            const r = origAbrir(e, id);
+            const p = playersData[id];
+            if (p && partidoEmpezado) document.getElementById('modalPlayerTitle').innerText = `${p.dorsal ?? ''} · ${p.name.split(' ')[0]} · ${Math.floor(getElapsedSeconds() / 60)}'`;
+            return r;
+        };
+
+        // Gol → ¿quién asistió? (la asistencia se apunta en el mismo minuto, así queda ligada a ese gol)
+        const origRegistrar = registrarAccionJugador;
+        function preguntarAsistencia(goleadorId) {
+            const lista = document.getElementById('v163AsistLista');
+            const g = playersData[goleadorId];
+            document.getElementById('v163AsistTit').textContent = `⚽ Gol de ${g ? g.name.split(' ')[0] : ''} · ¿quién asistió?`;
+            lista.innerHTML = '';
+            onFieldIds.filter(i => i !== goleadorId && playersData[i]).forEach(i => {
+                const q = playersData[i];
+                const b = document.createElement('button'); b.type = 'button'; b.textContent = `${q.dorsal ?? ''} ${q.name.split(' ')[0]}`;
+                b.onclick = () => {
+                    document.getElementById('v163AsistModal').classList.remove('on');
+                    const antes = substitutionTimeline.length;
+                    activeActionPlayerId = i; pendingAction = 'ASISTENCIA';
+                    origRegistrar();
+                    avisar(antes);
+                };
+                lista.appendChild(b);
+            });
+            document.getElementById('v163AsistModal').classList.add('on');
+        }
+        document.getElementById('v163AsistNadie').onclick = () => document.getElementById('v163AsistModal').classList.remove('on');
+        window.registrarAccionJugador = function () {
+            const accion = pendingAction, quien = activeActionPlayerId;
+            const r = origRegistrar.apply(this, arguments);
+            if (accion === 'GOL' && quien != null) setTimeout(() => preguntarAsistencia(quien), 60);
+            return r;
+        };
+
+        // Aviso con «Deshacer» tras cada acción apuntada
+        let tToast = null;
+        function avisar(antes) {
+            if (substitutionTimeline.length <= antes) return;
+            const ult = String(substitutionTimeline[substitutionTimeline.length - 1] || '');
+            const m = /^\[(\d+)'\]\s*(.*)$/.exec(ult);
+            const txt = m ? `✓ ${m[2].replace(/\s*\(([-+]?\d+[.,]?\d*)\)\s*$/, '').replace(/#\S+\s/, '')} · ${m[1]}'` : '✓ Apuntado';
+            document.getElementById('v163ToastTxt').textContent = txt;
+            const t = document.getElementById('v163Toast'); t.classList.add('on');
+            clearTimeout(tToast); tToast = setTimeout(() => t.classList.remove('on'), 4000);
+        }
+        document.getElementById('v163ToastUndo').onclick = () => {
+            document.getElementById('v163Toast').classList.remove('on');
+            document.getElementById('v163AsistModal').classList.remove('on');
+            document.getElementById('undoBtn').click();
+        };
+        ['playerActionsModal', 'disparoTypeModal', 'penaltiFavorModal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('click', (ev) => {
+                if (!ev.target.closest('button')) return;
+                const antes = substitutionTimeline.length;
+                setTimeout(() => avisar(antes), 80);
+            }, true);
+        });
+        refrescarModo();
     })();
 </script>
 </body>
