@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    171                                            ║
+  ║  Versión:    172                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1762,7 +1762,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v171</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v172</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2798,6 +2798,9 @@
         <button type="button" onclick="ligaEdIntercambiar()" style="width:100%; min-height:40px; margin-bottom:6px; border-radius:10px; border:1px solid rgba(90,176,255,.45); background:rgba(90,176,255,.10); color:#5ab0ff; font-weight:800; font-size:12px; cursor:pointer;">⇅ Intercambiar local y visitante</button>
         <label for="ligaEdVisitante" style="display:block; text-align:left; font-size:10px; color:#64748b; font-weight:700; margin-bottom:3px;">VISITANTE</label>
         <select id="ligaEdVisitante" style="width:100%; min-height:42px; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:0 8px; font-size:13px; margin-bottom:12px;"></select>
+        <!-- v172: campo donde se juega (si no es el del local) -->
+        <label for="ligaEdCampo" style="display:block; text-align:left; font-size:10px; color:#64748b; font-weight:700; margin-bottom:3px;">🏟️ CAMPO</label>
+        <select id="ligaEdCampo" onchange="if(this.value==='nuevo'){abrirCampoNuevo(ligaHorarioPidV172(), 'editar');}" style="width:100%; min-height:42px; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:0 8px; font-size:13px; margin-bottom:12px;"></select>
         <label style="display:block; text-align:left; font-size:10px; color:#64748b; font-weight:700; margin-bottom:3px;">DÍA</label>
         <input id="ligaHorarioFecha" type="date" class="lt-in" style="width:100%; margin-bottom:10px;">
         <label style="display:block; text-align:left; font-size:10px; color:#64748b; font-weight:700; margin-bottom:3px;">HORA</label>
@@ -9322,7 +9325,7 @@
         return {
             despues,
             eq, lp, casa: lp ? lp.local === h : null, hora: (lp && lp.hora) || null,
-            fechaISO: lp ? fechaLigaAISO(lp.fechaPartido || '') : '', campo: lp ? ctxCampoDe(liga, lp.local) : null,
+            fechaISO: lp ? fechaLigaAISO(lp.fechaPartido || '') : '', campo: lp ? campoPartidoLiga(liga, lp) : null,
             fH, fR, nEq: liga.equipos.length, rachaH: racha(h), rachaR: racha(eq.id), h2h
         };
     }
@@ -15458,6 +15461,39 @@ ${separador}`;
     const CTX_UMBRALES = { frio: 8, fresco: 15, calor: 25, racha: 30, lluviaMm: 0.3 };
     function ctxEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function ctxCampoDe(liga, eqId) { const e = ((liga && liga.equipos) || []).find(x => x.id === eqId); return (e && e.campo) ? e.campo : null; }
+    // v172 · campo de un partido concreto: el elegido para ese partido (lp.campoSel) o, si no, el del equipo local.
+    //  lp.campoSel = { eq: idEquipo } (el campo de otro equipo de la Liga) o { extra: id } (liga.camposExtra).
+    function campoPartidoLiga(liga, lp) {
+        if (!lp) return null;
+        const sel = lp.campoSel;
+        if (sel && sel.eq != null) { const c = ctxCampoDe(liga, sel.eq); if (c) return c; }
+        if (sel && sel.extra != null) { const c = ((liga && liga.camposExtra) || []).find(x => x.id === sel.extra); if (c) return c; }
+        return ctxCampoDe(liga, lp.local);
+    }
+    function campoElegidoTxt(liga, lp) {
+        const c = campoPartidoLiga(liga, lp);
+        return c ? ([c.nombre, c.lugar && c.lugar !== 'según el enlace' ? c.lugar : ''].filter(Boolean).join(' · ') || 'Campo sin nombre') : '';
+    }
+    // Opciones del desplegable de campo de un partido
+    function opcionesCampoPartido(liga, lp) {
+        const sel = lp.campoSel || null;
+        const val = sel && sel.eq != null ? 'eq:' + sel.eq : sel && sel.extra != null ? 'x:' + sel.extra : '';
+        const nomC = (c) => ctxEsc(c.nombre || c.lugar || 'Campo sin nombre');
+        const cl = ctxCampoDe(liga, lp.local);
+        let h = `<option value="" ${val === '' ? 'selected' : ''}>🏠 Campo del local${cl ? ' · ' + nomC(cl) : ' (sin campo puesto)'}</option>`;
+        const eqs = (liga.equipos || []).filter(e => e.campo && e.id !== lp.local);
+        if (eqs.length) h += `<optgroup label="Campos de la Liga">${eqs.map(e => `<option value="eq:${e.id}" ${val === 'eq:' + e.id ? 'selected' : ''}>${ctxEsc(e.nombre)} · ${nomC(e.campo)}</option>`).join('')}</optgroup>`;
+        const ex = liga.camposExtra || [];
+        if (ex.length) h += `<optgroup label="Otros campos">${ex.map(c => `<option value="x:${c.id}" ${val === 'x:' + c.id ? 'selected' : ''}>${nomC(c)}</option>`).join('')}</optgroup>`;
+        h += `<option value="nuevo">➕ Nuevo campo…</option>`;
+        return h;
+    }
+    function aplicarCampoSel(lp, val) {
+        if (!val) delete lp.campoSel;
+        else if (val.startsWith('eq:')) lp.campoSel = { eq: val.slice(3) };
+        else if (val.startsWith('x:')) lp.campoSel = { extra: val.slice(2) };
+    }
+    window.campoPartidoLiga = campoPartidoLiga;
     function ctxMapsUrl(c) {
         if (!c) return '';
         if (c.maps) return c.maps;
@@ -15714,7 +15750,7 @@ ${separador}`;
                 c.casa = lp.local === h;
                 c.hora = lp.hora || p.horaInicio || null; // v99
                 c.localId = lp.local;
-                const campo = ctxCampoDe(liga, lp.local);
+                const campo = campoPartidoLiga(liga, lp); // v172
                 c.cesped = campo && campo.cesped ? campo.cesped : null;
                 c.tamano = campo && campo.tamano ? campo.tamano : null;
                 // nivel del rival: clasificación con lo jugado ANTES de ese partido
@@ -15820,10 +15856,11 @@ ${separador}`;
             if (fISO && fISO > hoyISO) return;
             const lp = c.ligaId != null ? liga.partidos.find(x => x.id === c.ligaId) : null;
             const nomLocal = lp ? nombreEquipoLiga(liga, lp.local) : '';
-            const campo = lp ? ctxCampoDe(liga, lp.local) : null;
+            const campo = lp ? campoPartidoLiga(liga, lp) : null; // v172
             let motivo = '', accion = '';
             const boton = (txt, onclick) => `<button type="button" onclick="${onclick}" style="min-height:38px; padding:0 12px; border-radius:9px; border:none; background:#f5a623; color:#0a0e14; font-weight:800; font-size:11.5px; white-space:nowrap;">${txt}</button>`;
             if (!lp) motivo = `No lo encuentro en el calendario de la Liga (rival «${ctxEsc(p.rival)}»). Si es un amistoso, no tendrá tiempo.`;
+            else if (lp.campoSel && campo && campo.lat == null) { motivo = 'Al campo elegido para este partido le falta la ubicación.'; }
             else if (!campo) { motivo = `Falta el campo de ${ctxEsc(nomLocal)}.`; accion = boton('🏟️ Poner campo', `abrirCampoEquipo('${lp.local}')`); }
             else if (campo.lat == null) { motivo = `Al campo de ${ctxEsc(nomLocal)} le falta la ubicación.`; accion = boton('🏟️ Arreglar', `abrirCampoEquipo('${lp.local}')`); }
             else if (!c.hora) { motivo = '¿A qué hora empezó?'; accion = `<input type="time" id="ctxHora${i}" style="min-height:38px; background:#0f172a; border:1px solid rgba(255,255,255,0.15); border-radius:8px; color:#e2e8f0; padding:0 8px; font-size:13px;">` + boton('Guardar', `guardarHoraPartidoCtx(${i})`); }
@@ -15865,7 +15902,21 @@ ${separador}`;
     window.refrescarContexto = refrescarContexto;
 
     // ── v97 · FICHA DEL CAMPO DE CADA EQUIPO (Liga → Equipos → 🏟️ Campo) ──
-    let campoEditId = null, campoTmp = null;
+    let campoEditId = null, campoTmp = null, campoNuevoPid = null, campoNuevoDesde = null;
+    // v172 · campo nuevo (no es de ningún equipo): se guarda en liga.camposExtra y se elige para el partido
+    function abrirCampoNuevo(pid, desde) {
+        campoEditId = '__nuevo__'; campoNuevoPid = pid; campoNuevoDesde = desde;
+        campoTmp = { nombre: '', lugar: '', lat: null, lon: null, maps: '', cesped: '', tamano: '' };
+        document.getElementById('campoEquipoTitulo').innerText = '🏟️ CAMPO NUEVO';
+        document.getElementById('campoNombre').value = '';
+        document.getElementById('campoBuscar').value = '';
+        document.getElementById('campoMaps').value = '';
+        document.getElementById('campoResultados').innerHTML = '';
+        pintarCampoEstado();
+        document.getElementById('campoEquipoModal').style.zIndex = '10300'; // v172: por encima de «Editar partido»
+        document.getElementById('campoEquipoModal').style.display = 'flex';
+    }
+    window.abrirCampoNuevo = abrirCampoNuevo;
     function abrirCampoEquipo(id) {
         const liga = getLiga();
         const eq = liga.equipos.find(e => e.id === id);
@@ -15878,6 +15929,7 @@ ${separador}`;
         document.getElementById('campoMaps').value = campoTmp.maps || '';
         document.getElementById('campoResultados').innerHTML = '';
         pintarCampoEstado();
+        document.getElementById('campoEquipoModal').style.zIndex = '10300'; // v172: por encima de «Editar partido»
         document.getElementById('campoEquipoModal').style.display = 'flex';
     }
     function pintarCampoEstado() {
@@ -15932,10 +15984,15 @@ ${separador}`;
         document.getElementById('campoResultados').innerHTML = '';
         pintarCampoEstado();
     }
-    function cerrarCampoEquipo() { document.getElementById('campoEquipoModal').style.display = 'none'; campoEditId = null; }
+    function cerrarCampoEquipo() {
+        const eraNuevo = campoEditId === '__nuevo__';
+        document.getElementById('campoEquipoModal').style.display = 'none'; campoEditId = null; campoNuevoPid = null; campoNuevoDesde = null;
+        if (eraNuevo) { try { const pid = window.ligaHorarioPidV172 && window.ligaHorarioPidV172(); const liga = getLiga(); const lp = pid != null ? liga.partidos.find(x => x.id === pid) : null; const sel = document.getElementById('ligaEdCampo'); if (sel && lp && document.getElementById('ligaHorarioModal').style.display !== 'none') sel.innerHTML = opcionesCampoPartido(liga, lp); } catch (e) {} } // v172: si se cancela, el desplegable vuelve a lo de antes
+    }
     async function guardarCampoEquipo() {
         const liga = getLiga();
-        const eq = liga.equipos.find(e => e.id === campoEditId);
+        const nuevo = campoEditId === '__nuevo__'; // v172
+        const eq = nuevo ? {} : liga.equipos.find(e => e.id === campoEditId);
         if (!eq) { cerrarCampoEquipo(); return; }
         campoTmp.nombre = document.getElementById('campoNombre').value.trim();
         campoTmp.maps = document.getElementById('campoMaps').value.trim();
@@ -15948,6 +16005,20 @@ ${separador}`;
         if (campoTmp.lat == null && !campoTmp.lugar && escrito) campoTmp.lugar = escrito;
         if (campoTmp.lat == null && (campoTmp.nombre || campoTmp.maps) && !confirm('Este campo se va a guardar SIN ubicación, así que no saldrá el tiempo.\n\nEscribe el pueblo o barrio (p. ej. "Salamanca" o "Villamayor"), pulsa Buscar y toca el resultado.\n\n¿Guardar igualmente?')) { pintarCampoEstado(); return; }
         const vacio = !campoTmp.nombre && campoTmp.lat == null && !campoTmp.cesped && !campoTmp.tamano && !campoTmp.maps;
+        if (nuevo) { // v172
+            if (!campoTmp.nombre) { alert('Ponle un nombre al campo.'); return; }
+            const cx = { id: 'cx' + Date.now(), nombre: campoTmp.nombre, lugar: campoTmp.lugar || '', lat: campoTmp.lat, lon: campoTmp.lon, maps: campoTmp.maps || '', cesped: campoTmp.cesped || '', tamano: campoTmp.tamano || '' };
+            liga.camposExtra = (liga.camposExtra || []).concat([cx]);
+            const lp = liga.partidos.find(x => x.id === campoNuevoPid);
+            if (lp) lp.campoSel = { extra: cx.id };
+            saveLiga(liga);
+            const desde = campoNuevoDesde;
+            cerrarCampoEquipo();
+            if (desde === 'editar') { const sel = document.getElementById('ligaEdCampo'); if (sel && lp) sel.innerHTML = opcionesCampoPartido(liga, lp); }
+            try { renderLigaProximo(); } catch (e) {}
+            try { refrescarContexto(true); pintarContextoApp(); } catch (e) {}
+            return;
+        }
         if (vacio) delete eq.campo;
         else eq.campo = { nombre: campoTmp.nombre, lugar: campoTmp.lugar || '', lat: campoTmp.lat, lon: campoTmp.lon, maps: campoTmp.maps || '', cesped: campoTmp.cesped || '', tamano: campoTmp.tamano || '' };
         saveLiga(liga); // guarda y publica la Liga (el visor lo ve en Equipos y en la tarjeta del próximo partido)
@@ -17275,13 +17346,16 @@ ${separador}`;
                 <div><div style="${etiqueta}">Fecha</div><input type="date" id="ligaProxFecha" value="${fechaVal}" onchange="ligaProximoGuardarFechaHora()" style="${campo}"></div>
                 <div><div style="${etiqueta}">Hora</div><input type="time" id="ligaProxHora" value="${escHtmlIA(p.hora || '')}" onchange="ligaProximoGuardarFechaHora()" style="${campo}"></div>
             </div>
+            <div style="${etiqueta}">🏟️ Campo</div>
+            <select id="ligaProxCampo" onchange="ligaProximoCampo(this.value)" style="${campo} margin-bottom:${p.campoSel ? '4' : '10'}px;">${opcionesCampoPartido(liga, p)}</select>
+            ${p.campoSel ? `<div style="font-size:11px; color:#f5a623; margin-bottom:10px;">Se juega fuera de su sitio habitual: ${escHtmlIA(campoElegidoTxt(liga, p))}</div>` : ''}
             <div id="ligaProxTiempo" style="margin:-2px 0 12px;"></div>
             <button onclick="publicarProximoPartido()" style="width:100%; background:linear-gradient(135deg,#2ed573,#27ae60); color:#0a0e14; border:none; border-radius:10px; padding:11px; font-weight:800; font-size:13px; margin-bottom:8px;">📣 Publicar próximo partido</button>
             <button onclick="ocultarProximoPartido(false)" style="width:100%; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:10px; font-weight:700; font-size:12px;">Ocultar tarjeta del visor</button>
             <div id="ligaProxStatus" style="font-size:11px; color:#8da499; margin-top:8px; min-height:14px;">${estado}</div>
         </div>`;
         try { // v97: tiempo del partido y campo
-            const campoLocal = ctxCampoDe(liga, p.local);
+            const campoLocal = campoPartidoLiga(liga, p); // v172: el campo elegido para el partido
             ctxPintarTiempoProximo(document.getElementById('ligaProxTiempo'), campoLocal, fechaLigaAISO(p.fechaPartido || ''), p.hora || '', {
                 faltaCampo: `🌦️ Para ver el tiempo, añade el campo de ${escHtmlIA(nombreEquipoLiga(liga, p.local))} en Equipos (botón 🏟️).`,
                 faltaUbicacion: `🌦️ Al campo de ${escHtmlIA(nombreEquipoLiga(liga, p.local))} le falta la ubicación: en Equipos → 🏟️ escribe el pueblo o barrio, pulsa Buscar y toca el resultado.`,
@@ -17290,6 +17364,18 @@ ${separador}`;
         } catch (e) { console.error('Tiempo del próximo partido:', e); }
     }
     function ligaProximoElegir(id) { ligaProximoSel = parseInt(id, 10); renderLigaProximo(); }
+    // v172 · campo elegido para el próximo partido
+    function ligaProximoCampo(val) {
+        if (val === 'nuevo') { abrirCampoNuevo(ligaProximoSel, 'proximo'); renderLigaProximo(); return; }
+        const liga = getLiga();
+        const p = liga.partidos.find(x => x.id === ligaProximoSel);
+        if (!p) return;
+        aplicarCampoSel(p, val);
+        saveLiga(liga);
+        renderLigaProximo();
+        try { refrescarContexto(true); } catch (e) {}
+    }
+    window.ligaProximoCampo = ligaProximoCampo;
     function ligaProximoGuardarFechaHora() {
         const liga = getLiga();
         const p = liga.partidos.find(x => x.id === ligaProximoSel);
@@ -17424,6 +17510,7 @@ ${separador}`;
         const ops = (sel) => liga.equipos.map(e => `<option value="${e.id}" ${e.id === sel ? 'selected' : ''}>${escHtmlIA(e.nombre)}</option>`).join('');
         document.getElementById('ligaEdLocal').innerHTML = ops(p.local); // v148
         document.getElementById('ligaEdVisitante').innerHTML = ops(p.visitante);
+        document.getElementById('ligaEdCampo').innerHTML = opcionesCampoPartido(liga, p); // v172
         document.getElementById('ligaHorarioModal').style.display = 'flex';
     }
     function ligaGuardarHorario() {
@@ -17434,6 +17521,7 @@ ${separador}`;
         const h = document.getElementById('ligaHorarioHora').value;
         if (f) p.fechaPartido = f; else if (!p.fechaPartido || fechaLigaAISO(p.fechaPartido)) delete p.fechaPartido; // un rango (p. ej. 10-11/10/2026) se conserva si no se toca el día
         if (h) p.hora = h; else delete p.hora;
+        { const vc = document.getElementById('ligaEdCampo').value; if (vc !== 'nuevo') aplicarCampoSel(p, vc); } // v172
         // v148: cambiar los equipos (sobre todo quién juega en casa)
         const nl = document.getElementById('ligaEdLocal').value, nv = document.getElementById('ligaEdVisitante').value;
         if (nl && nv && (nl !== p.local || nv !== p.visitante)) {
@@ -17474,6 +17562,7 @@ ${separador}`;
         try { renderLigaClasificacion(); } catch (e) {} // v148: si cambian los equipos
     }
     window.ligaEditarHorario = ligaEditarHorario; window.ligaGuardarHorario = ligaGuardarHorario; window.ligaQuitarHorario = ligaQuitarHorario;
+    window.ligaHorarioPidV172 = () => ligaHorarioPid;
 
     // ── v127 · IMPORTAR JORNADA DE LA FEDERACIÓN (captura o texto) ────────────────
     // La IA lee las capturas o el texto (calendario con horarios y/o resultados) y devuelve los
