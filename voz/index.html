@@ -69,7 +69,8 @@ details summary::after{content:' ▸'}
 details[open] summary::after{content:' ▾'}
 #bolsillo{position:fixed;inset:0;background:#000;z-index:100;display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none}
 #bolsillo div{color:#222;font:700 13px var(--f-body);text-align:center;padding:20px}
-#bolsillo .hold{color:#555}
+#bolsillo .hold{color:#666}
+#bolsillo,#bolsillo *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--warn);outline-offset:2px}
 </style>
 </head>
@@ -132,8 +133,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
       <ol class="steps" style="margin-top:10px">
         <li>Conecta los auriculares, pulsa <b>Empezar prueba</b> y acepta el micrófono.</li>
         <li>Di varias frases: «Apunta, gol de Adrián, asiste Leo», «Apunta, a puerta nueve», «Apunta, rival córner», «Anula».</li>
-        <li>Prueba también «Apunta» solo, espera el pitido y di la acción.</li>
-        <li>Pulsa <b>Modo bolsillo</b>, guarda el móvil 5–10 minutos y sigue hablando. Para salir, mantén el dedo 2 segundos.</li>
+        <li>Prueba también «Apunta» solo, espera el pitido y di la acción. Para el gol con asistente: «Apunta, gol de Adrián, asistencia de Rubén».</li>
+        <li>Pulsa <b>Modo bolsillo</b>, guarda el móvil 5–10 minutos y sigue hablando. Para salir, mantén el dedo 2 segundos o toca 3 veces seguidas.</li>
         <li>Pon la tele o la radio de fondo para ver si se cuela algo.</li>
         <li>Cambia a <b>Botón del auricular</b>: un toque en el auricular y habla, sin «Apunta».</li>
         <li>Pon el modo avión un momento para ver qué pasa sin internet.</li>
@@ -158,7 +159,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
   </section>
 </main>
 
-<div id="bolsillo" hidden><div>Modo bolsillo<br>La app sigue escuchando<br><br><span class="hold" id="holdTxt">Mantén el dedo 2 s para salir</span></div></div>
+<div id="bolsillo" hidden><div>Modo bolsillo<br>La app sigue escuchando<br><br><span class="hold" id="holdTxt">Mantén el dedo 2 s o toca 3 veces seguidas para salir</span></div></div>
 
 <script>
 // ===================== PARSER (mismo que el boceto) =====================
@@ -166,7 +167,7 @@ let ROSTER=[]; let PORTERO=1;
 // Acciones: id, etiqueta, frases (se prueban de la más larga a la más corta), tipo
 const ACC = [
   // Hergar con dorsal
-  {id:'GOL',      lab:'⚽ Gol',               t:'h', f:['gol']},
+  {id:'GOL',      lab:'⚽ Gol',               t:'h', f:['gol','gold']},
   {id:'PENALTI',  lab:'🎯 Gol de penalti',    t:'h', f:['gol de penalti','penalti']},
   {id:'ASIST',    lab:'👟 Asistencia',        t:'h', f:['asistencia']},
   {id:'PASE_AREA',lab:'📯 Pase al área',      t:'h', f:['pase al area','centro']},
@@ -190,7 +191,8 @@ const ACC = [
   // Rival, empieza por "rival"
   {id:'R_GOL',    lab:'Gol rival',            t:'r', f:['gol']},
   {id:'R_PEN',    lab:'Penalti en contra',    t:'r', f:['penalti']},
-  {id:'R_PUERTA', lab:'Tiro a puerta rival',  t:'r', f:['tiro a puerta','a puerta','tiro']},
+  {id:'R_PUERTA', lab:'Tiro a puerta rival',  t:'r', f:['tiro a puerta','disparo a puerta','a puerta']},
+  {id:'R_FUERA',  lab:'Tiro fuera rival',     t:'r', f:['tiro fuera','disparo fuera','fuera']},
   {id:'R_CORNER', lab:'Córner rival',         t:'r', f:['corner']},
   {id:'R_FALTA',  lab:'Falta rival',          t:'r', f:['falta']},
   {id:'R_FJ',     lab:'Fuera de juego rival', t:'r', f:['fuera de juego','orsay']},
@@ -258,6 +260,7 @@ function parse(raw){
   // Rival
   if(w[0]==='rival'){
     const r=findAct(t.replace(/^rival ?/,''),['r']);
+    if(!r && w.includes('tiro')) return {ok:false, why:'Di «rival tiro a puerta» o «rival tiro fuera».'};
     if(!r) return {ok:false, why:'Después de «rival» no se ha reconocido ninguna acción.'};
     return {ok:true, kind:'r', id:r.a.id, text:r.a.lab};
   }
@@ -268,11 +271,16 @@ function parse(raw){
   if(e && e.a.t==='p'){ const g=ROSTER.find(x=>x.d===PORTERO); return {ok:true, kind:'h', id:e.a.id, text:g?`${e.a.lab} · ${who(g)}`:e.a.lab}; }
 
   // Hergar con jugador
-  const a=findAct(t,['h']);
-  const asIdx=w.findIndex(x=>/^(asiste|asistencia)$/.test(x));
-  const main=R.find(r=>asIdx<0||r.i<asIdx) || null;
+  let a=findAct(t,['h']);
+  // v2: si hay «gol» (o penalti), manda el gol; «asistencia/asiste/pase de» detrás marca al asistente
+  const hayGol=w.some(x=>x==='gol'||x==='gold');
+  if(hayGol && a && a.a.id!=='PENALTI') a={a:ACC.find(x=>x.id==='GOL'),len:3,f:'gol'};
+  const asIdx=hayGol? w.findIndex(x=>/^(asiste|asistencia|pase)$/.test(x)) : -1;
+  const main=(hayGol? R.find(r=>asIdx<0||r.i<asIdx) : R[0]) || null;
   if(!a && !R.length) return {ok:false, why:'Sin acción ni jugador: parece un comentario.'};
+  if(!a && w.includes('tiro')) return {ok:false, why:'Di «tiro a puerta» o «tiro fuera».'};
   if(!a) return {ok:false, why:'Hay un jugador pero ninguna acción reconocida.'};
+  if(!hayGol && R.length>1) return {ok:false, why:'Hay dos jugadores y no se ha oído «gol»: no se apunta para no equivocarse. Si era un gol, repite «gol de…».'};
   if(!main) return {ok:false, why:`«${a.f}» sin dorsal ni nombre: no se apunta.`};
   const m=resolve(main); if(m.err) return {ok:false, why:m.err};
   const nota=main.fuzzy?` · entendido «${main.tok}»`:'';
@@ -381,7 +389,7 @@ window.addEventListener('online',()=>{diag('vuelve internet'); pills();});
 window.addEventListener('offline',()=>{diag('se va internet'); pills();});
 document.addEventListener('visibilitychange',()=>{
   diag(document.hidden?'pantalla oculta / app en segundo plano':'pantalla visible de nuevo');
-  if(!document.hidden && corriendo) pedirWakeLock();
+  if(!document.hidden && corriendo){ pedirWakeLock(); if(modo==='continua' && !rec){ diag('reanudando la escucha'); arrancarContinua(); } }
 });
 
 async function pedirWakeLock(){
@@ -448,7 +456,7 @@ $('btnAnula').onclick=()=>anular('botón');
 
 // ===================== RECONOCIMIENTO =====================
 let modo='continua', corriendo=false, rec=null, armadoHasta=0, ultimoFin=0;
-const WAKE=/\b(apunta|apunto|apunte|apuntar)\b/;
+const WAKE=/\b(apunta|apunto|apunte|apuntar|punta)\b/; // v2: el arranque a veces se come la «a»
 const ANULA=/\b(anula|anular|anulalo|borra|borralo)\b/;
 
 function setEstado(t,cls){ const e=$('estado'); e.textContent=t; e.className='status '+(cls||''); }
@@ -480,9 +488,10 @@ function arrancarContinua(){
     rec.onstart=()=>{ desdeEscucha=Date.now(); if(ultimoFin){ diag(`escucha reactivada tras ${Date.now()-ultimoFin} ms`); } else diag('escucha iniciada'); setEstado('Escuchando · di «Apunta…»','on'); };
     rec.onresult=ev=>{ for(let i=ev.resultIndex;i<ev.results.length;i++){ if(ev.results[i].isFinal) oirContinua(ev.results[i][0].transcript); } };
     rec.onerror=ev=>{ diag('error: '+ev.error+(ev.error==='network'?' (necesita internet)':'')+(ev.error==='not-allowed'?' (micrófono denegado)':''));
+      if(document.hidden){ diag('en segundo plano Chrome corta el micrófono: se reanuda al volver a la pantalla'); return; }
       if(ev.error==='not-allowed'||ev.error==='service-not-allowed'||ev.error==='language-not-supported'){ parar(); } };
-    rec.onend=()=>{ if(desdeEscucha){ escuchandoMs+=Date.now()-desdeEscucha; desdeEscucha=null; }
-      ultimoFin=Date.now(); if(corriendo){ reinicios++; stats(); setTimeout(arrancarContinua, navigator.onLine||$('optLocal').checked?150:2000); } };
+    rec.onend=()=>{ rec=null; if(desdeEscucha){ escuchandoMs+=Date.now()-desdeEscucha; desdeEscucha=null; }
+      ultimoFin=Date.now(); if(corriendo && !document.hidden){ reinicios++; stats(); setTimeout(arrancarContinua, navigator.onLine||$('optLocal').checked?150:2000); } };
     rec.start();
   }catch(e){ diag('no arranca: '+e.message); setTimeout(arrancarContinua,1000); }
 }
@@ -558,12 +567,27 @@ $('mContinua').onclick=()=>setModo('continua');
 $('mAuricular').onclick=()=>setModo('auricular');
 
 // ---- Modo bolsillo ----
-let holdT=null;
-$('btnBolsillo').onclick=()=>{ $('bolsillo').hidden=false; diag('modo bolsillo activado'); };
+let holdT=null, holdIni=0, toques=[];
+const HOLD_TXT='Mantén el dedo 2 s o toca 3 veces seguidas para salir';
+function salirBolsillo(){ clearTimeout(holdT); holdT=null; $('bolsillo').hidden=true; toques=[]; $('holdTxt').textContent=HOLD_TXT; diag('modo bolsillo desactivado'); }
+$('btnBolsillo').onclick=()=>{ $('bolsillo').hidden=false; $('holdTxt').textContent=HOLD_TXT; diag('modo bolsillo activado'); };
 const bol=$('bolsillo');
-bol.addEventListener('pointerdown',e=>{ e.preventDefault(); $('holdTxt').textContent='Sigue manteniendo…'; holdT=setTimeout(()=>{ bol.hidden=true; diag('modo bolsillo desactivado'); $('holdTxt').textContent='Mantén el dedo 2 s para salir'; },2000); });
-['pointerup','pointercancel','pointerleave'].forEach(ev=>bol.addEventListener(ev,()=>{ clearTimeout(holdT); $('holdTxt').textContent='Mantén el dedo 2 s para salir'; }));
-bol.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+// v2: con eventos táctiles (Chrome cancelaba la pulsación larga) y salida alternativa con 3 toques
+function iniToque(e){ if(e.cancelable) e.preventDefault();
+  const now=Date.now(); toques=toques.filter(t=>now-t<1500); toques.push(now);
+  if(toques.length>=3){ salirBolsillo(); return; }
+  if(holdT) return;
+  holdIni=now; $('holdTxt').textContent='Sigue manteniendo…';
+  holdT=setTimeout(salirBolsillo,2000); }
+function finToque(){ if(!holdT) return; clearTimeout(holdT); holdT=null; if(!bol.hidden) $('holdTxt').textContent=HOLD_TXT; }
+if('ontouchstart' in window){
+  bol.addEventListener('touchstart',iniToque,{passive:false});
+  bol.addEventListener('touchend',finToque);
+  bol.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+}else{
+  bol.addEventListener('mousedown',iniToque);
+  bol.addEventListener('mouseup',finToque);
+}
 bol.addEventListener('contextmenu',e=>e.preventDefault());
 
 // ---- Informe ----
