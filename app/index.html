@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    143                                            ║
+  ║  Versión:    171                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1762,7 +1762,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v163</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v171</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2231,7 +2231,8 @@
         <div id="editPartidoTarjetasList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:6px;"></div>
         <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">Se ajustan el total de la temporada, la ficha del jugador y el detalle del partido. Las tarjetas no cambian el impacto. No se modifican las sanciones ya aplicadas.</div>
 
-        <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">⏱ GOLES CON MINUTO — para la lista de Partidos y los Récords del visor</label>
+        <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">⏱ GOLES CON MINUTO — para la lista de Partidos, los Récords y el 🎯 Mapa de goles del visor</label>
+        <div id="egMapaResumen" style="font-size:11px; line-height:1.45; margin-bottom:6px; min-height:14px;"></div>
         <div id="editPartidoGolesMinList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
         <button type="button" onclick="egTogglePegarVarios()" style="width:100%; padding:9px; background:rgba(52,152,219,0.08); color:#5dade2; border:1px dashed rgba(52,152,219,0.5); border-radius:9px; font-weight:800; font-size:12px; margin-bottom:6px;">📋 Pegar varios enlaces de vídeo</button>
         <div id="egPegarVariosBox" style="display:none; margin-bottom:8px; padding:10px; border-radius:10px; background:rgba(52,152,219,0.06); border:1px solid rgba(52,152,219,0.25);">
@@ -2241,7 +2242,7 @@
             <div id="egPegarVariosRes" style="font-size:11px; line-height:1.5; margin-top:6px;"></div>
         </div>
         <button type="button" id="editPartidoAddGolBtn" style="width:100%; padding:8px; background:rgba(46,213,115,0.08); color:#2ed573; border:1px dashed rgba(46,213,115,0.45); border-radius:9px; font-weight:800; font-size:12px; margin-bottom:6px;">+ Añadir gol</button>
-        <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">Si no sabes un minuto, déjalo vacío. Esto solo añade el detalle de cada gol: el marcador y los goles de cada jugador se siguen cambiando arriba.</div>
+        <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">Si no sabes un minuto, déjalo vacío. En cada gol, «¿Cómo llegó?» y 📍 (desde dónde) son opcionales y no cambian el impacto. Esto solo añade el detalle de cada gol: el marcador y los goles de cada jugador se siguen cambiando arriba.</div>
 
         <button id="guardarEditarPartidoBtn" style="width:100%; padding:12px; background:linear-gradient(135deg,#2980b9,#3498db); color:white; border-radius:12px; font-weight:900; font-size:13px; border:none; margin-bottom:8px;">💾 Guardar cambios</button>
         <div id="editPartidoStatus" style="text-align:center; font-size:11px; min-height:14px;"></div>
@@ -8675,6 +8676,9 @@
     document.getElementById("golRivalBtn").onclick = function() {
         pendingAction = 'GOL_RIVAL';
         registrarAccionRival();
+        // v169 · ¿cómo y desde dónde?
+        const k = substitutionTimeline.length - 1;
+        if (k >= 0 && /^\[\d+'\]\s*🥅 Gol rival/.test(String(substitutionTimeline[k])) && window.v169AbrirMapaGol) setTimeout(() => window.v169AbrirMapaGol(k, 'rival'), 80);
     };
 
     // ── M09 · ACCIONES RIVAL ──────────────────────────────────────────
@@ -9508,9 +9512,12 @@
                 }
                 golesTxt = gs.map(g => {
                     const min = g.min != null ? `${g.min}' ` : '';
-                    if (g.equipo === 'rival') return `${min}${rivalName.toUpperCase()}${g.penalti ? ' (penalti)' : ''}`;
-                    return `${min}${g.nombre || '¿?'}${g.penalti ? ' (penalti)' : ''}${g.asistente ? ` (asist. ${g.asistente})` : ''}`;
+                    const det = golDetalleIA(g); // v171: cómo llegó y desde dónde
+                    if (g.equipo === 'rival') return `${min}${rivalName.toUpperCase()}${g.penalti ? ' (penalti)' : ''}${det}`;
+                    return `${min}${g.nombre || '¿?'}${g.penalti ? ' (penalti)' : ''}${g.asistente ? ` (asist. ${g.asistente})` : ''}${det}`;
                 }).join(' · ');
+                const tem = origenGolesTemporadaIA(); // v171
+                if (tem) golesTxt += `\n${tem}`;
             } catch (e) { golesTxt = ''; }
 
             // v125 · situación en la Liga antes del partido, racha de los dos y enfrentamientos previos
@@ -12140,6 +12147,20 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     // ── v84 · GOLES CON MINUTO ─────────────────────────────────────────
     // Cada partido de la temporada guarda sus goles: { min, equipo:'hergar'|'rival', jugadorId, nombre, asistenteId, asistente, penalti }.
     // En directo salen de la cronología; en los manuales, del formulario; en los antiguos se pueden añadir desde ✏️ Editar partido.
+    // ── v169 · ORIGEN Y POSICIÓN DE LOS GOLES APUNTADOS EN DIRECTO ──
+    // Se guardan aparte (clave propia) con el número de línea de la cronología y su texto: si se deshace el gol,
+    // la línea ya no coincide y el dato se ignora. Se vacía al empezar un partido nuevo.
+    const MGD_KEY = 'hergar_F11_mapaGolesDirecto';
+    function mgdLeer() { try { return JSON.parse(localStorage.getItem(MGD_KEY) || '[]') || []; } catch (e) { return []; } }
+    function mgdGuardar(idx, datos) {
+        const linea = substitutionTimeline[idx];
+        if (linea == null) return;
+        const l = mgdLeer().filter(x => x.idx !== idx);
+        if (datos.origen || datos.pos) l.push(Object.assign({ idx, linea }, datos));
+        try { localStorage.setItem(MGD_KEY, JSON.stringify(l)); } catch (e) {}
+    }
+    function mgdBorrar() { try { localStorage.removeItem(MGD_KEY); } catch (e) {} }
+    window.mgdGuardar = mgdGuardar;
     function golesDesdeCronologia() {
         const porDorsal = {};
         Object.values(playersData).forEach(p => { if (p.dorsal != null) (porDorsal[String(p.dorsal)] = porDorsal[String(p.dorsal)] || []).push(p); });
@@ -12166,7 +12187,50 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             cands.sort((x, y) => Math.abs(x.idx - a.idx) - Math.abs(y.idx - a.idx));
             cands[0].asistenteId = a.id; cands[0].asistente = a.nombre;
         });
+        const mgd = mgdLeer(); // v169
+        goles.forEach(g => {
+            const e = mgd.find(x => x.idx === g.idx && x.linea === substitutionTimeline[g.idx]);
+            if (!e || g.penalti) return;
+            if (e.origen) g.origen = e.origen;
+            if (e.pos) g.pos = { x: e.pos.x, y: e.pos.y };
+        });
         return goles.map(g => { const r = Object.assign({}, g); delete r.idx; return r; });
+    }
+    // ── v171 · Origen y lado de los goles para el informe IA ──
+    const ORIGEN_IA = { jugada: 'jugada', robo: 'robo/contraataque', rechace: 'rechace', corner: 'córner', falta: 'falta', penalti: 'penalti', error: 'error del rival', perdida: 'pérdida nuestra' };
+    // Lado desde el que se marca: tercios del ancho del campo. Los goles del rival, vistos desde nuestra portería.
+    function ladoGol(g) {
+        if (!g || g.penalti || !g.pos || g.pos.x == null) return null;
+        const t = g.pos.x < 68 / 3 ? 0 : g.pos.x > 68 * 2 / 3 ? 2 : 1;
+        if (t === 1) return 'centro';
+        return g.equipo === 'rival' ? (t === 0 ? 'nuestra derecha' : 'nuestra izquierda') : (t === 0 ? 'izquierda' : 'derecha');
+    }
+    function zonaGolIA(g) {
+        if (!g || g.penalti || !g.pos || g.pos.y == null) return null;
+        const b = Math.abs(g.pos.x - 34);
+        return g.pos.y <= 5.5 && b <= 9.16 ? 'área pequeña' : (g.pos.y <= 16.5 && b <= 20.16 ? 'área' : 'fuera del área');
+    }
+    function golDetalleIA(g) {
+        const o = !g.penalti && g.origen ? ORIGEN_IA[g.origen] : null;
+        const z = zonaGolIA(g), l = ladoGol(g);
+        const partes = [o, z && l ? `${z}, ${l === 'centro' ? 'por el centro' : 'por ' + l}` : z].filter(Boolean);
+        return partes.length ? ` [${partes.join('; ')}]` : '';
+    }
+    function origenGolesTemporadaIA() {
+        const ps = (getTemporada().partidos || []);
+        const cuenta = (eq) => {
+            const c = {}; let n = 0;
+            ps.forEach(p => (Array.isArray(p.goles) ? p.goles : []).forEach(g => {
+                if ((g.equipo === 'rival') !== (eq === 'rival')) return;
+                const o = g.penalti ? 'penalti' : g.origen;
+                if (!o) return;
+                c[o] = (c[o] || 0) + 1; n++;
+            }));
+            return n >= 4 ? `${Object.keys(c).sort((a, b) => c[b] - c[a]).map(k => `${ORIGEN_IA[k]} ${c[k]}`).join(', ')} (de ${n} con el origen apuntado)` : '';
+        };
+        const f = cuenta('hergar'), r = cuenta('rival');
+        if (!f && !r) return '';
+        return `CÓMO LLEGAN LOS GOLES EN LA TEMPORADA (acumulado de la temporada; los encajados, siempre en colectivo y sin nombres) — A favor: ${f || 'pocos datos'} | En contra: ${r || 'pocos datos'}`;
     }
     function textoGolesConMinuto(p) {
         const goles = Array.isArray(p.goles) ? p.goles : [];
@@ -12650,7 +12714,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 </div>
                 ${ctxTiempoChip(p.contexto) ? `<div style="margin-top:4px;">${ctxTiempoChip(p.contexto)}</div>` : ''}
                 ${textoGolesConMinuto(p) ? `<div style="color:#8da499; font-size:10px; margin-top:3px;">⚽ ${textoGolesConMinuto(p)}</div>` : (p.goleadores!=='-'?`<div style="color:#8da499; font-size:10px; margin-top:3px;">⚽ ${p.goleadores}</div>`:'')}
-                ${chipVideosPartido(p, origIndex)}
+                ${chipVideosPartido(p, origIndex)} ${chipMapaPartido(p, origIndex)}
                 ${p.mvp&&p.mvp!=='-'?`<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:2px;"><span style="color:#f5a623; font-size:10px;">⭐ MVP: ${p.mvp}</span>${p.mvpId?`<button onclick="abrirCromoModalGuardado(${origIndex})" style="background:rgba(245,166,35,0.14); border:1px solid rgba(245,166,35,0.4); color:#f5a623; border-radius:6px; padding:2px 8px; font-size:10px; font-weight:700; white-space:nowrap;">🎴 Cromo</button>`:''}</div>`:''}
                 ${snChipPartido(snCtx, p)}
                 ${estadisticasPartidoHTML(t, p, snCtx, true)}
@@ -12799,6 +12863,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
         document.getElementById('editPartidoGolesMinList').innerHTML = filasGoles.map(egFilaHTML).join('') || egVacioHTML();
         document.querySelectorAll('#editPartidoGolesMinList .eg-row').forEach(egPintarVideo); // v119
+        document.querySelectorAll('#editPartidoGolesMinList .eg-row').forEach(egPintarMapa); egResumenMapa(); // v169
         const pv = document.getElementById('egPegarVariosBox'); if (pv) { pv.style.display = 'none'; document.getElementById('egPegarVariosTxt').value = ''; document.getElementById('egPegarVariosRes').innerHTML = ''; }
 
         document.getElementById('editPartidoStatus').innerText = '';
@@ -12819,7 +12884,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             <div style="display:flex; align-items:center; gap:6px;">
                 <input type="number" min="0" max="130" inputmode="numeric" class="eg-min" placeholder="min" value="${g.min != null ? g.min : ''}" style="width:58px; text-align:center; ${est} color:#f5a623; font-weight:800;">
                 <select class="eg-equipo" onchange="egCambiaEquipo(this)" style="${est} flex:1;"><option value="hergar" ${esH ? 'selected' : ''}>⚽ Hergar</option><option value="rival" ${esH ? '' : 'selected'}>🥅 Rival</option></select>
-                <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#94a3b8;"><input type="checkbox" class="eg-pen" ${g.penalti ? 'checked' : ''}>Penalti</label>
+                <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#94a3b8;"><input type="checkbox" class="eg-pen" ${g.penalti ? 'checked' : ''} onchange="egPintarMapa(this.closest('.eg-row'))">Penalti</label>
                 <button type="button" onclick="egQuitar(this)" aria-label="Quitar gol" style="background:rgba(255,71,87,0.12); color:#ff4757; border:none; border-radius:7px; padding:6px 9px; font-weight:800;">✕</button>
             </div>
             <div class="eg-jug" style="display:${esH ? 'flex' : 'none'}; gap:6px;">
@@ -12827,6 +12892,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 <select class="eg-asist" data-prev="${g.asistenteId != null ? g.asistenteId : ''}" onchange="egAsistCambia(this)" style="${est} flex:1;">${egOpciones(g.asistenteId, 'Sin asistencia')}</select>
                 <button type="button" class="eg-vbtn" onclick="egAbrirVideo(this)" aria-label="Vídeo del gol">🎥</button>
             </div>
+            ${egMapaFilaHTML(g, est)}
             <div class="eg-vbox" style="display:none; flex-direction:column; gap:6px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.25);">
                 <label class="eg-vsubir" style="display:flex; align-items:center; justify-content:center; min-height:44px; border-radius:9px; background:linear-gradient(135deg,#b41438,#e0405f); color:#fff; font-weight:800; font-size:12.5px; cursor:pointer;">📤 Subir vídeo del móvil<input type="file" accept="video/*" style="display:none;" onchange="egSubirVideo(this)"></label>
                 <div style="font-size:10px; color:#64748b; text-align:center;">o pega un enlace de Drive (solo se puede abrir en Drive):</div>
@@ -12854,7 +12920,112 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         ajustar(sel.value, +1);
         sel.dataset.prev = sel.value;
     };
-    window.egCambiaEquipo = function (sel) { const row = sel.closest('.eg-row'); row.querySelector('.eg-jug').style.display = sel.value === 'rival' ? 'none' : 'flex'; if (sel.value === 'rival') row.querySelector('.eg-vbox').style.display = 'none'; egPintarVideo(row); };
+    window.egCambiaEquipo = function (sel) { const row = sel.closest('.eg-row'); row.querySelector('.eg-jug').style.display = sel.value === 'rival' ? 'none' : 'flex'; if (sel.value === 'rival') row.querySelector('.eg-vbox').style.display = 'none'; egPintarVideo(row); egPintarMapa(row); };
+
+    // ── v169 · ORIGEN Y POSICIÓN DE CADA GOL (para el 🎯 Mapa de goles del visor) ──
+    // Cada gol guarda g.origen (código) y g.pos = { x, y } en metros: x de 0 a 68 a lo ancho y y de 0 a 50 desde la
+    // línea de gol hacia el centro del campo. El penalti no necesita nada: su origen es «penalti» y su sitio, el punto.
+    // Del rival solo se apuntan los goles (no la posición de sus tiros). Todo es opcional y no toca el impacto.
+    const GOL_ORIGENES = {
+        hergar: [['jugada', 'Jugada'], ['robo', 'Robo / contraataque'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['error', 'Error del rival']],
+        rival: [['jugada', 'Jugada'], ['robo', 'Robo / contraataque'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra']]
+    };
+    function egOrigenOpciones(equipo, sel) {
+        return '<option value="">¿Cómo llegó?</option>' + GOL_ORIGENES[equipo === 'rival' ? 'rival' : 'hergar'].map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
+    }
+    function egMapaFilaHTML(g, est) {
+        const x = g.pos && g.pos.x != null ? g.pos.x : '', y = g.pos && g.pos.y != null ? g.pos.y : '';
+        return `<div class="eg-mapa" style="display:flex; gap:6px; align-items:center;">
+                <select class="eg-orig" data-val="${g.origen || ''}" onchange="this.dataset.val=this.value; egPintarMapa(this.closest('.eg-row'))" style="${est} flex:1;">${egOrigenOpciones(g.equipo, g.origen)}</select>
+                <button type="button" class="eg-pbtn" onclick="egAbrirCampo(this)" aria-label="Desde dónde fue el gol" style="min-width:44px; min-height:34px; border-radius:8px; border:1.5px dashed rgba(255,255,255,0.25); background:transparent; color:#94a3b8; font-size:15px; padding:0 6px;">📍</button>
+            </div>
+            <input type="hidden" class="eg-px" value="${x}"><input type="hidden" class="eg-py" value="${y}">
+            <div class="eg-pbox" style="display:none; flex-direction:column; gap:6px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.25);">
+                <div class="eg-ptxt" style="font-size:11px; color:#94a3b8; line-height:1.4;"></div>
+                <svg class="eg-campo" viewBox="0 0 340 250" onclick="egTocarCampo(event, this)" style="width:100%; display:block; border-radius:10px; background:radial-gradient(ellipse at center,#1a6e3a,#0f4a25); touch-action:manipulation; cursor:crosshair;"></svg>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <span class="eg-pest" style="font-size:11px; color:#cbd5e1;"></span>
+                    <button type="button" onclick="egQuitarPos(this)" style="background:none; border:none; color:#ff6b7a; font-weight:700; font-size:11.5px; padding:0;">Quitar posición</button>
+                </div>
+            </div>`;
+    }
+    function egCampoSVG(px, py, pen) {
+        const s = 5, L = 'rgba(255,255,255,.35)';
+        let g = `<rect x="1" y="1" width="338" height="248" fill="none" stroke="${L}" stroke-width="1.5"/>
+            <rect x="${(34 - 20.16) * s}" y="0" width="${40.32 * s}" height="${16.5 * s}" fill="none" stroke="${L}" stroke-width="1.5"/>
+            <rect x="${(34 - 9.16) * s}" y="0" width="${18.32 * s}" height="${5.5 * s}" fill="none" stroke="${L}" stroke-width="1.5"/>
+            <circle cx="${34 * s}" cy="${11 * s}" r="2" fill="${L}"/>
+            <path d="M ${(34 - 7.3) * s} ${16.5 * s} A ${9.15 * s} ${9.15 * s} 0 0 0 ${(34 + 7.3) * s} ${16.5 * s}" fill="none" stroke="${L}" stroke-width="1.5"/>
+            <path d="M ${(34 - 9.15) * s} 250 A ${9.15 * s} ${9.15 * s} 0 0 1 ${(34 + 9.15) * s} 250" fill="none" stroke="${L}" stroke-width="1.5"/>
+            <rect x="${(34 - 3.66) * s}" y="0" width="${7.32 * s}" height="4" fill="#fff"/>`;
+        if (pen) g += `<circle cx="${34 * s}" cy="${11 * s}" r="9" fill="#f5a623" stroke="#0a0e14" stroke-width="2"/>`;
+        else if (px !== '' && py !== '') g += `<circle cx="${px * s}" cy="${py * s}" r="9" fill="#f5a623" stroke="#0a0e14" stroke-width="2"/>`;
+        return g;
+    }
+    function egPintarMapa(row) {
+        if (!row) return;
+        const pen = row.querySelector('.eg-pen').checked, equipo = row.querySelector('.eg-equipo').value;
+        const sel = row.querySelector('.eg-orig');
+        if (pen) { sel.innerHTML = '<option value="">🎯 Penalti</option>'; sel.disabled = true; }
+        else {
+            const v = sel.dataset.val || '';
+            const ok = GOL_ORIGENES[equipo === 'rival' ? 'rival' : 'hergar'].some(o => o[0] === v);
+            if (!ok) sel.dataset.val = '';
+            sel.innerHTML = egOrigenOpciones(equipo, ok ? v : '');
+            sel.disabled = false;
+        }
+        const px = row.querySelector('.eg-px').value, py = row.querySelector('.eg-py').value, hayPos = px !== '' && py !== '';
+        const btn = row.querySelector('.eg-pbtn');
+        const ok = pen || hayPos;
+        btn.style.borderStyle = ok ? 'solid' : 'dashed';
+        btn.style.borderColor = ok ? '#2ed573' : 'rgba(255,255,255,0.25)';
+        btn.style.background = ok ? 'rgba(46,213,115,0.14)' : 'transparent';
+        row.querySelector('.eg-ptxt').innerHTML = pen ? 'Penalti: se coloca solo en el punto.' : `Toca desde dónde se marcó. Arriba, ${equipo === 'rival' ? '<b style="color:#e2e8f0;">nuestra portería</b>' : '<b style="color:#e2e8f0;">la portería del rival</b>'}.`;
+        row.querySelector('.eg-campo').innerHTML = egCampoSVG(px === '' ? '' : Number(px), py === '' ? '' : Number(py), pen);
+        row.querySelector('.eg-pest').textContent = pen ? 'A 11 m' : (hayPos ? `A ${Math.round(Math.hypot(Number(py), Number(px) - 34))} m de la portería` : 'Sin posición');
+        egResumenMapa();
+    }
+    window.egPintarMapa = egPintarMapa;
+    window.egAbrirCampo = function (btn) {
+        const box = btn.closest('.eg-row').querySelector('.eg-pbox');
+        box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+    };
+    window.egTocarCampo = function (ev, svg) {
+        const row = svg.closest('.eg-row');
+        if (row.querySelector('.eg-pen').checked) return;
+        const r = svg.getBoundingClientRect();
+        const x = Math.max(0, Math.min(68, (ev.clientX - r.left) / r.width * 68));
+        const y = Math.max(0, Math.min(50, (ev.clientY - r.top) / r.height * 50));
+        row.querySelector('.eg-px').value = Math.round(x * 10) / 10;
+        row.querySelector('.eg-py').value = Math.round(y * 10) / 10;
+        egPintarMapa(row);
+    };
+    window.egQuitarPos = function (b) {
+        const row = b.closest('.eg-row');
+        row.querySelector('.eg-px').value = ''; row.querySelector('.eg-py').value = '';
+        egPintarMapa(row);
+    };
+    function egResumenMapa() {
+        const el = document.getElementById('egMapaResumen');
+        if (!el) return;
+        const rows = [...document.querySelectorAll('#editPartidoGolesMinList .eg-row')];
+        if (!rows.length) { el.innerHTML = ''; return; }
+        const comp = rows.filter(r => r.querySelector('.eg-pen').checked || (r.querySelector('.eg-orig').value && r.querySelector('.eg-px').value !== '')).length;
+        const f = rows.length - comp;
+        el.innerHTML = f ? `<span style="color:#f5a623;">📍 Te ${f === 1 ? 'falta 1 gol' : 'faltan ' + f + ' goles'} por completar (cómo llegó y desde dónde) para el Mapa de goles.</span>` : '<span style="color:#2ed573;">📍 Todos los goles tienen origen y posición.</span>';
+    }
+    // Goles de un partido guardado a los que les falta el origen o la posición
+    function golesMapaQueFaltan(p) {
+        if (Array.isArray(p.goles) && p.goles.length) return p.goles.filter(g => !g.penalti && (!g.origen || !g.pos)).length;
+        return (Number(p.golesLocal) || 0) + (Number(p.golesRival) || 0);
+    }
+    function chipMapaPartido(p, idx) {
+        const tot = (Number(p.golesLocal) || 0) + (Number(p.golesRival) || 0);
+        if (!tot) return '';
+        const f = golesMapaQueFaltan(p);
+        return f ? `<span class="chip-video falta" onclick="abrirEditarPartido(${idx})">📍 faltan ${f} ${f === 1 ? 'gol' : 'goles'} por mapear</span>`
+                 : `<span class="chip-video ok" onclick="abrirEditarPartido(${idx})">📍 goles mapeados</span>`;
+    }
 
     // ── v119 · VÍDEOS DE LOS GOLES ────────────────────────────────────────────
     // Cada gol del Hergar puede llevar el código de un vídeo de Google Drive (g.video) y marcarse como
@@ -13130,12 +13301,14 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (selA && selA.value && btn.closest('.eg-row').querySelector('.eg-equipo').value !== 'rival') { const v = selA.value; selA.value = ''; egAsistCambia(selA); selA.dataset.prev = v; selA.value = v; }
         btn.closest('.eg-row').remove();
         if (!cont.querySelector('.eg-row')) cont.innerHTML = egVacioHTML();
+        egResumenMapa(); // v169
     };
     document.getElementById('editPartidoAddGolBtn').onclick = () => {
         const cont = document.getElementById('editPartidoGolesMinList');
         cont.querySelectorAll('.eg-vacio').forEach(e => e.remove());
         cont.insertAdjacentHTML('beforeend', egFilaHTML({ min: null, equipo: 'hergar' }));
         egPintarVideo(cont.lastElementChild); // v119
+        egPintarMapa(cont.lastElementChild); // v169
     };
     function egLeerFilas() {
         const idDe = (v) => v === '' ? null : (/^\d+$/.test(v) ? Number(v) : v);
@@ -13145,9 +13318,16 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const min = v === '' ? null : Math.max(0, parseInt(v));
             const equipo = row.querySelector('.eg-equipo').value;
             const penalti = row.querySelector('.eg-pen').checked;
-            if (equipo === 'rival') return { min, equipo, penalti };
+            // v169 · origen y posición del gol
+            const extra = {};
+            if (!penalti) {
+                const o = row.querySelector('.eg-orig').value; if (o) extra.origen = o;
+                const px = row.querySelector('.eg-px').value, py = row.querySelector('.eg-py').value;
+                if (px !== '' && py !== '') extra.pos = { x: Number(px), y: Number(py) };
+            }
+            if (equipo === 'rival') return Object.assign({ min, equipo, penalti }, extra);
             const sg = row.querySelector('.eg-goleador'), sa = row.querySelector('.eg-asist');
-            const g = { min, equipo, jugadorId: idDe(sg.value), nombre: nombreDe(sg), asistenteId: idDe(sa.value), asistente: nombreDe(sa), penalti };
+            const g = Object.assign({ min, equipo, jugadorId: idDe(sg.value), nombre: nombreDe(sg), asistenteId: idDe(sa.value), asistente: nombreDe(sa), penalti }, extra);
             const vid = row.querySelector('.eg-vid').value; if (vid) g.video = vid;              // v119
             if (row.querySelector('.eg-vocu').checked) g.videoOculto = true;                      // v119
             return g;
@@ -14310,6 +14490,7 @@ ${separador}`;
         analisisIACompleto = '';
         resumenIACompleto = '';
         substitutionTimeline = [];
+        mgdBorrar(); // v169
         benchSittingTime = {};
         actionHistory = [];
         expulsadosIds = [];
@@ -18156,16 +18337,27 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                     activeActionPlayerId = i; pendingAction = 'ASISTENCIA';
                     origRegistrar();
                     avisar(antes);
+                    mapaTrasGol(); // v169
                 };
                 lista.appendChild(b);
             });
             document.getElementById('v163AsistModal').classList.add('on');
         }
-        document.getElementById('v163AsistNadie').onclick = () => document.getElementById('v163AsistModal').classList.remove('on');
+        // v169 · tras el gol y la asistencia: ¿cómo llegó y desde dónde?
+        let golPendienteMapa = null;
+        function mapaTrasGol() {
+            const k = golPendienteMapa; golPendienteMapa = null;
+            if (k != null && window.v169AbrirMapaGol && /⚽ Gol #/.test(String(substitutionTimeline[k] || ''))) setTimeout(() => window.v169AbrirMapaGol(k, 'hergar'), 80);
+        }
+        document.getElementById('v163AsistNadie').onclick = () => { document.getElementById('v163AsistModal').classList.remove('on'); mapaTrasGol(); };
         window.registrarAccionJugador = function () {
             const accion = pendingAction, quien = activeActionPlayerId;
             const r = origRegistrar.apply(this, arguments);
-            if (accion === 'GOL' && quien != null) setTimeout(() => preguntarAsistencia(quien), 60);
+            if (accion === 'GOL' && quien != null) {
+                golPendienteMapa = null;
+                for (let k = substitutionTimeline.length - 1; k >= 0; k--) if (/^\[\d+'\]\s*⚽ Gol #/.test(String(substitutionTimeline[k]))) { golPendienteMapa = k; break; }
+                setTimeout(() => preguntarAsistencia(quien), 60);
+            }
             return r;
         };
 
@@ -18195,6 +18387,66 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             }, true);
         });
         refrescarModo();
+    })();
+</script>
+<!-- v169 · ORIGEN Y POSICIÓN DEL GOL EN DIRECTO -->
+<style>
+    #v169MapaModal { position: fixed; inset: 0; z-index: 10560; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.78); }
+    #v169MapaModal.on { display: flex; }
+    #v169MapaModal .caja { width: 100%; max-width: 480px; max-height: 96vh; overflow-y: auto; background: #111827; border-radius: 20px 20px 0 0; border-top: 2px solid #f5a623; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+    #v169MapaModal .tit { text-align: center; font-family: 'Montserrat', sans-serif; font-weight: 900; color: #fff; font-size: 15px; }
+    #v169MapaModal .sub { text-align: center; font-size: 11px; color: #94a3b8; margin: 2px 0 8px; }
+    #v169MapaModal .ori { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; margin-bottom: 8px; }
+    #v169MapaModal .ori button { min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: #1e293b; color: #cbd5e1; font-weight: 800; font-size: 12px; padding: 4px; }
+    #v169MapaModal .ori button.sel { background: rgba(245,166,35,.18); border-color: #f5a623; color: #f5a623; }
+    #v169MapaModal svg { width: 100%; display: block; border-radius: 12px; background: radial-gradient(ellipse at center,#1a6e3a,#0f4a25); touch-action: manipulation; }
+    #v169MapaModal .est { text-align: center; font-size: 11.5px; color: #cbd5e1; min-height: 16px; margin: 5px 0 8px; }
+    #v169MapaModal .bot { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+    #v169MapaModal .bot button { min-height: 50px; border-radius: 12px; border: none; font-weight: 900; font-size: 13.5px; }
+</style>
+<div id="v169MapaModal" role="dialog" aria-modal="true" aria-label="¿Cómo llegó el gol y desde dónde?"><div class="caja">
+    <div class="tit" id="v169MapaTit">⚽ ¿Cómo llegó el gol?</div>
+    <div class="sub" id="v169MapaSub">Opcional · toca el origen y el sitio del campo</div>
+    <div class="ori" id="v169MapaOri"></div>
+    <svg id="v169MapaCampo" viewBox="0 0 340 250"></svg>
+    <div class="est" id="v169MapaEst"></div>
+    <div class="bot"><button type="button" id="v169MapaSaltar" style="background:#1e293b; color:#94a3b8;">Saltar</button><button type="button" id="v169MapaOk" style="background:linear-gradient(135deg,#27ae60,#2ed573); color:#0a0e14;">✅ Guardar</button></div>
+</div></div>
+<script>
+    (function () {
+        const ORI = {
+            hergar: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['error', 'Error rival']],
+            rival: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra']]
+        };
+        let idxGol = null, origen = null, pos = null;
+        const $ = (id) => document.getElementById(id);
+        function pintar() {
+            $('v169MapaCampo').innerHTML = (typeof egCampoSVG === 'function') ? egCampoSVG(pos ? pos.x : '', pos ? pos.y : '', false) : '';
+            $('v169MapaEst').textContent = pos ? `📍 A ${Math.round(Math.hypot(pos.y, pos.x - 34))} m de la portería` : 'Toca en el campo desde dónde fue';
+            [...$('v169MapaOri').children].forEach(b => b.classList.toggle('sel', b.dataset.v === origen));
+        }
+        window.v169AbrirMapaGol = function (idx, equipo) {
+            idxGol = idx; origen = null; pos = null;
+            const m = /^\[(\d+)'\]\s*(.*)$/.exec(String(substitutionTimeline[idx] || ''));
+            const quien = equipo === 'rival' ? 'del rival' : ((m && /⚽ Gol #\S+ (\S+)/.exec(m[2])) ? 'de ' + /⚽ Gol #\S+ (\S+)/.exec(m[2])[1] : '');
+            $('v169MapaTit').textContent = `${equipo === 'rival' ? '🥅' : '⚽'} Gol ${quien}${m ? ' · ' + m[1] + "'" : ''}`;
+            $('v169MapaSub').innerHTML = `Opcional · arriba, ${equipo === 'rival' ? '<b>nuestra portería</b>' : '<b>la portería del rival</b>'}`;
+            $('v169MapaOri').innerHTML = ORI[equipo === 'rival' ? 'rival' : 'hergar'].map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join('');
+            [...$('v169MapaOri').children].forEach(b => b.onclick = () => { origen = origen === b.dataset.v ? null : b.dataset.v; pintar(); });
+            pintar();
+            $('v169MapaModal').classList.add('on');
+        };
+        $('v169MapaCampo').onclick = (ev) => {
+            const r = ev.currentTarget.getBoundingClientRect();
+            pos = { x: Math.round(Math.max(0, Math.min(68, (ev.clientX - r.left) / r.width * 68)) * 10) / 10, y: Math.round(Math.max(0, Math.min(50, (ev.clientY - r.top) / r.height * 50)) * 10) / 10 };
+            pintar();
+        };
+        const cerrar = () => { $('v169MapaModal').classList.remove('on'); idxGol = null; };
+        $('v169MapaSaltar').onclick = cerrar;
+        $('v169MapaOk').onclick = () => {
+            if (idxGol != null && (origen || pos)) { const d = {}; if (origen) d.origen = origen; if (pos) d.pos = pos; mgdGuardar(idxGol, d); }
+            cerrar();
+        };
     })();
 </script>
 </body>
