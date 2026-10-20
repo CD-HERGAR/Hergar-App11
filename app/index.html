@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    172                                            ║
+  ║  Versión:    174                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1762,7 +1762,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v172</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v174</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4846,7 +4846,7 @@
         <div style="padding:4px 6px 0;">${estHexSVG(x.pct, col, nom)}</div>
         <div style="font-size:10px; color:#94a3b8; text-align:center; padding:0 12px; line-height:1.4;">Sobre 100: a cuántos compañeros supera (100 = el que más del equipo) · discontinua: la mitad del equipo</div>
         <div style="padding:10px 12px 14px;">
-          <div style="font-size:10.5px; font-weight:800; letter-spacing:1.2px; color:${col};">SUPERPODERES</div>${sp}${gem}</div></div>`;
+          <div style="font-size:10.5px; font-weight:800; letter-spacing:1.2px; color:${col};">SUPERPODERES</div>${sp}${oportunistaChipHTML(t, j)}${gem}</div></div>`;
     }
     // 🧬 El ADN del equipo (Temporada → Más análisis)
     function adnEquipoHTML(t, abrir) {
@@ -4869,7 +4869,8 @@
               <span style="min-width:0;"><span style="font-size:13px; font-weight:700; color:#e2e8f0;">${estEsc(estNom(x.j))}</span>${(() => { const jc = juegaComo(x), sub = [x.cola, jc ? 'como ' + jc[0] : ''].filter(Boolean).join(' · '); return sub ? `<br><span style="font-size:10.5px; color:#94a3b8;">${estEsc(sub)}</span>` : ''; })()}</span>${chip}</div>`;
           }).join('')}</div>`;
       });
-      // gemelos: parejas que se eligen mutuamente o con más parecido
+      h += oportunistaAdnHTML(t); // v174
+    // gemelos: parejas que se eligen mutuamente o con más parecido
       const vistos = new Set(), pares = [];
       lista.filter(x => x.gemelo).sort((a, b) => b.gemelo.sim - a.gemelo.sim).forEach(x => {
         const a = String(x.j.id), b = String(x.gemelo.o.id), key = [a, b].sort().join('_');
@@ -4882,6 +4883,56 @@
       h += `<div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:10px;">Los ejes: Puntería (goles por tiro, mínimo ${ESTILO_MIN_TIROS} tiros), Disparo, Último pase (asistencias y pases clave), Pase al área, Regate (con penaltis provocados) y Defensa (las clave cuentan doble), todo por 70'. Cada uno puntúa según a cuántos compañeros supera. Nada resta.</div>`;
       return h;
     }
+
+  // v174 · ⚡ OPORTUNISTA (misma función en la app y en el visor): el que más goles de rechace marca (mínimo 2;
+  // si hay empate, todos) y, además, quien tenga al menos 2 de rechace y sean el 40 % o más de sus goles.
+  const OPORT_MIN = 2, OPORT_PCT = 0.4;
+  function oportunistasTemporada(t) {
+    const js = (t && t.jugadores) || {}, c = {};
+    let total = 0, rech = 0;
+    ((t && t.partidos) || []).forEach(p => (Array.isArray(p.goles) ? p.goles : []).forEach(g => {
+      if (!g || g.equipo === 'rival') return;
+      total++;
+      if (g.origen !== 'rechace' || g.penalti || g.jugadorId == null) return;
+      rech++;
+      const id = String(g.jugadorId); c[id] = (c[id] || 0) + 1;
+    }));
+    const max = Math.max(0, ...Object.values(c));
+    const res = {};
+    Object.entries(c).forEach(([id, n]) => {
+      if (n < OPORT_MIN) return;
+      const j = js[id] || Object.values(js).find(x => String(x.id) === id);
+      const goles = Math.max(n, (j && j.goles) || 0);
+      if (n === max || n / goles >= OPORT_PCT) res[id] = { id, j, n, goles, primero: n === max };
+    });
+    return { res, total, rech };
+  }
+  function oportunistaChipHTML(t, j, col) {
+    if (!t || !j) return '';
+    const o = oportunistasTemporada(t).res[String(j.id)];
+    if (!o) return '';
+    return `<div style="display:flex; align-items:center; gap:10px; background:rgba(168,85,247,.14); border:1px solid rgba(168,85,247,.5); border-radius:12px; padding:9px 11px; margin-top:6px;">
+      <span style="font-size:20px; min-width:34px; text-align:center;">⚡</span>
+      <span style="font-size:12.5px; line-height:1.35; color:#e2e8f0;"><b style="color:#d8b4fe;">Oportunista</b> <span style="color:#94a3b8; font-size:11px;">· ${o.n} de sus ${o.goles} goles, de rechace: siempre está donde cae el balón</span></span></div>`;
+  }
+  function oportunistaAdnHTML(t) {
+    const O = oportunistasTemporada(t), L = Object.values(O.res).sort((a, b) => b.n - a.n || a.n / a.goles - b.n / b.goles);
+    if (!L.length) return '';
+    return `<div style="background:rgba(168,85,247,.06); border:1px solid rgba(168,85,247,.4); border-radius:14px; padding:10px 12px; margin-bottom:10px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:4px;"><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; letter-spacing:.5px; color:#d8b4fe;">⚡ OPORTUNISTA</span><span style="font-size:10.5px; color:#94a3b8; text-align:right;">Siempre está donde cae el balón.</span></div>
+      ${L.map(o => `<div style="display:flex; justify-content:space-between; gap:8px; align-items:center; min-height:40px; border-top:1px solid rgba(255,255,255,.06); font-size:13px;"><span style="color:#e2e8f0; font-weight:700;">${estEsc(o.j ? estNom(o.j) : '¿?')}</span><span style="font-size:11.5px; color:#cbd5e1;"><b style="font-family:'Montserrat',sans-serif; font-size:15px; color:#d8b4fe;">${o.n}</b> de rechace · de ${o.goles}</span></div>`).join('')}
+      <div style="font-size:10.5px; color:#94a3b8; margin-top:6px;">Del equipo: ${O.rech} de nuestros ${O.total} goles han sido de rechace (${O.total ? Math.round(O.rech / O.total * 100) : 0} %). Lo lleva quien más marca de rechace (mínimo ${OPORT_MIN}) y quien tiene el ${Math.round(OPORT_PCT * 100)} % o más de sus goles de rechace.</div></div>`;
+  }
+  // v174 · su gol más lejano (cuentan los de falta; los penaltis no). Para «🏅 Sus récords».
+  function golLejanoJugador(t, j) {
+    let best = null;
+    ((t && t.partidos) || []).forEach((p, i) => (Array.isArray(p.goles) ? p.goles : []).forEach(g => {
+      if (!g || g.equipo === 'rival' || g.penalti || g.origen === 'penalti' || String(g.jugadorId) !== String(j.id) || !g.pos || g.pos.x == null || g.pos.y == null) return;
+      const d = Math.hypot(Number(g.pos.y), Number(g.pos.x) - 34);
+      if (!best || d > best.d) best = { d, p, i, g };
+    }));
+    return best;
+  }
 
     // ── Récords personales ──
     const REC_DEF = [
@@ -4965,6 +5016,9 @@
         ${lista.map(r => `<div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); margin-top:4px;">
           <span style="min-width:0;"><span style="font-size:12.5px; font-weight:600; color:#e2e8f0;">${estEsc(r.d.n)}</span><br><span style="font-size:10.5px; color:#94a3b8;">${estEsc(cuando(r))}</span></span>
           <span style="display:flex; align-items:center; gap:6px;">${r.batidos.length && r.batidos[r.batidos.length - 1].i === ult ? `<span style="font-size:9.5px; font-weight:800; color:#0a0e14; background:${acento}; border-radius:5px; padding:2px 6px;">NUEVO</span>` : ''}<span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:17px; color:${acento};">${recFmt(r.d, r.best.v)}</span></span></div>`).join('')}
+              ${(() => { const L = golLejanoJugador(t, j); return L ? `<div style="display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:center; padding:8px 0; border-top:1px solid rgba(255,255,255,.06); margin-top:4px;">
+        <span style="min-width:0;"><span style="font-size:12.5px; font-weight:600; color:#e2e8f0;">Su gol más lejano</span><br><span style="font-size:10.5px; color:#94a3b8;">vs ${estEsc(String(L.p.rival || '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()))}${L.g.origen === 'falta' ? ' · de falta' : ''}</span></span>
+        <span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:17px; color:${acento};">${Math.round(L.d)} m</span></div>` : ''; })()}
         ${rachas.length || nBat ? `<div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:8px;">
           ${rachas.map(([v, l]) => `<div style="background:rgba(255,255,255,.04); border-radius:10px; padding:8px 10px;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:#e2e8f0;">${v}</div><div style="font-size:10.5px; color:#94a3b8; line-height:1.35;">${l}</div></div>`).join('')}
           ${nBat ? `<div style="background:rgba(255,255,255,.04); border-radius:10px; padding:8px 10px;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:#e2e8f0;">${nBat}</div><div style="font-size:10.5px; color:#94a3b8; line-height:1.35;">${nBat === 1 ? 'récord batido' : 'récords batidos'} esta temporada</div></div>` : ''}</div>` : ''}
@@ -6867,7 +6921,8 @@
                         const tp = getTemporada().partidos, ult = tp[tp.length - 1];
                         if (ult && Array.isArray(ult.goles)) gs = ult.goles;
                     }
-                    return gs.map(g => ({ min: g.min, equipo: g.equipo, nombre: g.nombre || '' }));
+                    // v174: con el sitio del gol (cuando se ha apuntado) para el aviso de «gol más lejano» del visor
+                    return gs.map(g => { const o = { min: g.min, equipo: g.equipo, nombre: g.nombre || '' }; if (g.penalti) o.penalti = true; if (g.equipo === 'hergar' && !g.penalti && g.pos && g.pos.x != null && g.pos.y != null) o.pos = { x: Math.round(g.pos.x * 10) / 10, y: Math.round(g.pos.y * 10) / 10 }; return o; });
                 } catch (e) { return []; }
             })(),
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
@@ -18533,7 +18588,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         const cerrar = () => { $('v169MapaModal').classList.remove('on'); idxGol = null; };
         $('v169MapaSaltar').onclick = cerrar;
         $('v169MapaOk').onclick = () => {
-            if (idxGol != null && (origen || pos)) { const d = {}; if (origen) d.origen = origen; if (pos) d.pos = pos; mgdGuardar(idxGol, d); }
+            if (idxGol != null && (origen || pos)) { const d = {}; if (origen) d.origen = origen; if (pos) d.pos = pos; mgdGuardar(idxGol, d); try { if (typeof publicarPartidoFirebase === 'function') publicarPartidoFirebase(); } catch (e) {} } // v174: el visor recibe el sitio del gol
             cerrar();
         };
     })();
