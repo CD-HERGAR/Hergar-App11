@@ -1714,6 +1714,11 @@
                         </div>
                         <div style="height:10px; border-radius:5px; background:rgba(255,255,255,0.08); overflow:hidden; margin:8px 0 6px;"><div id="ghEspacioBarra" style="height:100%; width:0%; background:#2ed573; border-radius:5px; transition:width .3s;"></div></div>
                         <div id="ghEspacioTxt" style="font-size:11.5px; line-height:1.45; color:#cbd5e1;">Sin datos todavía: pulsa ↻ Actualizar.</div>
+                        <!-- v181 · vídeos que ya no usa ningún gol (subidas repetidas) -->
+                        <div id="ghHuerfanosBox" style="display:none; margin-top:8px; padding:8px 10px; border-radius:8px; background:rgba(245,166,35,0.08); border:1px solid rgba(245,166,35,0.3);">
+                            <div id="ghHuerfanosTxt" style="font-size:11px; line-height:1.45; color:#f5c97a;"></div>
+                            <button type="button" id="ghHuerfanosBtn" onclick="limpiarVideosHuerfanos()" style="margin-top:6px; width:100%; min-height:38px; border-radius:8px; border:1px solid rgba(245,166,35,0.45); background:rgba(245,166,35,0.12); color:#f5c97a; font-weight:800; font-size:11.5px;">🧹 LIMPIAR VÍDEOS SIN USAR</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1762,7 +1767,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v174</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v181</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -12847,12 +12852,14 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
 
     // ── EDITAR PARTIDO YA GUARDADO EN TEMPORADA (corregir goleador, resultado, etc.) ──
     let editandoPartidoIndex = null;
+    let egVideosSubidos = []; // v181 · vídeos subidos a GitHub mientras está abierto Editar partido
 
     window.abrirEditarPartido = function(index) {
         const t = getTemporada();
         const p = t.partidos[index];
         if (!p) return;
         editandoPartidoIndex = index;
+        egVideosSubidos = []; // v181
 
         document.getElementById('editPartidoRival').value = p.rival;
         document.getElementById('editPartidoFecha').value = p.fecha;
@@ -13178,6 +13185,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const e = leerEspacioGitHub(), barra = document.getElementById('ghEspacioBarra'), txt = document.getElementById('ghEspacioTxt');
         if (!barra || !txt) return;
         if (msg) { txt.style.color = color || '#cbd5e1'; txt.innerText = msg; }
+        pintarHuerfanosGitHub(e); // v181
         if (!e) { barra.style.width = '0%'; if (!msg) { txt.style.color = '#cbd5e1'; txt.innerText = ghToken() ? 'Sin datos todavía: pulsa ↻ Actualizar.' : 'Guarda antes el token de GitHub.'; } return; }
         const pct = Math.min(100, e.total / GH_LIMITE * 100);
         const col = pct >= 90 ? '#ff4757' : pct >= 70 ? '#f5a623' : '#2ed573';
@@ -13187,7 +13195,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const caben = Math.floor(quedan / Math.max(media, 1048576));
         txt.style.color = '#cbd5e1';
         txt.innerHTML = `<b style="color:${col}; font-size:13px;">${fmtMB(e.total)} de 1 GB</b> (${Math.round(pct)} %)<br>`
-            + `${e.n} ${e.n === 1 ? 'vídeo' : 'vídeos'} · ${fmtMB(e.videos)}${e.n ? ` · media ${fmtMB(media)} por vídeo` : ''} · resto del visor ${fmtMB(e.resto)}<br>`
+            + (e.sinUsar != null
+                ? `${e.n - e.sinUsar} ${e.n - e.sinUsar === 1 ? 'gol' : 'goles'} con vídeo${e.sinUsar ? ` · ${e.n} archivos en la carpeta` : ''} · ${fmtMB(e.videos)}${e.n ? ` · media ${fmtMB(media)} por vídeo` : ''} · resto del visor ${fmtMB(e.resto)}<br>` // v181
+                : `${e.n} ${e.n === 1 ? 'vídeo' : 'vídeos'} · ${fmtMB(e.videos)}${e.n ? ` · media ${fmtMB(media)} por vídeo` : ''} · resto del visor ${fmtMB(e.resto)}<br>`)
             + `<span style="color:${pct >= 90 ? '#ff6b7a' : '#94a3b8'};">${pct >= 90 ? '⚠️ Casi lleno: al cerrar la temporada, baja los vídeos y bórralos de GitHub. ' : ''}Caben unos ${caben} vídeos más · comprobado ${fechaCortaNube(e.fecha)}</span>`;
     }
     async function ghListar(ruta) {
@@ -13202,6 +13212,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (manual) pintarEspacioGitHub('Calculando...', '#94a3b8');
         try {
             let total = 0, videos = 0, nv = 0;
+            const usados = ghVideosUsados(); let sinUsar = 0, sinUsarBytes = 0; // v181
             const raiz = await ghListar('');
             for (const it of raiz) {
                 if (it.type === 'file') total += it.size || 0;
@@ -13210,11 +13221,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                     dentro.forEach(f => {
                         if (f.type !== 'file') return;
                         total += f.size || 0;
-                        if (it.path === 'videos') { videos += f.size || 0; nv++; }
+                        if (it.path === 'videos') { videos += f.size || 0; nv++; if (!usados.has(f.path)) { sinUsar++; sinUsarBytes += f.size || 0; } }
                     });
                 }
             }
             const e = { total, videos, n: nv, resto: total - videos, fecha: Date.now() };
+            if (usados.size) { e.sinUsar = sinUsar; e.sinUsarBytes = sinUsarBytes; } // v181 · sin datos de goles no se cuenta nada como sobrante
             localStorage.setItem(GH_ESPACIO_KEY, JSON.stringify(e));
             pintarEspacioGitHub();
             return e;
@@ -13224,6 +13236,84 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
     }
     window.actualizarEspacioGitHub = actualizarEspacioGitHub;
+    // ── v181 · VÍDEOS SIN USAR ────────────────────────────────────────────────
+    // Cada subida crea un archivo nuevo (con 4 letras al azar al final) y, hasta la v181, al volver a subir el
+    // vídeo de un gol el anterior se quedaba en GitHub sin que nadie lo viera. Aquí se mira qué archivos usa de
+    // verdad algún gol (temporada actual, temporadas archivadas y el partido en curso) y se borran los demás.
+    function ghVideosUsados() {
+        const s = new Set();
+        const mirar = (txt) => { (String(txt || '').match(/gh:videos\/[^"'\\\s]+/g) || []).forEach(v => s.add(v.slice(3))); };
+        try { mirar(JSON.stringify(getTemporada())); } catch (e) {}
+        try { mirar(JSON.stringify(getTemporadasArchivadas())); } catch (e) {}
+        try { mirar(localStorage.getItem('hergar_F11_state')); } catch (e) {}
+        return s;
+    }
+    function pintarHuerfanosGitHub(e) {
+        const box = document.getElementById('ghHuerfanosBox'), txt = document.getElementById('ghHuerfanosTxt');
+        if (!box || !txt) return;
+        if (!e || !e.sinUsar || !ghToken()) { box.style.display = 'none'; return; }
+        box.style.display = 'block';
+        txt.innerHTML = `⚠️ <b>${e.sinUsar} ${e.sinUsar === 1 ? 'archivo' : 'archivos'} sin usar</b> (${fmtMB(e.sinUsarBytes || 0)}): son vídeos subidos más de una vez para el mismo gol. No se ven en el visor y se pueden borrar sin perder nada.`;
+    }
+    async function ghBorrarArchivo(path, sha) {
+        if (!sha) {
+            const r0 = await fetch(`https://api.github.com/repos/${ghRepo()}/contents/${path}`, { headers: ghCabeceras(), cache: 'no-store' });
+            if (r0.status === 404) return true; // ya no está
+            if (!r0.ok) throw new Error('error ' + r0.status);
+            sha = (await r0.json()).sha;
+        }
+        const r = await fetch(`https://api.github.com/repos/${ghRepo()}/contents/${path}`, {
+            method: 'DELETE', headers: Object.assign({ 'Content-Type': 'application/json' }, ghCabeceras()),
+            body: JSON.stringify({ message: `Vídeo sin usar: ${path.slice(7)}`, sha })
+        });
+        if (r.status === 404) return true;
+        if (!r.ok) throw new Error(r.status === 401 ? 'token no válido' : r.status === 403 ? 'el token no tiene permiso de escritura' : 'error ' + r.status);
+        return true;
+    }
+    // Borra de uno en uno (GitHub no admite varios cambios a la vez en el mismo repositorio)
+    let ghBorrandoVideos = Promise.resolve();
+    function ghBorrarVideosSinUsar(candidatos) {
+        const lista = [...new Set(candidatos)].filter(v => typeof v === 'string' && v.indexOf('videos/') === 0);
+        if (!lista.length || !ghToken()) return ghBorrandoVideos;
+        ghBorrandoVideos = ghBorrandoVideos.then(async () => {
+            const usados = ghVideosUsados(); // se mira justo antes de borrar
+            if (!usados.size) return;
+            for (const v of lista) {
+                if (usados.has(v)) continue;
+                try { await ghBorrarArchivo(v); } catch (e) { console.warn('v181 no se pudo borrar', v, e); }
+            }
+            try { await actualizarEspacioGitHub(false); } catch (e) {}
+        });
+        return ghBorrandoVideos;
+    }
+    window.limpiarVideosHuerfanos = async function () {
+        const btn = document.getElementById('ghHuerfanosBtn'), txt = document.getElementById('ghHuerfanosTxt');
+        if (!ghToken()) { txt.innerText = 'Guarda antes el token de GitHub.'; return; }
+        const usados = ghVideosUsados();
+        if (!usados.size) { txt.innerText = 'No encuentro ningún gol con vídeo de GitHub en la temporada, así que no borro nada por seguridad.'; return; }
+        btn.disabled = true; btn.style.opacity = '0.5';
+        try {
+            txt.innerText = 'Mirando la carpeta videos...';
+            const archivos = (await ghListar('videos')).filter(f => f.type === 'file');
+            const sobran = archivos.filter(f => !usados.has(f.path));
+            if (!sobran.length) { txt.innerText = '✓ No sobra ningún vídeo.'; await actualizarEspacioGitHub(false); return; }
+            const mb = sobran.reduce((a, f) => a + (f.size || 0), 0);
+            const enUso = archivos.length - sobran.length;
+            if (!confirm(`Se van a borrar de GitHub ${sobran.length} vídeos (${fmtMB(mb)}) que no usa ningún gol.\n\nLos ${enUso} vídeos que se ven en el visor no se tocan.\n\n¿Seguir?`)) { pintarHuerfanosGitHub(leerEspacioGitHub()); return; }
+            let ok = 0, mal = 0;
+            await ghBorrandoVideos;
+            for (const f of sobran) {
+                txt.innerText = `🧹 Borrando ${ok + mal + 1} de ${sobran.length}... no cierres la app.`;
+                try { await ghBorrarArchivo(f.path, f.sha); ok++; } catch (e) { mal++; console.warn('v181', f.path, e); }
+            }
+            await actualizarEspacioGitHub(false);
+            const e = leerEspacioGitHub();
+            pintarEspacioGitHub(`✅ Borrados ${ok} vídeos sin usar${mal ? ` (${mal} no se pudieron borrar: vuelve a intentarlo)` : ''}. Quedan ${e ? e.n : enUso} vídeos, uno por gol.`, mal ? '#f5a623' : '#2ed573');
+            if (e && e.sinUsar) pintarHuerfanosGitHub(e);
+        } catch (err) {
+            txt.innerText = '❌ No se pudo limpiar: ' + (err.message || err);
+        } finally { btn.disabled = false; btn.style.opacity = ''; }
+    };
     function nombreArchivoVideo(row, ext) {
         const limpio = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 24) || 'x';
         const f = (document.getElementById('editPartidoFecha').value || '').split('/');
@@ -13260,6 +13350,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 throw new Error(r.status === 401 ? 'token no válido' : r.status === 403 || r.status === 404 ? 'el token no tiene permiso de escritura en el repositorio' : (txt || 'error ' + r.status));
             }
             row.querySelector('.eg-vid').value = 'gh:' + ruta;
+            egVideosSubidos.push(ruta); // v181 · si no se guarda o se vuelve a subir, se borra de GitHub
             row.querySelector('.eg-vurl').value = '';
             row.querySelector('.eg-vocu').checked = false;
             est.innerHTML = '<span style="color:#2ed573;">✓ Vídeo subido a GitHub. Pulsa 💾 Guardar cambios; en el visor se podrá ver en 1-2 minutos.</span>';
@@ -13403,6 +13494,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
 
     document.getElementById('closeEditarPartidoBtn').onclick = () => {
         document.getElementById('editarPartidoModal').style.display = 'none';
+        if (egVideosSubidos.length) { ghBorrarVideosSinUsar(egVideosSubidos); egVideosSubidos = []; } // v181 · subidos y no guardados
     };
 
     document.getElementById('guardarEditarPartidoBtn').onclick = () => {
@@ -13412,6 +13504,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (!p) return;
 
         const fechaVieja = p.fecha, rivalViejo = p.rival;
+        const vidsAntes = (Array.isArray(p.goles) ? p.goles : []).filter(g => esVideoGh(g.video)).map(g => g.video.slice(3)); // v181
         const nuevoRival = document.getElementById('editPartidoRival').value.trim() || p.rival;
         const nuevaFecha = document.getElementById('editPartidoFecha').value.trim() || p.fecha;
         const gl = parseInt(document.getElementById('editPartidoGolesLocal').value) || 0;
@@ -13480,13 +13573,24 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
 
         saveTemporada(t);
         publicarTemporadaFirebase(t); // ⚽ HERGAR LIVE: refleja la corrección también en el visor
+        // v181 · el vídeo que se ha sustituido (o quitado) y los subidos de más en esta edición se borran de GitHub
+        let avisoVid = '';
+        try {
+            const usados = ghVideosUsados();
+            const sobran = [...new Set(vidsAntes.concat(egVideosSubidos))].filter(v => !usados.has(v));
+            if (sobran.length && ghToken() && usados.size) {
+                ghBorrarVideosSinUsar(sobran);
+                avisoVid = `🗑 Se ${sobran.length === 1 ? 'borra' : 'borran'} de GitHub ${sobran.length === 1 ? 'el vídeo anterior' : sobran.length + ' vídeos anteriores'}, que ya no ${sobran.length === 1 ? 'usa' : 'usan'} ningún gol.`;
+            }
+        } catch (e) { console.warn('v181 vídeos:', e); }
+        egVideosSubidos = [];
         // v103: si es el partido que sigue cargado en la pantalla Partido, su marcador (y el del visor en vivo) también cambia
         try { if (cmPartidoEsElCargado(t, editandoPartidoIndex) && (goalsLocal !== gl || goalsRival !== gr)) aplicarMarcadorCorregido(gl, gr); } catch (e) {}
 
         document.getElementById('editarPartidoModal').style.display = 'none';
         renderPartidos();
         renderRanking();
-        alert('✅ Partido actualizado correctamente.' + (avisoAsist ? '\n\n' + avisoAsist : ''));
+        alert('✅ Partido actualizado correctamente.' + (avisoAsist ? '\n\n' + avisoAsist : '') + (avisoVid ? '\n\n' + avisoVid : ''));
     };
 
     // ── v122 · ASISTENCIAS CORREGIDAS EN "EDITAR PARTIDO" ─────────────────────
