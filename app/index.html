@@ -1556,6 +1556,7 @@
                     <button id="publicarAlineacionBtn" style="flex:1; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 8px;">📣 PUBLICAR ALINEACIÓN</button>
                     <button id="llegueTardeBtn" onclick="ltAbrir()" style="flex:1 1 100%; background:linear-gradient(135deg,#e67e22,#d35400); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 10px;">⏩ LLEGUÉ TARDE</button>
                     <button id="delegadoCargarBtn" onclick="cargarPartidoDelegado()" style="flex:1 1 100%; background:linear-gradient(135deg,#1f7a4b,#14532d); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 10px;">📥 PARTIDO DEL DELEGADO</button>
+                    <button id="visorRepararBtn" onclick="republicarUltimoPartidoVisor()" style="flex:1 1 100%; display:none; background:rgba(245,166,35,0.12); color:#f5c26b; border-radius:12px; font-weight:800; font-size:11px; border:1px solid rgba(245,166,35,0.5); padding:10px 10px; line-height:1.35;"></button>
                     <button id="avisarAlineacionBtn" style="flex:0 0 auto; display:none; background:rgba(30,41,59,0.6); color:#cbd5e1; border-radius:12px; font-weight:700; font-size:11px; border:1px solid rgba(255,255,255,0.12); padding:10px 10px;">🔔 AVISAR</button>
                 </div>
                 <div class="controls-row" style="flex-wrap:nowrap;">
@@ -1767,7 +1768,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v181</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v182</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -6839,7 +6840,10 @@
         return code;
     }
 
+    // v182 · partido de PRUEBA del delegado cargado en la app: nada sale en el visor (ni al reanudar, ni al FINAL, ni al reabrir la app)
+    function esPartidoPruebaDelegado() { try { const d = dlgPendiente(); return !!(d && d.prueba); } catch (e) { return false; } }
     function activarCompartirPartido(silencioso = false) {
+        if (esPartidoPruebaDelegado()) return; // v182
         if (compartirEnVivo) return; // ya activo, no repetir
         matchShareCode = localStorage.getItem('hergar_F11_matchShareCode');
         if (!matchShareCode) {
@@ -6871,6 +6875,7 @@
 
     function publicarPartidoFirebase() {
         if (!compartirEnVivo || !matchShareCode || !window.__hergarFirebaseSet) return;
+        if (esPartidoPruebaDelegado()) return; // v182
 
         const rivalName = document.getElementById("rivalNameInput")?.value || "RIVAL";
         const formacionActiva = document.getElementById("formationSelector")?.value || "4-2-3-1";
@@ -10475,6 +10480,107 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     }
     function dlgFechaPartido() { const p = dlgPendiente(); return (p && p.fecha) || null; }
     function dlgOlvidarPendiente() { try { localStorage.removeItem(DLG_PEND_KEY); } catch (e) {} }
+
+    // ── v182 · EL VISOR ENSEÑA UN PARTIDO QUE NO ESTÁ EN LA TEMPORADA ─────────────
+    // Si el «Último partido» del visor no coincide con el último partido guardado en la temporada (p. ej. una prueba
+    // del delegado que se coló), en la previa sale un botón para volver a poner en el visor el último partido guardado.
+    // Se publica con un código nuevo, armado con lo que guarda la temporada (marcador, goles, estadísticas, impacto de
+    // cada niño, informe IA). El partido malo se queda en la nube pero ya nadie lo ve.
+    const normRivalVisor = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let visorPartidoMalo = null;
+    async function revisarPartidoDelVisor() {
+        const btn = document.getElementById('visorRepararBtn');
+        if (!btn) return;
+        const ocultar = () => { btn.style.display = 'none'; visorPartidoMalo = null; };
+        if (partidoEmpezado || matchFinished || !window.__hergarFirebaseGet) return ocultar();
+        const tp = getTemporada().partidos || [], ult = tp[tp.length - 1];
+        if (!ult) return ocultar();
+        try {
+            const lc = await window.__hergarFirebaseGet('lastMatchCode');
+            const code = lc && lc.ok && lc.val && lc.val.code;
+            if (!code) return ocultar();
+            const r = await window.__hergarFirebaseGet('matches/' + code);
+            const m = r && r.ok && r.val;
+            if (!m || !m.matchFinished || m.previa) return ocultar(); // en la previa o en directo el visor no enseña «Último partido»
+            const igual = normRivalVisor(m.rival) === normRivalVisor(ult.rival) && Number(m.golesLocal) === Number(ult.golesLocal) && Number(m.golesRival) === Number(ult.golesRival);
+            if (igual || partidoEmpezado || matchFinished) return ocultar();
+            visorPartidoMalo = { code, rival: m.rival, gl: m.golesLocal, gr: m.golesRival };
+            btn.innerHTML = `⚠️ El visor enseña como último partido HERGAR ${Number(m.golesLocal) || 0}-${Number(m.golesRival) || 0} ${escapeHtmlSimple(m.rival || '')}, que no está en la temporada.<br>👉 Toca aquí para poner el último guardado (${escapeHtmlSimple(ult.rival)} ${ult.golesLocal}-${ult.golesRival}, ${escapeHtmlSimple(ult.fecha)})`;
+            btn.style.display = 'block';
+        } catch (e) { console.warn('v182 revisar visor:', e); }
+    }
+    function escapeHtmlSimple(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    function payloadDesdeTemporada(t, P) {
+        const num = (v) => Number(v) || 0;
+        const jugadores = {};
+        Object.values(t.jugadores || {}).forEach(j => {
+            const h = (j.historial || []).find(x => x && x.fecha === P.fecha && x.rival === P.rival);
+            if (!h) return;
+            const a = h.acc || {}, mins = num(h.mins);
+            const imp = num(h.imp);
+            jugadores[j.id] = {
+                name: j.name, dorsal: j.dorsal, enCampo: false, enBanquillo: false,
+                esPortero: !!(h.lineas && h.lineas.portero),
+                minutos: mins, goles: num(h.goles), asistencias: num(h.asistencias),
+                accionesDef: num(a.def), accionesDefClave: num(a.defC), regates: num(a.reg),
+                pasesArea: num(a.pa), pasesClave: num(a.pc),
+                disparosPuerta: num(a.dp), disparosFuera: num(a.df), fuerasJuego: num(a.fj),
+                paradas: num(a.par), paradasDificiles: num(a.parD),
+                golesRecibidos: num(h.golesRecibidos), tirosPuertaEnPorteria: 0,
+                impacto: Math.round(imp * 100) / 100,
+                impactoPond: h.impPond != null ? num(h.impPond) : (mins > 0 ? Math.round(imp / mins * 70 * 100) / 100 : 0),
+                amarillas: num(a.am), roja: !!a.ro
+            };
+        });
+        // cuándo acabó: fecha + hora de inicio + duración + descanso
+        let fin = null;
+        try {
+            const f = String(P.fecha || '').split('/').map(Number), hh = String(P.horaInicio || '12:00').split(':').map(Number);
+            const dur = String(P.duracion || '70:00').split(':').map(Number);
+            if (f.length === 3) fin = new Date(f[2], f[1] - 1, f[0], hh[0] || 12, hh[1] || 0).getTime() + ((dur[0] || 70) + 10) * 60000;
+        } catch (e) {}
+        const goles = (Array.isArray(P.goles) ? P.goles : []).filter(Boolean).map(g => {
+            const o = { min: g.min, equipo: g.equipo, nombre: g.nombre || '' };
+            if (g.penalti) o.penalti = true;
+            if (g.equipo === 'hergar' && !g.penalti && g.pos && g.pos.x != null && g.pos.y != null) o.pos = { x: Math.round(g.pos.x * 10) / 10, y: Math.round(g.pos.y * 10) / 10 };
+            return o;
+        });
+        return {
+            secret: HERGAR_LIVE_SECRET, actualizado: Date.now(),
+            rival: P.rival, golesLocal: num(P.golesLocal), golesRival: num(P.golesRival),
+            minuto: parseInt(P.duracion) || 70, parte: 2,
+            matchRunning: false, matchFinished: true, finalizadoEn: fin || Date.now(), previa: false,
+            formacion: P.formacion || '', onFieldIds: [], benchIds: [], benchSittingTime: {}, jugadores,
+            eventos: [], momentumData: [], golesMin: goles,
+            tirosNuestrosPuerta: num(P.tirosNuestrosPuerta), tirosNuestrosFuera: num(P.tirosNuestrosFuera),
+            tirosRivalesPuerta: num(P.tirosRivalesPuerta), tirosRivalesFuera: num(P.tirosRivalesFuera),
+            faltasFavor: num(P.faltasFavor), faltasContra: num(P.faltasContra), cornersFavor: num(P.cornersFavor), cornersContra: num(P.cornersContra),
+            fuerasJuegoNuestros: num(P.fuerasJuegoNuestros), fuerasJuegoRival: num(P.fuerasJuegoRival),
+            analisisIA: P.analisisIA || '', resumenIA: P.resumenIA || '', notasIA: {},
+            republicado: true
+        };
+    }
+    window.republicarUltimoPartidoVisor = async function () {
+        if (partidoEmpezado || matchFinished) { alert('Hay un partido en marcha en la pantalla de partido. Pulsa antes «Nuevo partido».'); return; }
+        if (!window.__hergarFirebaseSet) { alert('La conexión con la nube aún no está lista. Espera unos segundos.'); return; }
+        const t = getTemporada(), tp = t.partidos || [], P = tp[tp.length - 1];
+        if (!P) return;
+        if (!confirm(`El visor volverá a enseñar como último partido:\n\nHERGAR ${P.golesLocal}-${P.golesRival} ${P.rival} (${P.fecha})\n\n¿Seguir?`)) return;
+        const code = generarCodigoPartido();
+        const r1 = await window.__hergarFirebaseSet('matches/' + code, payloadDesdeTemporada(t, P));
+        if (!r1 || !r1.ok) { alert('❌ No se pudo publicar: ' + ((r1 && r1.error) || 'sin conexión')); return; }
+        const r2 = await window.__hergarFirebaseSet('lastMatchCode', { secret: HERGAR_LIVE_SECRET, code, actualizado: Date.now() });
+        if (!r2 || !r2.ok) { alert('❌ No se pudo cambiar el partido del visor: ' + ((r2 && r2.error) || 'sin conexión')); return; }
+        document.getElementById('visorRepararBtn').style.display = 'none';
+        visorPartidoMalo = null;
+        alert(`✅ Listo. El visor vuelve a enseñar HERGAR ${P.golesLocal}-${P.golesRival} ${P.rival}.\n\nSi lo tienes abierto, recárgalo.`);
+    };
+    window.revisarPartidoDelVisor = revisarPartidoDelVisor;
+    // se mira al abrir la app (cuando la nube está lista) y al volver a la app
+    (function () {
+        let k = 0; const it = setInterval(() => { k++; if (window.__hergarFirebaseGet) { clearInterval(it); setTimeout(revisarPartidoDelVisor, 1500); } else if (k > 40) clearInterval(it); }, 500);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(revisarPartidoDelVisor, 800); });
+    })();
     document.getElementById("actionPenaltiBtn").onclick = abrirPenaltiFavor;
     document.getElementById("penaltiRivalBtn").onclick = () => { document.getElementById("penaltiRivalModal").style.display = "flex"; };
 
@@ -14616,6 +14722,7 @@ ${separador}`;
     // por lo que "Nuevo partido" desde el menú no hacía nada.
     function ejecutarNuevoPartido() {
         try { dlgOlvidarPendiente(); } catch (e) {} // v157
+        setTimeout(() => { try { revisarPartidoDelVisor(); } catch (e) {} }, 1500); // v182
         // Guardar el once inicial del partido actual antes de resetear
         if (titularesIniciales.length === 11) {
             localStorage.setItem("hergar_F11_lastOnce", JSON.stringify(titularesIniciales));
