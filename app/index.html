@@ -1768,7 +1768,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v182</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v183</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -10341,7 +10341,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
 
     // Aplica un suceso del delegado con las mismas funciones que en directo
     function dlgAplicar(e) {
-        const MAP = { tp: 'DISPARO_PUERTA', tf: 'DISPARO_FUERA', pc: 'PASE_CLAVE', pa: 'PASE_AREA', def: 'DEFENSA', reg: 'REGATE' };
+        const MAP = { tp: 'DISPARO_PUERTA', tf: 'DISPARO_FUERA', pc: 'PASE_CLAVE', pa: 'PASE_AREA', def: 'DEFENSA', reg: 'REGATE', defC: 'DEFENSA_CLAVE' }; // v183: + def. clave
         const j = e.j != null ? Number(e.j) : null;
         selectedPlayerId = null; activeActionPlayerId = null; pendingAction = null;
         switch (e.k) {
@@ -10350,7 +10350,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 activeActionPlayerId = j; pendingAction = 'GOL'; registrarAccionJugador();
                 if (e.a != null && playersData[Number(e.a)]) { activeActionPlayerId = Number(e.a); pendingAction = 'ASISTENCIA'; registrarAccionJugador(); }
                 break;
-            case 'tp': case 'tf': case 'pc': case 'pa': case 'def': case 'reg':
+            case 'tp': case 'tf': case 'pc': case 'pa': case 'def': case 'reg': case 'defC':
                 if (!playersData[j]) break;
                 activeActionPlayerId = j; pendingAction = MAP[e.k]; registrarAccionJugador();
                 break;
@@ -10363,6 +10363,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             case 'cf': document.getElementById('cornerFavorBtn').onclick(); break;
             case 'cc': document.getElementById('cornerContraBtn').onclick(); break;
             case 'am': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionYellowBtn').onclick(); } break;
+            case 'fa': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionFalloBtn').onclick(); } break;      // v183
+            case 'faI': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionFalloImpBtn').onclick(); } break; // v183
             case 'ro': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionRedBtn').onclick(); } break;
             case 'sub': selectedPlayerId = Number(e.s); handleBenchPlayerClick(Number(e.e)); break;
             case 'swap': selectedPlayerId = null; handleFieldPlayerClick(j); handleFieldPlayerClick(Number(e.x)); break;
@@ -10433,7 +10435,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const evs = (Array.isArray(st.ev) ? st.ev : Object.values(st.ev || {})).filter(Boolean);
         const n = k => evs.filter(e => e.k === k).length;
         const minFin = Math.floor(Number(st.fase === 'final' ? (st.parte === 2 ? st.fin2 : st.fin1) : st.acum) / 60) || 0;
-        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta · 💨 ${n('tf')} fuera\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
+        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
         const backup = ltBackup();
         // Previa: convocatoria, once, banquillo, sistema y rival del delegado
         if (compartirEnVivo) desactivarCompartirPartido(); // la alineación publicada de este móvil no debe pisar al visor
