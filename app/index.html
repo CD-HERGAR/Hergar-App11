@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    174                                            ║
+  ║  Versión:    188                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1768,7 +1768,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v185</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v188</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -17467,8 +17467,143 @@ ${separador}`;
       return html;
     }
 
+  // ── v187 · RIVALES EN COMÚN (mismo código en la app y en el visor) ──
+  // Compara a dos equipos de la Liga por sus resultados contra los mismos rivales.
+  //  · Para cada rival común: media de la diferencia de goles y de los puntos de cada uno contra él
+  //    (si se han enfrentado varias veces al mismo equipo, cuenta la media: todos los rivales pesan igual).
+  //  · Ventaja = media de (diferencia de goles de A − la de B) en esos rivales.
+  //  · Aviso si uno jugó bastante más en casa que el otro contra esos rivales.
+  //  · Contra cada equipo cuentan como mucho los 2 últimos partidos de cada uno.
+  //  · Con más de 5 rivales en común, se usan los 5 con más Elo (se pueden ver todos en el detalle).
+  const RC_MAX_PARTIDOS = 2, RC_MAX_RIVALES = 5;
+  function rcCalcular(liga, iA, iB, limite) {
+    const D = pronPreparar(liga);
+    const jug = D.P.filter(p => p.jugado);
+    const de = (i, p) => { const casa = p.l === i; const gf = casa ? p.gl : p.gv, gc = casa ? p.gv : p.gl; return { gf, gc, casa, pts: gf > gc ? 3 : gf === gc ? 1 : 0, jg: p.jg }; };
+    const contra = (i, x) => jug.filter(p => (p.l === i && p.v === x) || (p.l === x && p.v === i)).sort((a, b) => a.jg - b.jg).slice(-RC_MAX_PARTIDOS).map(p => de(i, p));
+    const lado = (rs) => ({ rs, n: rs.length, dg: rs.reduce((s, r) => s + r.gf - r.gc, 0) / rs.length, pts: rs.reduce((s, r) => s + r.pts, 0) / rs.length, casa: rs.filter(r => r.casa).length });
+    let comunes = [];
+    const soloA = [], soloB = [];
+    for (let x = 0; x < D.NT; x++) {
+      if (x === iA || x === iB) continue;
+      const a = contra(iA, x), b = contra(iB, x);
+      if (a.length && b.length) comunes.push({ x, nombre: D.nombres[x], A: lado(a), B: lado(b) });
+      else if (a.length) soloA.push({ x, nombre: D.nombres[x], rs: a });
+      else if (b.length) soloB.push({ x, nombre: D.nombres[x], rs: b });
+    }
+    const total = comunes.length;
+    let recortado = false;
+    if (limite && comunes.length > limite) {
+      let elo = {};
+      try { const E = eloLiga(liga); if (E) E.equipos.forEach(x => { elo[x.i] = x.elo; }); } catch (e) { elo = {}; }
+      comunes = comunes.slice().sort((a, b) => (elo[b.x] || 0) - (elo[a.x] || 0)).slice(0, limite);
+      recortado = true;
+    }
+    const suma = (k, s) => comunes.reduce((t, c) => t + c[s][k], 0);
+    const reg = (s) => { const r = { V: 0, E: 0, D: 0 }; comunes.forEach(c => c[s].rs.forEach(x => r[x.gf > x.gc ? 'V' : x.gf === x.gc ? 'E' : 'D']++)); return r; };
+    const nA = comunes.reduce((t, c) => t + c.A.n, 0), nB = comunes.reduce((t, c) => t + c.B.n, 0);
+    const casaA = nA ? suma('casa', 'A') / nA : 0, casaB = nB ? suma('casa', 'B') / nB : 0;
+    const difs = comunes.map(c => c.A.dg - c.B.dg);
+    return {
+      D, comunes, soloA, soloB, total, recortado, nombreA: D.nombres[iA], nombreB: D.nombres[iB],
+      ptsA: suma('pts', 'A'), ptsB: suma('pts', 'B'), dgA: suma('dg', 'A'), dgB: suma('dg', 'B'),
+      regA: reg('A'), regB: reg('B'), nA, nB, casaA: suma('casa', 'A'), casaB: suma('casa', 'B'), fracCasaA: casaA, fracCasaB: casaB,
+      ventaja: difs.length ? difs.reduce((s, v) => s + v, 0) / difs.length : 0,
+      mejorA: difs.filter(v => v > 0.001).length, mejorB: difs.filter(v => v < -0.001).length, iguales: difs.filter(v => Math.abs(v) <= 0.001).length
+    };
+  }
+  function rcEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function rcNum(v, d) { const r = Math.round(v * Math.pow(10, d)) / Math.pow(10, d); return (Number.isInteger(r) ? String(r) : r.toFixed(d)).replace('.', ','); }
+  function rcSigno(v, d) { const t = rcNum(Math.abs(v), d); return (v > 0.001 ? '+' : v < -0.001 ? '−' : '') + t; }
+  // tituloLargo: nombre del rival para las frases (p. ej. «el Cabrerizos»)
+  function rcHTML(liga, iA, iB, conMarco) {
+    if (!liga || iA == null || iB == null || iA < 0 || iB < 0) return '';
+    const Rt = rcCalcular(liga, iA, iB, null);
+    const marco = (dentro) => conMarco
+      ? `<div style="background:rgba(255,255,255,.025); border:1px solid rgba(255,85,119,.2); border-radius:12px; padding:11px; margin-bottom:10px;">${dentro}</div>`
+      : `<div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08);">${dentro}</div>`;
+    if (Rt.comunes.length <= RC_MAX_RIVALES) { const x = rcBloque(Rt, ''); return x ? marco(x) : ''; }
+    const Rf = rcCalcular(liga, iA, iB, RC_MAX_RIVALES);
+    const sel = (on) => { const b = (k, t, act) => `<button type="button" onclick="rcVer(this,'${k}')" style="flex:1; min-height:36px; border-radius:9px; border:none; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; background:${act ? 'rgba(255,255,255,.14)' : 'transparent'}; color:${act ? '#e2e8f0' : '#94a3b8'};">${t}</button>`;
+      return `<div style="display:flex; gap:6px; background:rgba(255,255,255,.04); border-radius:11px; padding:4px; margin-bottom:9px;">${b('f', 'Los ' + RC_MAX_RIVALES + ' más fuertes', on === 'f')}${b('t', 'Todos (' + Rt.total + ')', on === 't')}</div>`; };
+    return marco(`<div class="rc-ver" data-v="f">${rcBloque(Rf, sel('f'))}</div><div class="rc-ver" data-v="t" style="display:none;">${rcBloque(Rt, sel('t'))}</div>`);
+  }
+  function rcBloque(R, selector) {
+    const HC = '#ff5577', RC = '#4dabf7';
+    const nA = rcEsc(R.nombreA), nB = rcEsc(R.nombreB);
+    const cab = `<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:9px;"><span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:11.5px; color:#e2e8f0;">🔁 Rivales en común</span><span style="font-size:11px; color:#94a3b8;">${R.recortado ? 'los ' + R.comunes.length + ' más fuertes (Elo)' : R.comunes.length ? (R.comunes.length === 1 ? '1 equipo' : R.comunes.length + ' equipos') : ''}</span></div>${selector}`;
+    if (!R.comunes.length) {
+      if (!R.soloA.length || !R.soloB.length) return '';
+      return cab + `<div style="font-size:12px; color:#94a3b8; line-height:1.45;">Todavía no habéis jugado contra ningún equipo en común.</div>`;
+    }
+    const regTxt = (r) => `${r.V}V ${r.E}E ${r.D}D`;
+    const caja = (nom, col, fondo, pts, reg, dg) => `<div style="background:${fondo}; border-radius:10px; padding:8px 10px;">
+        <div style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:10.5px; color:${col}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${nom}</div>
+        <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:20px; color:#e2e8f0;">${rcNum(pts, 1)} pts</div>
+        <div style="font-size:10.5px; color:#cbd5e1;">${reg} · goles ${rcSigno(dg, 1) || '0'}</div></div>`;
+    const v = R.ventaja;
+    const frase = Math.abs(v) < 0.05
+      ? `Contra los mismos equipos, a los dos les ha ido igual: misma diferencia de goles de media.`
+      : `Contra ${R.recortado ? 'los ' + R.comunes.length + ' rivales en común más fuertes' : 'los mismos equipos'}, ${v > 0 ? 'el ' + nA : 'el ' + nB} ha sacado de media <b style="color:${v > 0 ? HC : RC};">${rcNum(Math.abs(v), 1)} ${Math.abs(v) === 1 ? 'gol' : 'goles'} más por partido</b> que ${v > 0 ? 'el ' + nB : 'el ' + nA}.`;
+    const chip = (r) => { const c = r.gf > r.gc ? ['rgba(46,213,115,.16)', '#7bed9f'] : r.gf === r.gc ? ['rgba(148,163,184,.16)', '#cbd5e1'] : ['rgba(255,107,122,.16)', '#ff9da4'];
+      return `<span style="display:inline-block; min-width:34px; text-align:center; font-weight:800; font-size:11.5px; border-radius:6px; padding:2px 4px; margin:1px; background:${c[0]}; color:${c[1]};">${r.gf}-${r.gc}</span>`; };
+    const filas = R.comunes.map(c => `<div style="display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; align-items:center; padding:5px 0; border-top:1px solid rgba(255,255,255,.06); font-size:12px;">
+        <span style="color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${rcEsc(c.nombre)}</span>
+        <span style="text-align:center;">${c.A.rs.map(chip).join('')}</span><span style="text-align:center;">${c.B.rs.map(chip).join('')}</span></div>`).join('');
+    // Detalle: barras por goles y por puntos
+    const barras = (modo) => {
+      const vals = R.comunes.map(c => modo === 'g' ? c.A.dg - c.B.dg : c.A.pts - c.B.pts);
+      const max = Math.max(modo === 'g' ? 2 : 1, ...vals.map(Math.abs));
+      return R.comunes.map((c, k) => {
+        const d = vals[k], w = Math.round(Math.min(1, Math.abs(d) / max) * 50), col = d > 0.001 ? HC : d < -0.001 ? RC : '#64748b';
+        const uni = modo === 'g' ? (Math.abs(d) === 1 ? ' gol' : ' goles') : (Math.abs(d) === 1 ? ' pt' : ' pts');
+        const barra = Math.abs(d) <= 0.001 ? 'left:calc(50% - 3px); width:6px; background:#64748b;' : (d > 0 ? `left:50%; width:${w}%; background:${col};` : `right:50%; width:${w}%; background:${col};`);
+        const cs = (s) => s.rs.map(r => r.casa ? 'casa' : 'fuera').join(', ');
+        return `<div style="padding:7px 0; border-top:1px solid rgba(255,255,255,.06);">
+          <div style="display:flex; justify-content:space-between; gap:8px; font-size:12px;"><span style="color:#e2e8f0; font-weight:700;">${rcEsc(c.nombre)}</span><span style="font-family:'Montserrat',sans-serif; font-weight:900; color:${d > 0.001 ? HC : d < -0.001 ? RC : '#94a3b8'};">${Math.abs(d) <= 0.001 ? 'igual' : rcSigno(d, 1) + uni}</span></div>
+          <div style="font-size:10.5px; color:#94a3b8; margin:2px 0 5px;">${nA} ${c.A.rs.map(r => r.gf + '-' + r.gc).join(', ')} (${cs(c.A)}) · ${nB} ${c.B.rs.map(r => r.gf + '-' + r.gc).join(', ')} (${cs(c.B)})</div>
+          <div style="position:relative; height:10px; border-radius:5px; background:rgba(255,255,255,.05);"><div style="position:absolute; left:50%; top:-2px; bottom:-2px; width:2px; margin-left:-1px; background:rgba(255,255,255,.3);"></div><div style="position:absolute; top:0; bottom:0; border-radius:5px; ${barra}"></div></div></div>`;
+      }).join('');
+    };
+    const btn = (m, t, on) => `<button type="button" onclick="rcModo(this,'${m}')" data-m="${m}" style="flex:1; min-height:38px; border-radius:9px; border:none; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11.5px; background:${on ? '#f5a623' : 'transparent'}; color:${on ? '#0a0e14' : '#cbd5e1'};">${t}</button>`;
+    let campo = '';
+    if (Math.abs(R.fracCasaA - R.fracCasaB) >= 0.4) {
+      const masA = R.fracCasaA > R.fracCasaB;
+      campo = `<div style="font-size:11.5px; line-height:1.45; color:#e2e8f0; background:rgba(245,166,35,.08); border:1px solid rgba(245,166,35,.35); border-radius:10px; padding:8px 10px; margin-top:8px;">Ojo con el campo: contra estos equipos, el ${nA} jugó ${R.casaA} de ${R.nA} en casa y el ${nB}, ${R.casaB} de ${R.nB}. Parte de la ${masA ? 'ventaja del ' + nA : 'ventaja del ' + nB} puede venir de ahí.</div>`;
+    }
+    const solo = (arr, nom, col) => arr.length ? `<div style="display:flex; justify-content:space-between; gap:10px; font-size:11.5px; padding:4px 0;"><span style="color:${col}; font-weight:700; white-space:nowrap;">Solo el ${nom}</span><span style="color:#cbd5e1; text-align:right;">${arr.map(s => rcEsc(s.nombre) + ' ' + s.rs.map(r => r.gf + '-' + r.gc).join(', ')).join(' · ')}</span></div>` : '';
+    const sinComun = (R.soloA.length || R.soloB.length) ? `<div style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:10.5px; letter-spacing:.5px; color:#94a3b8; margin:10px 0 4px;">SIN RIVAL EN COMÚN TODAVÍA</div>${solo(R.soloA, nA, HC)}${solo(R.soloB, nB, RC)}` : '';
+    const resumenPts = `En total contra ${R.comunes.length === 1 ? 'ese equipo' : 'esos ' + R.comunes.length + ' equipos'}: ${rcNum(R.ptsA, 1)} puntos del ${nA} y ${rcNum(R.ptsB, 1)} del ${nB}.`;
+    const resumenG = `Mejor el ${nA} contra ${R.mejorA}, el ${nB} contra ${R.mejorB}${R.iguales ? ` e igual contra ${R.iguales}` : ''}.`;
+    const detalle = `<div class="rc-det" style="display:none; margin-top:8px;">
+        <div style="display:flex; gap:6px; background:rgba(255,255,255,.04); border-radius:11px; padding:4px; margin-bottom:8px;">${btn('g', 'Por goles', true)}${btn('p', 'Por puntos', false)}</div>
+        <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:800; letter-spacing:.4px; margin-bottom:2px;"><span style="color:${RC};">◂ MEJOR ${nB}</span><span style="color:${HC};">MEJOR ${nA} ▸</span></div>
+        <div class="rc-g"><div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">${resumenG}</div>${barras('g')}</div>
+        <div class="rc-p" style="display:none;"><div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">${resumenPts}</div>${barras('p')}</div>
+        ${campo}${sinComun}
+        <div style="font-size:10.5px; color:#94a3b8; margin-top:8px; line-height:1.4;">Contra cada equipo cuentan como mucho los ${RC_MAX_PARTIDOS} últimos partidos de cada uno, y su media, para que todos los rivales pesen igual.${R.recortado ? ` Con más de ${RC_MAX_RIVALES} rivales en común se usan los ${RC_MAX_RIVALES} con más Elo.` : ''}</div>
+      </div>`;
+    return (`<div class="rc-box">${cab}
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
+        ${caja(nA, HC, 'rgba(255,85,119,.12)', R.ptsA, regTxt(R.regA), R.dgA)}${caja(nB, RC, 'rgba(77,171,247,.12)', R.ptsB, regTxt(R.regB), R.dgB)}
+      </div>
+      <div style="font-size:12px; line-height:1.45; color:#cbd5e1; margin-bottom:6px;">${frase}</div>
+      ${R.comunes.length === 1 ? `<div style="font-size:11px; color:#f5a623; margin-bottom:6px;">Solo 1 rival en común: tómalo como orientativo.</div>` : ''}
+      <div style="display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; font-size:10px; font-weight:800; letter-spacing:.3px; color:#94a3b8; padding-bottom:3px;"><span>CONTRA</span><span style="text-align:center; color:${HC}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${nA}</span><span style="text-align:center; color:${RC}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${nB}</span></div>
+      ${filas}
+      <div style="font-size:10.5px; color:#94a3b8; margin-top:4px;">Resultado visto desde cada equipo: sus goles primero.</div>
+      <button type="button" onclick="rcToggle(this)" style="display:block; margin:6px 0 0 auto; min-height:40px; padding:0 4px; border:none; background:transparent; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#f5a623;">Ver detalle ▾</button>
+      ${detalle}</div>`);
+  }
+  window.rcVer = (b, k) => { const raiz = b.closest('.rc-ver') && b.closest('.rc-ver').parentElement; if (!raiz) return; raiz.querySelectorAll(':scope > .rc-ver').forEach(x => { x.style.display = x.dataset.v === k ? 'block' : 'none'; }); };
+  window.rcToggle = (b) => { const box = b.closest('.rc-box'); const d = box && box.querySelector('.rc-det'); if (!d) return; const ver = d.style.display === 'none'; d.style.display = ver ? 'block' : 'none'; b.textContent = ver ? 'Ocultar detalle ▴' : 'Ver detalle ▾'; };
+  window.rcModo = (b, m) => { const box = b.closest('.rc-box'); if (!box) return;
+    box.querySelector('.rc-g').style.display = m === 'g' ? 'block' : 'none'; box.querySelector('.rc-p').style.display = m === 'p' ? 'block' : 'none';
+    box.querySelectorAll('button[data-m]').forEach(x => { const on = x.dataset.m === m; x.style.background = on ? '#f5a623' : 'transparent'; x.style.color = on ? '#0a0e14' : '#cbd5e1'; }); };
+
     function abrirFichaRival(id) {
         document.getElementById('fichaRivalContenido').innerHTML = fichaRivalHTML(getLiga(), getTemporada(), id, (eq, px) => escudoEquipoHTML(eq, px));
+        try { const lg = getLiga(), iH = lg.equipos.findIndex(e => e.esHergar), iR = lg.equipos.findIndex(e => String(e.id) === String(id)); if (iR >= 0 && iR !== iH) { const x = rcHTML(lg, iH, iR, true); if (x) document.getElementById('fichaRivalContenido').insertAdjacentHTML('beforeend', x); } } catch (e) { console.error('Rivales en común:', e); } // v187
         const m = document.getElementById('fichaRivalModal');
         m.style.display = 'block'; m.scrollTop = 0;
     }
@@ -19033,5 +19168,361 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         };
     })();
 </script>
+<!-- ── v186 · PENDIENTES: lo que falta por completar, en un solo sitio ── -->
+<style>
+    .bottom-tab { position: relative; }
+    .pend-badge { position: absolute; top: 2px; right: calc(50% - 22px); min-width: 17px; height: 17px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: #f5a623; color: #0a0e14; font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 900; display: none; align-items: center; justify-content: center; line-height: 1; }
+    .mas-item .pend-num { margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 11px; background: #f5a623; color: #0a0e14; font-family: 'Montserrat', sans-serif; font-size: 11.5px; font-weight: 900; display: inline-flex; align-items: center; justify-content: center; }
+    #pendModal { display: none; position: fixed; inset: 0; z-index: 9500; background: #0a0e14; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #pendModal .pend-wrap { max-width: 480px; margin: 0 auto; padding: 14px 14px 40px; display: flex; flex-direction: column; gap: 14px; }
+    .pend-card { background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .pend-card.imp { border-color: rgba(245,166,35,0.55); }
+    .pend-ico { width: 32px; height: 32px; flex-shrink: 0; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 15px; background: rgba(148,163,184,0.12); color: #94a3b8; }
+    .pend-card.imp .pend-ico { background: rgba(245,166,35,0.16); color: #f5a623; }
+    .pend-tag { font-size: 9.5px; font-weight: 800; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 5px; background: rgba(245,166,35,0.18); color: #f5a623; }
+    .pend-grupo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 2px 0; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 1.2px; color: #94a3b8; }
+    .pend-grupo span:last-child { font-family: 'Inter', sans-serif; font-weight: 600; letter-spacing: 0; }
+    .pend-accion { min-height: 40px; padding: 0 16px; border-radius: 10px; border: none; background: #2ed573; color: #0a0e14; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 800; }
+    .pend-card.imp .pend-accion { background: #f5a623; }
+    .pend-check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 12px; color: #94a3b8; cursor: pointer; }
+    .pend-check input, .pend-sub input { width: 20px; height: 20px; accent-color: #94a3b8; margin: 0; flex-shrink: 0; }
+    .pend-subs { border-radius: 10px; background: rgba(0,0,0,0.25); padding: 2px 10px; }
+    .pend-sub { display: flex; align-items: center; gap: 10px; min-height: 44px; border-top: 1px solid rgba(255,255,255,0.06); cursor: pointer; font-size: 12.5px; }
+    .pend-sub:first-child { border-top: none; }
+    .pend-desc { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(148,163,184,0.06); border: 1px solid rgba(148,163,184,0.2); }
+    .pend-btn2 { min-height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #cbd5e1; font-size: 11px; font-weight: 700; }
+    #pendAvisoPartido { display: none; margin-top: 10px; text-align: left; width: 100%; background: rgba(245,166,35,0.10); border: 1.5px solid rgba(245,166,35,0.55); border-radius: 14px; padding: 12px 14px; color: #e2e8f0; flex-direction: column; align-items: stretch; gap: 6px; position: relative; z-index: 1; }
+    #egPendBanner { display: none; width: 100%; min-height: 44px; margin-bottom: 12px; padding: 0 12px; border-radius: 10px; background: rgba(245,166,35,0.10); border: 1px solid rgba(245,166,35,0.45); color: #f5a623; font-size: 12.5px; font-weight: 700; text-align: left; justify-content: flex-start; }
+</style>
+<div id="pendModal" role="dialog" aria-label="Pendientes">
+    <div class="pend-wrap" id="pendContenido"></div>
+</div>
+<script>
+(function () {
+    const DESC_KEY = 'hergar_F11_pendDescartes';
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+    function leerDesc() { try { return JSON.parse(localStorage.getItem(DESC_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    function guardarDesc(d) { try { localStorage.setItem(DESC_KEY, JSON.stringify(d)); } catch (e) {} }
+    function hoyISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+    function diasHasta(iso) { if (!iso) return null; const [y, m, d] = iso.split('-').map(Number); const a = new Date(y, m - 1, d), h = new Date(); h.setHours(0, 0, 0, 0); return Math.round((a - h) / 86400000); }
+
+    // ── Goles de un partido guardado ──
+    function golesSinMinuto(p) {
+        const tot = (Number(p.golesLocal) || 0) + (Number(p.golesRival) || 0);
+        const con = (Array.isArray(p.goles) ? p.goles : []).filter(g => g && g.min != null).length;
+        return Math.max(0, tot - con);
+    }
+    function golesSinVideo(p) { // [{ k, g }] goles del Hergar que esperan vídeo
+        if (typeof videosGlobalOn === 'function' && !videosGlobalOn()) return [];
+        const gs = Array.isArray(p.goles) ? p.goles : [];
+        if (!gs.some(g => g && g.min != null)) return [];
+        const out = [];
+        gs.forEach((g, k) => { if (g && g.equipo !== 'rival' && !g.video && !g.videoOculto && (g.jugadorId == null || permisoVideo(g.jugadorId))) out.push({ k, g }); });
+        return out;
+    }
+    function nombreGol(g) { return (g.nombre || '¿?') + (g.min != null ? ` · ${g.min}′` : ''); }
+    function clavePartido(p) { return `${p.fecha}|${p.rival}`; }
+
+    // ── Cálculo de todo lo pendiente ──
+    function calcular() {
+        const t = getTemporada(), ps = t.partidos || [];
+        const items = [];
+        const n = ps.length, ult = n ? ps[n - 1] : null;
+        if (ult) {
+            const i = n - 1, cp = clavePartido(ult), sub = `J${n} · vs ${ult.rival} ${ult.golesLocal}-${ult.golesRival}`;
+            const sm = golesSinMinuto(ult);
+            if (sm) items.push({ key: `min|${cp}|${sm}`, g: 'ultimo', gsub: sub, imp: true, titulo: `${plural(sm, 'gol', 'goles')} sin minuto`,
+                det: 'Sin minuto no cuentan en el más/menos, los momentos del partido, el tiempo por marcador ni las victorias añadidas.',
+                donde: 'Editar partido → Goles con minuto', accion: 'Poner minuto', fn: () => pendEditar(i, 'min') });
+            const ma = golesMapaQueFaltan(ult);
+            if (ma && (Number(ult.golesLocal) || 0) + (Number(ult.golesRival) || 0)) items.push({ key: `mapa|${cp}|${ma}`, g: 'ultimo', gsub: sub, titulo: `${plural(ma, 'gol', 'goles')} sin origen o posición`,
+                det: 'Para el Mapa de goles del visor. Los penaltis no hace falta completarlos.',
+                donde: 'Editar partido → ¿Cómo llegó? y 📍', accion: 'Completar', fn: () => pendEditar(i, 'mapa') });
+            const sv = golesSinVideo(ult);
+            if (sv.length) items.push({ key: `video|${cp}`, g: 'ultimo', gsub: sub, titulo: `${plural(sv.length, 'gol del Hergar', 'goles del Hergar')} sin vídeo`,
+                det: '«La semana del Hergar» del visor espera a los vídeos como mucho 24 horas.',
+                donde: 'Editar partido → 🎥 de cada gol', accion: 'Subir vídeos', fn: () => pendEditar(i, 'video'),
+                subs: sv.map(x => ({ txt: nombreGol(x.g), fn: () => marcarSinVideo(i, x.k, true) })) });
+            if (!ult.analisisIA && typeof partidoYaTransferido !== 'undefined' && partidoYaTransferido) items.push({ key: `ia|${cp}`, g: 'ultimo', gsub: sub, titulo: 'Informe IA sin generar',
+                det: 'El visor sigue mostrando el informe del partido anterior.', donde: 'Análisis IA del partido',
+                accion: 'Generar', fn: () => { const b = document.getElementById('bannerIaBtn'); if (b) b.click(); } });
+        }
+        // Partidos anteriores (todo junto)
+        if (n > 1) {
+            const ant = ps.slice(0, n - 1);
+            let sm = 0, smP = [], ma = 0, maP = [], tit = [], vids = [];
+            ant.forEach((p, i) => {
+                const a = golesSinMinuto(p); if (a) { sm += a; smP.push(i); }
+                const b = golesMapaQueFaltan(p); if (b && (Number(p.golesLocal) || 0) + (Number(p.golesRival) || 0)) { ma += b; maP.push(i); }
+                if (!(Array.isArray(p.titulares) && p.titulares.length)) tit.push(i);
+                golesSinVideo(p).forEach(x => vids.push({ i, k: x.k, g: x.g, p }));
+            });
+            const jl = (arr) => arr.slice(0, 4).map(i => 'J' + (i + 1)).join(', ') + (arr.length > 4 ? '…' : '');
+            if (sm) items.push({ key: `antmin|${sm}`, g: 'antes', titulo: `${plural(sm, 'gol', 'goles')} sin minuto en ${plural(smP.length, 'partido', 'partidos')}`,
+                det: `${jl(smP)}. Esos partidos no cuentan en el más/menos ni en los momentos del partido.`, donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(smP[0], 'min') });
+            if (ma) items.push({ key: `antmapa|${ma}`, g: 'antes', titulo: `${plural(ma, 'gol', 'goles')} sin mapear en ${plural(maP.length, 'partido', 'partidos')}`,
+                det: `${jl(maP)}. Sin ellos, el Mapa de goles de la temporada sale incompleto.`, donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(maP[0], 'mapa') });
+            if (vids.length) items.push({ key: `antvideo`, g: 'antes', titulo: `${plural(vids.length, 'gol', 'goles')} sin vídeo en partidos anteriores`,
+                det: 'Marca los que no se grabaron y dejarán de salir aquí.', donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(vids[0].i, 'video'),
+                subs: vids.map(x => ({ txt: `J${x.i + 1} ${x.p.rival} · ${nombreGol(x.g)}`, fn: () => marcarSinVideo(x.i, x.k, true) })) });
+            if (tit.length) items.push({ key: `anttit|${tit.length}`, g: 'antes', titulo: `${plural(tit.length, 'partido', 'partidos')} sin titulares marcados`,
+                det: `${jl(tit)}. El efecto del banquillo y el más/menos de esos partidos son aproximados.`, donde: 'Temporada → ⋯ → Titulares de partidos guardados', accion: 'Marcar titulares',
+                fn: () => { try { abrirTitularesPartidos(); } catch (e) {} } });
+        }
+        // Liga
+        try {
+            const liga = getLiga(), hoy = hoyISO();
+            if (liga && Array.isArray(liga.partidos)) {
+                const sinRes = liga.partidos.filter(p => !ligaPartidoJugado(p) && (() => { const f = fechaLigaAISO(p.fechaPartido || p.fecha); return f && f < hoy; })());
+                if (sinRes.length) {
+                    const js = [...new Set(sinRes.map(p => ligaNumJornadaGlobal(liga, p)))].sort((a, b) => a - b);
+                    const jtxt = js.length === 1 ? `de la jornada ${js[0]}` : `de las jornadas ${js.slice(0, -1).join(', ')} y ${js[js.length - 1]}`;
+                    items.push({ key: `liga|${js.join(',')}|${sinRes.length}`, g: 'liga', gsub: js.length === 1 ? `Jornada ${js[0]}` : '', imp: true,
+                        titulo: `${plural(sinRes.length, 'resultado', 'resultados')} ${jtxt} sin meter`,
+                        det: 'Sin ellos, la clasificación, el Pronóstico y el Elo de la Liga no están al día.', donde: 'Liga → Partidos → Importar de la federación',
+                        accion: 'Importar', fn: () => pendAbrirLiga('importar') });
+                }
+                const pend = ligaPendientesHergar(liga).slice().sort((a, b) => (fechaLigaAISO(a.fechaPartido || a.fecha) || '9') < (fechaLigaAISO(b.fechaPartido || b.fecha) || '9') ? -1 : 1);
+                const prox = pend[0];
+                if (prox) {
+                    const h = ligaHergarId(liga), rivalId = prox.local === h ? prox.visitante : prox.local;
+                    const sub = `J${ligaNumJornadaGlobal(liga, prox)} · vs ${nombreEquipoLiga(liga, rivalId)}`;
+                    const iso = fechaLigaAISO(prox.fechaPartido || ''), dias = diasHasta(iso || fechaLigaAISO(prox.fecha));
+                    if (!iso || !prox.hora) items.push({ key: `proxhora|${prox.id}`, g: 'proximo', gsub: sub, titulo: `Próximo partido sin ${!iso && !prox.hora ? 'fecha ni hora' : !iso ? 'fecha' : 'hora'}`,
+                        det: 'Sin la fecha y la hora, el visor no puede sacar el tiempo que hará ni ordenar la jornada.', donde: 'Liga → Partidos → Próximo partido',
+                        accion: 'Ponerla', fn: () => pendAbrirLiga('proximo', prox.id) });
+                    const publicado = liga.proximoPublicado && liga.proximoPublicado.id === prox.id;
+                    if (!publicado && dias != null && dias >= 0 && dias <= 7) items.push({ key: `proxpub|${prox.id}`, g: 'proximo', gsub: sub, titulo: 'Próximo partido sin publicar',
+                        det: dias === 0 ? 'Es hoy y el visor no tiene la tarjeta del partido.' : `Es ${dias === 1 ? 'mañana' : 'dentro de ' + dias + ' días'} y las familias no tienen la tarjeta en el visor.`,
+                        donde: 'Liga → Partidos → Publicar próximo partido', accion: 'Publicar', fn: () => pendAbrirLiga('proximo', prox.id) });
+                }
+            }
+        } catch (e) { console.warn('Pendientes (Liga):', e); }
+        // Mantenimiento
+        try {
+            if (n) {
+                const ultNube = parseInt(localStorage.getItem('hergar_F11_nubeUltima') || '0', 10);
+                const cambiado = nubeHuella(JSON.stringify(nubeDatos())) !== localStorage.getItem('hergar_F11_nubeHuella');
+                const dias = ultNube ? Math.floor((Date.now() - ultNube) / 86400000) : null;
+                if (cambiado && (!ultNube || dias >= 2)) items.push({ key: `nube|${ultNube}`, g: 'mant', titulo: ultNube ? `Copia en la nube sin subir desde hace ${plural(dias, 'día', 'días')}` : 'Aún no hay copia en la nube',
+                    det: 'Hay cambios que no están en la nube. Si se pierde el móvil, se perderían.', donde: 'Ajustes → Convocatoria y plantilla → Copia en la nube',
+                    accion: 'Subir ahora', fn: () => { subirCopiaNube(true); setTimeout(pendRender, 4000); setTimeout(pendRender, 9000); } });
+            }
+            const e = (typeof ghToken === 'function' && ghToken()) ? leerEspacioGitHub() : null;
+            if (e && e.sinUsar) items.push({ key: `gh|${e.sinUsar}`, g: 'mant', titulo: `${plural(e.sinUsar, 'vídeo', 'vídeos')} sin usar en GitHub`,
+                det: `Son subidas repetidas que ningún gol usa (${fmtMB(e.sinUsarBytes || 0)}). Se pueden borrar sin perder nada.`, donde: 'Ajustes → Convocatoria y plantilla → Subir vídeos a GitHub',
+                accion: 'Limpiar', fn: () => pendAbrirAjustes('ghHuerfanosBox') });
+        } catch (e) { console.warn('Pendientes (mantenimiento):', e); }
+
+        const D = leerDesc();
+        items.forEach(it => { it.descartado = !it.subs && !!D[it.key]; });
+        return { items, t };
+    }
+
+    // ── Acciones ──
+    function marcarSinVideo(i, k, valor) {
+        const t = getTemporada(), p = t.partidos[i];
+        if (!p || !Array.isArray(p.goles) || !p.goles[k]) return;
+        if (valor) p.goles[k].videoOculto = true; else delete p.goles[k].videoOculto;
+        saveTemporada(t);
+        try { republicarVideos(); } catch (e) {}
+        pendRender();
+    }
+    function cerrarPend() { document.getElementById('pendModal').style.display = 'none'; pendRefrescar(); }
+    window.cerrarPend = cerrarPend;
+    let pendDesdeEditar = false;
+    function pendEditar(i, que) {
+        window.scrollTo(0, 0);
+        abrirEditarPartido(i);
+        pendDesdeEditar = true;
+        const b = document.getElementById('egPendBanner'); if (b) b.style.display = 'flex';
+        setTimeout(() => {
+            const rows = [...document.querySelectorAll('#editPartidoGolesMinList .eg-row')];
+            const falta = (r) => {
+                const rival = r.querySelector('.eg-equipo').value === 'rival', pen = r.querySelector('.eg-pen').checked;
+                if (que === 'min') return r.querySelector('.eg-min').value === '';
+                if (que === 'mapa') return !pen && (r.querySelector('.eg-orig').value === '' || r.querySelector('.eg-px').value === '');
+                if (que === 'video') return !rival && !r.querySelector('.eg-vid').value && !r.querySelector('.eg-vocu').checked && !r.querySelector('.eg-vbtn').classList.contains('bloq');
+                return false;
+            };
+            const fila = rows.find(falta);
+            if (!fila) { if (que === 'min' && b) b.innerText = '‹ Volver a Pendientes · si falta algún gol, añádelo con «+ Añadir gol»'; return; }
+            fila.style.outline = '2px solid #f5a623'; fila.style.outlineOffset = '2px';
+            fila.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            if (que === 'min') setTimeout(() => fila.querySelector('.eg-min').focus(), 350);
+            if (que === 'video') { const vb = fila.querySelector('.eg-vbox'); if (vb && vb.style.display === 'none') egAbrirVideo(fila.querySelector('.eg-vbtn')); }
+        }, 200);
+    }
+    function pendAbrirLiga(que, id) {
+        cerrarPend();
+        document.getElementById('tabLigaBtn').click();
+        const btn = [...document.querySelectorAll('.liga-tab')].find(b => (b.getAttribute('onclick') || '').includes('ligaPanelPartidos'));
+        if (btn) switchTabLiga('ligaPanelPartidos', btn);
+        if (que === 'proximo' && id != null) { ligaProximoSel = id; renderLigaProximo(); }
+        window.scrollTo(0, 0);
+        if (que === 'importar') setTimeout(() => abrirImportarLiga(), 150);
+    }
+    function pendAbrirAjustes(idDestino) {
+        cerrarPend();
+        document.getElementById('masConvBtn').click();
+        const sec = document.getElementById('rosterEditSection');
+        if (sec && sec.style.display === 'none') toggleRosterEdit();
+        setTimeout(() => { const el = document.getElementById(idDestino); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.style.outline = '2px solid #f5a623'; el.style.outlineOffset = '2px'; } }, 300);
+    }
+
+    // ── Pantalla ──
+    const GRUPOS = [['ultimo', 'ÚLTIMO PARTIDO'], ['liga', 'LIGA'], ['proximo', 'PRÓXIMO PARTIDO'], ['antes', 'PARTIDOS ANTERIORES'], ['mant', 'MANTENIMIENTO']];
+    let pendAcciones = {};
+    let verDescartados = false;
+    function pendRender() {
+        const cont = document.getElementById('pendContenido');
+        if (!cont) return;
+        const { items, t } = calcular();
+        pendAcciones = {};
+        let kk = 0;
+        const reg = (fn) => { const id = 'a' + (kk++); pendAcciones[id] = fn; return id; };
+        const vivos = items.filter(x => !x.descartado), imps = vivos.filter(x => x.imp).length;
+        const tarjeta = (it) => {
+            const subs = it.subs ? `<div class="pend-subs">${it.subs.map(s => `<label class="pend-sub"><span style="flex:1; color:#e2e8f0;">${esc(s.txt)}</span><span style="font-size:11.5px; color:#94a3b8;">No se grabó</span><input type="checkbox" onchange="pendAccion('${reg(s.fn)}')"></label>`).join('')}</div>` : '';
+            const check = it.subs ? `<span style="font-size:11px; color:#94a3b8;">Marca los que no se grabaron</span>`
+                : `<label class="pend-check"><input type="checkbox" onchange="pendDescartar('${esc(it.key)}', true)">No se va a hacer</label>`;
+            return `<div class="pend-card${it.imp ? ' imp' : ''}">
+                <div style="display:flex; gap:10px; align-items:flex-start;">
+                    <div class="pend-ico" aria-hidden="true">!</div>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:3px;">
+                        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"><span style="font-size:14px; font-weight:700; color:#fff;">${esc(it.titulo)}</span>${it.imp ? '<span class="pend-tag">IMPORTANTE</span>' : ''}</div>
+                        <div style="font-size:12px; line-height:1.45; color:#cbd5e1;">${esc(it.det)}</div>
+                        <div style="font-size:11px; line-height:1.4; color:#94a3b8;">${esc(it.donde)}</div>
+                    </div>
+                </div>
+                ${subs}
+                <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+                    ${check}
+                    <button type="button" class="pend-accion" onclick="pendAccion('${reg(it.fn)}')">${esc(it.accion)} ›</button>
+                </div>
+            </div>`;
+        };
+        let html = `<div style="display:flex; align-items:center; gap:10px;">
+                <button type="button" onclick="cerrarPend()" aria-label="Volver" style="width:44px; height:44px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#e2e8f0; font-size:18px; font-weight:800;">‹</button>
+                <div style="flex:1; font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; letter-spacing:2px; color:#f5a623;">🧹 PENDIENTES</div>
+            </div>
+            <div style="background:#111827; border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                ${vivos.length ? `<div style="display:flex; align-items:baseline; gap:10px;"><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:34px; color:#fff;">${vivos.length}</span><span style="font-size:13px; color:#cbd5e1;">por completar${imps ? ` · <b style="color:#f5a623;">${plural(imps, 'importante', 'importantes')}</b>` : ''}</span></div>`
+                    : `<div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px; color:#2ed573;">✓ Todo al día</div>`}
+                <div style="font-size:11.5px; line-height:1.45; color:#94a3b8;">La lista se hace sola mirando lo que hay en la app. Si algo no se va a hacer, márcalo y deja de contar: sale abajo, en Descartados.</div>
+            </div>`;
+        const ult = (t.partidos || [])[(t.partidos || []).length - 1];
+        GRUPOS.forEach(([g, tit]) => {
+            const lista = vivos.filter(x => x.g === g);
+            if (!lista.length) return;
+            const sub = lista[0].gsub || (g === 'antes' ? 'Menos urgente' : g === 'mant' ? 'Copias y espacio' : '');
+            html += `<div style="display:flex; flex-direction:column; gap:8px;"><div class="pend-grupo"><span>${tit}</span><span>${esc(sub)}</span></div>${lista.map(tarjeta).join('')}</div>`;
+        });
+        // Descartados: los marcados «no se va a hacer» y los goles marcados «sin vídeo»
+        const D = leerDesc();
+        const desc = items.filter(x => x.descartado).map(x => ({ txt: x.titulo, fn: () => pendDescartar(x.key, false) }));
+        (t.partidos || []).forEach((p, i) => (Array.isArray(p.goles) ? p.goles : []).forEach((g, k) => {
+            if (g && g.equipo !== 'rival' && g.videoOculto && !g.video) desc.push({ txt: `Vídeo de ${nombreGol(g)} (J${i + 1} ${p.rival}) · sin vídeo`, fn: () => marcarSinVideo(i, k, false) });
+        }));
+        // Limpieza: descartes que ya no corresponden a nada
+        const vivasClaves = new Set(items.map(x => x.key));
+        let limpiar = false; Object.keys(D).forEach(k => { if (!vivasClaves.has(k)) { delete D[k]; limpiar = true; } });
+        if (limpiar) guardarDesc(D);
+        if (desc.length) {
+            html += `<div style="display:flex; flex-direction:column; gap:6px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.12);">
+                <button type="button" onclick="pendVerDescartados()" style="min-height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 4px; border:none; background:transparent; color:#94a3b8; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; letter-spacing:1.2px;"><span>DESCARTADOS · ${desc.length}</span><span>${verDescartados ? '▴' : '▾'}</span></button>
+                ${verDescartados ? desc.map(d => `<div class="pend-desc"><span style="flex:1; font-size:12.5px; color:#94a3b8;">${esc(d.txt)}</span><button type="button" class="pend-btn2" onclick="pendAccion('${reg(d.fn)}')">Recuperar</button></div>`).join('')
+                    + '<div style="font-size:11px; line-height:1.45; color:#94a3b8; padding:0 2px;">Un gol marcado «No se grabó» queda igual que con «Sin vídeo» en Editar partido: el visor no espera su vídeo.</div>' : ''}
+            </div>`;
+        }
+        cont.innerHTML = html;
+        pintarIndicadores(vivos, imps);
+    }
+    window.pendAccion = (id) => { const f = pendAcciones[id]; if (f) f(); };
+    window.pendDescartar = (key, si) => { const D = leerDesc(); if (si) D[key] = Date.now(); else delete D[key]; guardarDesc(D); pendRender(); };
+    window.pendVerDescartados = () => { verDescartados = !verDescartados; pendRender(); };
+
+    // ── Número en Ajustes y aviso tras guardar el partido ──
+    function pintarIndicadores(vivos, imps) {
+        const nTot = vivos.length;
+        const badge = document.getElementById('pendBadge'); if (badge) { badge.textContent = nTot; badge.style.display = nTot ? 'flex' : 'none'; }
+        const num = document.getElementById('pendMasNum'); if (num) { num.textContent = nTot; num.style.display = nTot ? 'inline-flex' : 'none'; }
+        const av = document.getElementById('pendAvisoPartido');
+        if (av) {
+            const ver = nTot > 0 && typeof partidoYaTransferido !== 'undefined' && partidoYaTransferido;
+            av.style.display = ver ? 'flex' : 'none';
+            if (ver) {
+                const lista = vivos.filter(x => x.imp).map(x => x.titulo.charAt(0).toLowerCase() + x.titulo.slice(1));
+                av.innerHTML = `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:13px; color:#f5a623; letter-spacing:.4px;">🧹 TE ${nTot === 1 ? 'QUEDA 1 COSA' : 'QUEDAN ' + nTot + ' COSAS'} POR COMPLETAR</span>
+                        <span style="min-width:24px; height:24px; border-radius:12px; background:#f5a623; color:#0a0e14; font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px; display:flex; align-items:center; justify-content:center;">${nTot}</span></div>
+                    <div style="font-size:12px; line-height:1.45; color:#cbd5e1;">${imps ? `${imps === 1 ? 'Importante' : imps + ' importantes'}: ${esc(lista.join(' y '))}.${nTot > imps ? ' El resto, cuando tengas un rato.' : ''}` : 'Nada urgente: cuando tengas un rato.'}</div>
+                    <div style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#f5a623;">Ver pendientes ›</div>`;
+            }
+        }
+    }
+    let pendTimer = null;
+    function pendRefrescar() {
+        clearTimeout(pendTimer);
+        pendTimer = setTimeout(() => {
+            try {
+                if (document.getElementById('pendModal').style.display === 'block') { pendRender(); return; }
+                const { items } = calcular();
+                const vivos = items.filter(x => !x.descartado);
+                pintarIndicadores(vivos, vivos.filter(x => x.imp).length);
+            } catch (e) { console.warn('Pendientes:', e); }
+        }, 400);
+    }
+    window.pendRefrescar = pendRefrescar;
+    function abrirPendientes() {
+        cerrarMasSheet();
+        verDescartados = false;
+        document.getElementById('pendModal').style.display = 'block';
+        document.getElementById('pendModal').scrollTop = 0;
+        pendRender();
+    }
+    window.abrirPendientes = abrirPendientes;
+
+    // Entrada en Ajustes, número en la pestaña y aviso bajo el marcador
+    const tabMas = document.getElementById('tabMasBtn');
+    if (tabMas) tabMas.insertAdjacentHTML('beforeend', '<span id="pendBadge" class="pend-badge" aria-label="Pendientes"></span>');
+    const sheet = document.getElementById('masSheet');
+    if (sheet) {
+        sheet.insertAdjacentHTML('afterbegin', '<button class="mas-item" id="masPendBtn" style="color:#f5a623; font-weight:800;"><span class="ic">🧹</span>Pendientes<span id="pendMasNum" class="pend-num" style="display:none;"></span></button>');
+        document.getElementById('masPendBtn').onclick = abrirPendientes;
+    }
+    const marcador = document.querySelector('.match-header .scoreboard-row');
+    if (marcador) {
+        marcador.insertAdjacentHTML('afterend', '<button type="button" id="pendAvisoPartido" onclick="abrirPendientes()"></button>');
+    }
+    // Banner para volver desde Editar partido
+    const edCaja = document.querySelector('#editarPartidoModal > div');
+    if (edCaja) {
+        edCaja.insertAdjacentHTML('afterbegin', '<button type="button" id="egPendBanner">‹ Volver a Pendientes</button>');
+        document.getElementById('egPendBanner').onclick = () => document.getElementById('closeEditarPartidoBtn').click();
+    }
+    // Al cerrarse Editar partido o Titulares, la lista se recalcula
+    const vigilar = (id, alCerrar) => {
+        const el = document.getElementById(id); if (!el) return;
+        new MutationObserver(() => { if (el.style.display === 'none') alCerrar(); }).observe(el, { attributes: true, attributeFilter: ['style'] });
+    };
+    vigilar('editarPartidoModal', () => {
+        const b = document.getElementById('egPendBanner'); if (b) { b.style.display = 'none'; b.innerText = '‹ Volver a Pendientes'; }
+        pendDesdeEditar = false; pendRefrescar();
+    });
+    vigilar('titularesPartidosModal', pendRefrescar);
+    vigilar('iaModal', pendRefrescar);
+
+    // Recalcular cuando cambian la temporada, la Liga o se guarda el partido
+    if (typeof saveTemporada === 'function') { const _st = saveTemporada; saveTemporada = function (t) { _st(t); pendRefrescar(); }; }
+    if (typeof saveLiga === 'function') { const _sl = saveLiga; saveLiga = function (l) { const r = _sl(l); pendRefrescar(); return r; }; }
+    if (typeof transferirPartidoATemporada === 'function') { const _tr = transferirPartidoATemporada; transferirPartidoATemporada = function () { const r = _tr.apply(this, arguments); pendRefrescar(); return r; }; }
+    if (typeof ejecutarNuevoPartido === 'function') { const _np = ejecutarNuevoPartido; ejecutarNuevoPartido = function () { const r = _np.apply(this, arguments); pendRefrescar(); return r; }; }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pendRefrescar(); });
+    setTimeout(pendRefrescar, 1500);
+})();
+</script>
+
 </body>
 </html>
