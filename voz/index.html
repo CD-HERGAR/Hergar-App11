@@ -78,7 +78,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 <main>
   <header style="display:grid;gap:4px">
     <h1>Prueba de voz</h1>
-    <p class="note">v3b · Página de pruebas, aparte de la app. No toca los datos del equipo: solo lee nombres y dorsales.</p>
+    <p class="note">v3d · Página de pruebas, aparte de la app. No toca los datos del equipo: solo lee nombres y dorsales.</p>
   </header>
 
   <section class="card">
@@ -170,8 +170,8 @@ const ACC = [
   {id:'GOL',      lab:'⚽ Gol',               t:'h', f:['gol','gold']},
   {id:'PENALTI',  lab:'🎯 Gol de penalti',    t:'h', f:['gol de penalti','penalti']},
   {id:'ASIST',    lab:'👟 Asistencia',        t:'h', f:['asistencia']},
-  {id:'PASE_AREA',lab:'📯 Pase al área',      t:'h', f:['pase al area','centro']},
-  {id:'PASE_CLAVE',lab:'🔑 Pase clave',       t:'h', f:['pase clave']},
+  {id:'PASE_AREA',lab:'📯 Pase al área',      t:'h', f:['pase al area','pase el area','pasa al area','pasa el area','pase area','centro']},
+  {id:'PASE_CLAVE',lab:'🔑 Pase clave',       t:'h', f:['pase clave','pasa clave']},
   {id:'PUERTA',   lab:'🎯 Disparo a puerta',  t:'h', f:['disparo a puerta','tiro a puerta','a puerta']},
   {id:'FUERA',    lab:'💨 Disparo fuera',     t:'h', f:['disparo fuera','tiro fuera','fuera']},
   {id:'FJ',       lab:'🚩 Fuera de juego',    t:'h', f:['fuera de juego','orsay']},
@@ -412,11 +412,13 @@ async function pedirWakeLock(){
 
 // ===================== AUDIO: pitido y voz =====================
 let actx=null;
-function pitido(f=880,ms=120){
+function pitido(f=660,ms=110){ // v3d · más suave: tono redondo, más bajo y sin chasquido
   if(!$('optPitido').checked) return;
   try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)();
-    const o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=f; g.gain.value=.15;
-    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+ms/1000);
+    const o=actx.createOscillator(), g=actx.createGain(), t=actx.currentTime;
+    o.type='sine'; o.frequency.value=f;
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.05,t+.015); g.gain.linearRampToValueAtTime(0,t+ms/1000);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+ms/1000+.02);
   }catch(e){}
 }
 let hablandoHasta=0;
@@ -451,13 +453,14 @@ function procesarFrase(raw,origen){
   mostrar(raw,r);
   if(r.ok){
     apuntado.push({...r,h:hhmm().slice(0,5),anulado:false}); pintarLista();
-    diag(`✔ APUNTADO (${origen}): ${r.text}`); decir(paraVoz(r.text));
+    diag(`✔ APUNTADO (${origen}): ${r.text}`); decir(paraVoz(r.text)); return true;
   }else{
     diag(`✘ no apuntado (${origen}): ${r.why}`);
     const corto = /sin dorsal ni nombre/.test(r.why) ? 'Falta el jugador' : /ninguna acci/.test(r.why) ? 'Falta la acción' : /no est. entre/.test(r.why) ? 'Ese dorsal no está' : /se llaman as/.test(r.why) ? 'Hay dos con ese nombre' : 'No entendido';
     // v3 · tras un fallo, 6 s para repetir la frase sin volver a decir «Apunta»
     if(modo==='continua' && corriendo){ armadoHasta=Date.now()+6000; setEstado('Repite la frase','armed'); setTimeout(()=>{ if(Date.now()>=armadoHasta && corriendo) setEstado('Escuchando · di «Apunta…»','on'); },6100); }
     decir(corto + '. Repite');
+    return false;
   }
 }
 function anular(origen){
@@ -512,14 +515,14 @@ function arrancarContinua(){
 
 // ---- Modo 2: botón del auricular (Media Session) ----
 let audioSil=null, recUno=null;
-// v3b · Chrome solo da los botones del auricular a un audio de más de 5 s que no sea silencio puro:
-// 12 s de un siseo casi inaudible (8 bits, ±1) en vez de 2 s de silencio.
+// v3d · Chrome solo da los botones del auricular a un audio de más de 5 s que no sea silencio puro.
+// 16 bits con un ruido mínimo y al azar (±2 de 32768): no se oye. La v3b usaba 8 bits con un patrón fijo y sonaba un pitido agudo.
 function wavSilencio(seg=12){
-  const sr=8000,n=sr*seg,b=new ArrayBuffer(44+n),v=new DataView(b);
+  const sr=8000,n=sr*seg,b=new ArrayBuffer(44+n*2),v=new DataView(b);
   const w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
-  w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
-  v.setUint32(24,sr,true);v.setUint32(28,sr,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);
-  for(let i=0;i<n;i++) v.setUint8(44+i, 128 + ((i*7919)%3) - 1);
+  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  let x=12345; for(let i=0;i<n;i++){ x=(x*1103515245+12345)&0x7fffffff; v.setInt16(44+i*2, (x%5)-2, true); }
   return URL.createObjectURL(new Blob([b],{type:'audio/wav'}));
 }
 async function prepararAuricular(){
@@ -537,8 +540,10 @@ function soltarAuricular(){
   if('mediaSession' in navigator){ ['play','pause','nexttrack','previoustrack','stop'].forEach(a=>{ try{ navigator.mediaSession.setActionHandler(a,null); }catch(e){} }); }
   if(audioSil){ audioSil.pause(); }
 }
-function escucharUnaFrase(){
+let reintentoAuricular=false;
+function escucharUnaFrase(esReintento){
   if(!corriendo||recUno) return;
+  reintentoAuricular=!!esReintento;
   pitido(); setEstado('Habla ahora','armed');
   try{
     recUno=crearRec(false); let oido='';
@@ -552,7 +557,9 @@ function escucharUnaFrase(){
       if(!oido){ diag('no se oyó nada'); decir('No he oído nada'); return; }
       diag(`oído: «${oido}»`);
       const t=norm(oido); if(ANULA.test(t)&&t.split(' ').length<=3){ anular('auricular'); return; }
-      const tras=textoTrasWake(t); procesarFrase(tras!==null&&tras.length>1?tras:oido,'auricular'); };
+      const tras=textoTrasWake(t); const ok=procesarFrase(tras!==null&&tras.length>1?tras:oido,'auricular');
+      // v3c · si no se apunta, vuelve a escuchar una vez sola (sin tocar el auricular) al acabar de hablar la app
+      if(ok===false && !reintentoAuricular && corriendo){ diag('reintento: escucha otra vez una frase'); setTimeout(()=>{ const ir=()=>{ if(Date.now()<hablandoHasta||speechSynthesis.speaking){ setTimeout(ir,200); return; } escucharUnaFrase(true); }; ir(); }, 900); } };
     recUno.start();
   }catch(e){ recUno=null; diag('no arranca: '+e.message); }
 }
