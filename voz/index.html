@@ -78,7 +78,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 <main>
   <header style="display:grid;gap:4px">
     <h1>Prueba de voz</h1>
-    <p class="note">Página de pruebas, aparte de la app. No toca los datos del equipo: solo lee nombres y dorsales.</p>
+    <p class="note">v3b · Página de pruebas, aparte de la app. No toca los datos del equipo: solo lee nombres y dorsales.</p>
   </header>
 
   <section class="card">
@@ -176,8 +176,8 @@ const ACC = [
   {id:'FUERA',    lab:'💨 Disparo fuera',     t:'h', f:['disparo fuera','tiro fuera','fuera']},
   {id:'FJ',       lab:'🚩 Fuera de juego',    t:'h', f:['fuera de juego','orsay']},
   {id:'REGATE',   lab:'🌀 Regate',            t:'h', f:['regate','jugada individual','jugada']},
-  {id:'DEF_CLAVE',lab:'🛡️⭐ Acción defensiva clave',t:'h', f:['defensa clave','robo clave']},
-  {id:'DEF',      lab:'🛡️ Acción defensiva',  t:'h', f:['defensa','robo','recupera']},
+  {id:'DEF_CLAVE',lab:'🛡️⭐ Acción defensiva clave',t:'h', f:['accion defensiva clave','defensiva clave','defensa clave','robo clave']},
+  {id:'DEF',      lab:'🛡️ Acción defensiva',  t:'h', f:['accion defensiva','indefensiva','defensiva','defensa','robo','recupera']},
   {id:'AMARILLA', lab:'🟨 Amarilla',          t:'h', f:['tarjeta amarilla','amarilla']},
   {id:'ROJA',     lab:'🟥 Roja',              t:'h', f:['tarjeta roja','roja','expulsion']},
   {id:'FALLO_IMP',lab:'💥 Fallo importante',  t:'h', f:['fallo importante','fallo grave']},
@@ -188,7 +188,11 @@ const ACC = [
   // Equipo, sin dorsal
   {id:'CORNER_F', lab:'⛳ Córner a favor',     t:'e', f:['corner a favor']},
   {id:'FALTA_F',  lab:'🟢 Falta a favor',      t:'e', f:['falta a favor']},
-  // Rival, empieza por "rival"
+  // Reloj del partido, sin jugador (v3)
+ {id:'DESCANSO', lab:'⏸ Descanso', t:'c', f:['final primera parte','final de la primera parte','fin primera parte','descanso']},
+ {id:'SEGUNDA', lab:'▶ Empieza la 2.ª parte', t:'c', f:['empieza segunda parte','empieza la segunda parte','segunda parte','reanuda']},
+ {id:'FINAL', lab:'🏁 Final del partido', t:'c', f:['final del partido','fin del partido','final partido']},
+ // Rival, empieza por "rival"
   {id:'R_GOL',    lab:'Gol rival',            t:'r', f:['gol']},
   {id:'R_PEN',    lab:'Penalti en contra',    t:'r', f:['penalti']},
   {id:'R_PUERTA', lab:'Tiro a puerta rival',  t:'r', f:['tiro a puerta','disparo a puerta','a puerta']},
@@ -219,7 +223,7 @@ function lev(a,b){ const m=[...Array(b.length+1).keys()];
   for(let i=1;i<=a.length;i++){ let p=m[0]; m[0]=i;
     for(let j=1;j<=b.length;j++){ const t=m[j]; m[j]=Math.min(m[j]+1,m[j-1]+1,p+(a[i-1]===b[j-1]?0:1)); p=t; } }
   return m[b.length]; }
-const ACT_WORDS=new Set(ACC.flatMap(a=>a.f.join(' ').split(' ')).concat(['asiste','sale','entra','cambio','rival','del','de','por','a','al','el','la','apunta','apunto','apunte','anula','y','con']));
+const ACT_WORDS=new Set(ACC.flatMap(a=>a.f.join(' ').split(' ')).concat(['punto','parte','primera','segunda','empieza','asiste','sale','entra','cambio','rival','del','de','por','a','al','el','la','apunta','apunto','apunte','anula','y','con']));
 function refs(t){
   const out=[]; const w=t.split(' ');
   w.forEach((tok,i)=>{
@@ -228,6 +232,8 @@ function refs(t){
     let hit=ROSTER.filter(p=>p.keys.includes(tok));
     let fuzzy=false;
     if(!hit.length && tok.length>=5){ hit=ROSTER.filter(p=>p.keys.some(k=>k.length>=5 && lev(tok,k)<=1)); fuzzy=hit.length>0; }
+    // v3 · principio del nombre: «Adri» = Adrián, «Gonza» = Gonzalo (4 letras o más)
+    if(!hit.length && tok.length>=4){ hit=ROSTER.filter(p=>p.keys.some(k=>k.length>tok.length && k.startsWith(tok))); fuzzy=hit.length>0; }
     if(hit.length) out.push({i,cands:hit,by:'name',tok,fuzzy});
   });
   return out;
@@ -264,6 +270,10 @@ function parse(raw){
     if(!r) return {ok:false, why:'Después de «rival» no se ha reconocido ninguna acción.'};
     return {ok:true, kind:'r', id:r.a.id, text:r.a.lab};
   }
+
+  // v3 · Reloj del partido (descanso, 2.ª parte, final)
+  const c=findAct(t,['c']);
+  if(c) return {ok:true, kind:'c', id:c.a.id, text:c.a.lab};
 
   // Equipo y portero sin jugador
   const e=findAct(t,['e','p']);
@@ -443,7 +453,11 @@ function procesarFrase(raw,origen){
     apuntado.push({...r,h:hhmm().slice(0,5),anulado:false}); pintarLista();
     diag(`✔ APUNTADO (${origen}): ${r.text}`); decir(paraVoz(r.text));
   }else{
-    diag(`✘ no apuntado (${origen}): ${r.why}`); decir('No entendido');
+    diag(`✘ no apuntado (${origen}): ${r.why}`);
+    const corto = /sin dorsal ni nombre/.test(r.why) ? 'Falta el jugador' : /ninguna acci/.test(r.why) ? 'Falta la acción' : /no est. entre/.test(r.why) ? 'Ese dorsal no está' : /se llaman as/.test(r.why) ? 'Hay dos con ese nombre' : 'No entendido';
+    // v3 · tras un fallo, 6 s para repetir la frase sin volver a decir «Apunta»
+    if(modo==='continua' && corriendo){ armadoHasta=Date.now()+6000; setEstado('Repite la frase','armed'); setTimeout(()=>{ if(Date.now()>=armadoHasta && corriendo) setEstado('Escuchando · di «Apunta…»','on'); },6100); }
+    decir(corto + '. Repite');
   }
 }
 function anular(origen){
@@ -456,7 +470,7 @@ $('btnAnula').onclick=()=>anular('botón');
 
 // ===================== RECONOCIMIENTO =====================
 let modo='continua', corriendo=false, rec=null, armadoHasta=0, ultimoFin=0;
-const WAKE=/\b(apunta|apunto|apunte|apuntar|punta)\b/; // v2: el arranque a veces se come la «a»
+const WAKE=/\b(apunta|apunto|apunte|apuntar|punta|a punto)\b/; // v2: el arranque a veces se come la «a» · v3: «a punto»
 const ANULA=/\b(anula|anular|anulalo|borra|borralo)\b/;
 
 function setEstado(t,cls){ const e=$('estado'); e.textContent=t; e.className='status '+(cls||''); }
@@ -498,21 +512,26 @@ function arrancarContinua(){
 
 // ---- Modo 2: botón del auricular (Media Session) ----
 let audioSil=null, recUno=null;
-function wavSilencio(seg=2){
-  const sr=8000,n=sr*seg,b=new ArrayBuffer(44+n*2),v=new DataView(b);
+// v3b · Chrome solo da los botones del auricular a un audio de más de 5 s que no sea silencio puro:
+// 12 s de un siseo casi inaudible (8 bits, ±1) en vez de 2 s de silencio.
+function wavSilencio(seg=12){
+  const sr=8000,n=sr*seg,b=new ArrayBuffer(44+n),v=new DataView(b);
   const w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
-  w(0,'RIFF');v.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
-  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*2,true);
+  w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);
+  for(let i=0;i<n;i++) v.setUint8(44+i, 128 + ((i*7919)%3) - 1);
   return URL.createObjectURL(new Blob([b],{type:'audio/wav'}));
 }
 async function prepararAuricular(){
   if(!('mediaSession' in navigator)){ diag('este navegador no permite captar el botón del auricular'); return; }
-  audioSil=audioSil||new Audio(wavSilencio()); audioSil.loop=true;
-  try{ await audioSil.play(); diag('sesión de audio activa: toca el auricular'); }catch(e){ diag('no se pudo activar el audio: '+e.name); }
+  audioSil=audioSil||new Audio(wavSilencio()); audioSil.loop=true; audioSil.volume=1;
+  try{ await audioSil.play(); diag('sesión de audio activa: toca el auricular una vez (no dos: dos veces abre el asistente de Google). En la barra de notificaciones debe salir «Hergar · Prueba de voz».'); }catch(e){ diag('no se pudo activar el audio: '+e.name); }
   navigator.mediaSession.metadata=new MediaMetadata({title:'Hergar · Prueba de voz',artist:'Toca el auricular para apuntar'});
   const h=accion=>()=>{ diag('botón del auricular: '+accion); if(audioSil&&audioSil.paused) audioSil.play().catch(()=>{}); navigator.mediaSession.playbackState='playing'; escucharUnaFrase(); };
   ['play','pause','nexttrack','previoustrack','stop'].forEach(a=>{ try{ navigator.mediaSession.setActionHandler(a,h(a)); }catch(e){} });
   navigator.mediaSession.playbackState='playing';
+  // v3 · si en 20 s no llega ningún toque, avisar en el registro
+  const t0=Date.now(); setTimeout(()=>{ if(corriendo && modo==='auricular' && !diagTxt.some(l=>/botón del auricular:/.test(l) && true)) diag('en 20 s no ha llegado ningún toque del auricular: el móvil se lo está dando a otra app (Spotify, YouTube…) o este auricular no lo manda'); },20000);
 }
 function soltarAuricular(){
   if('mediaSession' in navigator){ ['play','pause','nexttrack','previoustrack','stop'].forEach(a=>{ try{ navigator.mediaSession.setActionHandler(a,null); }catch(e){} }); }
@@ -529,6 +548,7 @@ function escucharUnaFrase(){
     recUno.onerror=ev=>{ diag('error: '+ev.error); };
     recUno.onend=()=>{ if(desdeEscucha){ escuchandoMs+=Date.now()-desdeEscucha; desdeEscucha=null; }
       recUno=null; rec=null; if(corriendo) setEstado('Esperando el auricular','on');
+      if(corriendo && audioSil){ setTimeout(()=>{ audioSil.play().catch(()=>{}); try{ navigator.mediaSession.playbackState='playing'; }catch(e){} }, 400); } // v3b · recuperar los botones tras usar el micro
       if(!oido){ diag('no se oyó nada'); decir('No he oído nada'); return; }
       diag(`oído: «${oido}»`);
       const t=norm(oido); if(ANULA.test(t)&&t.split(' ').length<=3){ anular('auricular'); return; }
