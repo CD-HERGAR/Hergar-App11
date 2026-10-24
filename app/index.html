@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    188                                            ║
+  ║  Versión:    189                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1768,7 +1768,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v188</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v189</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -10515,6 +10515,14 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     function dlgCerrar() { const m = document.getElementById('dlgModal'); if (m) m.style.display = 'none'; }
     window.dlgCerrar = dlgCerrar;
 
+    // v189 · plantilla completa para que el delegado pueda convocar en el campo a quien no estaba convocado
+    function plantillaDelegado() {
+        return Object.values(playersData).filter(p => p && p.id != null).map(p => {
+            const o = { id: p.id, name: p.name || '', dorsal: p.dorsal == null ? '' : p.dorsal, estado: estadoDe(p) };
+            if (p.invitado) o.sube = p.equipoOrigen || 'Otro equipo';
+            return o;
+        });
+    }
     async function pasarAlDelegado() {
         if (partidoEmpezado || matchFinished) { alert('Esto se hace en la previa, antes de empezar el partido. Si ya terminó, pulsa antes «Nuevo partido».'); return; }
         const conv = Object.values(playersData).filter(p => p && p.convocado);
@@ -10544,7 +10552,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), rival, golesLocal: 0, golesRival: 0, minuto: 0, parte: 1,
             matchRunning: false, matchFinished: false, previa: true, formacion: form,
             onFieldIds: once || [], benchIds: convocados.map(p => p.id).filter(id => !(once && once.includes(id))), jugadores: jug, eventos: [],
-            delegado: { v: 1, pin: cfg.pin, rival, fecha, hora, campo, formacion: form, once: once || [], convocados, creado: Date.now() }
+            delegado: { v: 1, pin: cfg.pin, rival, fecha, hora, campo, formacion: form, once: once || [], convocados, plantilla: plantillaDelegado(), creado: Date.now() }
         };
         const res = await window.__hergarFirebaseSet('matches/' + cfg.code, payload);
         if (!res || !res.ok) { alert('❌ No se pudo preparar en la nube: ' + ((res && res.error) || 'error desconocido')); return; }
@@ -10561,7 +10569,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             </div>
             <a href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" style="display:block; margin-top:12px; text-align:center; background:#25d366; color:#fff; text-decoration:none; padding:13px; border-radius:12px; font-weight:800; font-size:14px;">📲 Mandar por WhatsApp</a>
             <a href="https://wa.me/?text=${encodeURIComponent(`🧪 PRUEBA (no sale en el visor) · HERGAR vs ${rival}:\n${url}&prueba=1\n\nCódigo: ${cfg.pin}`)}" target="_blank" style="display:block; margin-top:8px; text-align:center; background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.45); color:#f5c26b; text-decoration:none; padding:11px; border-radius:12px; font-weight:800; font-size:13px;">🧪 Mandar enlace de PRUEBA (no sale en el visor)</a>
-            <div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Si cambias la convocatoria o el once antes del partido, vuelve a pulsar «Pasar al delegado»: se actualiza con el mismo enlace y código. Después del partido, pulsa «📥 Partido del delegado» en la pantalla de partido.</div>
+            <div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Si cambias la convocatoria o el once antes del partido, vuelve a pulsar «Pasar al delegado»: se actualiza con el mismo enlace y código. En el campo, el delegado también puede quitar a quien no venga y convocar a cualquier niño de la plantilla. Después del partido, pulsa «📥 Partido del delegado» en la pantalla de partido.</div>
             <button onclick="dlgCerrar()" style="margin-top:12px; width:100%; min-height:46px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#e2e8f0; font-weight:700;">Cerrar</button>`);
     }
     window.pasarAlDelegado = pasarAlDelegado;
@@ -10661,8 +10669,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (once.length !== 11 || once.some(id => !playersData[id])) { alert('Al partido del delegado le falta la alineación inicial. No se puede cargar.'); return; }
         const evs = (Array.isArray(st.ev) ? st.ev : Object.values(st.ev || {})).filter(Boolean);
         const n = k => evs.filter(e => e.k === k).length;
+        // v189: cambios de última hora en la convocatoria hechos por el delegado
+        const cc = st.convCambios || {}, arrN = v => (Array.isArray(v) ? v : Object.values(v || {})).map(Number);
+        const ccMas = arrN(cc.mas).filter(id => playersData[id]), ccMenos = arrN(cc.menos).filter(id => playersData[id]);
+        const ccTxt = (ccMas.length || ccMenos.length) ? `\n🔁 Convocatoria cambiada en el campo: ${[...ccMas.map(id => '+ ' + playersData[id].name), ...ccMenos.map(id => '− ' + playersData[id].name)].join(', ')}` : '';
         const minFin = Math.floor(Number(st.fase === 'final' ? (st.parte === 2 ? st.fin2 : st.fin1) : st.acum) / 60) || 0;
-        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
+        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas${ccTxt}\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
         const backup = ltBackup();
         // Previa: convocatoria, once, banquillo, sistema y rival del delegado
         if (compartirEnVivo) desactivarCompartirPartido(); // la alineación publicada de este móvil no debe pisar al visor
@@ -10683,6 +10695,17 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         finally { reproduciendoPrevio = false; }
         if (!ok) { alert('Algo ha fallado al cargar el partido del delegado. No se ha cambiado nada.'); return; }
         localStorage.setItem(DLG_PEND_KEY, JSON.stringify({ code, fecha: st.fecha || null, prueba: !!st.prueba }));
+        // v189: la convocatoria de la previa queda como la dejó el delegado
+        if (ccTxt && !st.prueba) {
+            try {
+                const lg = getLiga();
+                if (lg.proximoPublicado) {
+                    lg.proximoPublicado.convocados = conv.map(p => { const pd = playersData[p.id]; const o = { id: p.id, name: pd.name, dorsal: pd.dorsal }; if (pd.invitado) o.sube = pd.equipoOrigen || 'Otro equipo'; return o; });
+                    lg.proximoPublicado.convocadosTs = Date.now();
+                    localStorage.setItem(LIGA_STORAGE_KEY, JSON.stringify(lg));
+                }
+            } catch (e) { console.error('Convocatoria del delegado:', e); }
+        }
         try { ocultarProximoPartido(true); } catch (e) {}
         document.getElementById('scoreLocal').innerText = goalsLocal;
         document.getElementById('scoreRival').innerText = goalsRival;
@@ -16597,8 +16620,21 @@ ${separador}`;
         localStorage.setItem(LIGA_STORAGE_KEY, JSON.stringify(liga));
         publicarLigaFirebase(liga);
     }
-    function publicarLigaFirebase(liga) {
-        if (!window.__hergarFirebaseSet) return Promise.resolve({ ok: false, error: 'Firebase no disponible todavía' });
+    async function publicarLigaFirebase(liga) {
+        if (!window.__hergarFirebaseSet) return { ok: false, error: 'Firebase no disponible todavía' };
+        // v189: si el delegado cambió la convocatoria en el campo después de la tuya, se mantiene la suya
+        try {
+            const pp = liga && liga.proximoPublicado;
+            if (pp && window.__hergarFirebaseGet) {
+                const r = await Promise.race([window.__hergarFirebaseGet('liga/liga/proximoPublicado'), new Promise(ok => setTimeout(() => ok(null), 3000))]);
+                const rp = r && r.ok && r.val;
+                if (rp && rp.id === pp.id && rp.convocados && (rp.convocadosDelegadoTs || 0) > (pp.convocadosTs || 0) && (rp.convocadosDelegadoTs || 0) > (pp.convocadosDelegadoTs || 0)) {
+                    pp.convocados = Array.isArray(rp.convocados) ? rp.convocados : Object.values(rp.convocados);
+                    pp.convocadosDelegadoTs = rp.convocadosDelegadoTs;
+                    try { const lg = getLiga(); if (lg.proximoPublicado && lg.proximoPublicado.id === pp.id) { lg.proximoPublicado.convocados = pp.convocados; lg.proximoPublicado.convocadosDelegadoTs = pp.convocadosDelegadoTs; localStorage.setItem(LIGA_STORAGE_KEY, JSON.stringify(lg)); } } catch (e) {}
+                }
+            }
+        } catch (e) { console.error('Convocatoria del delegado:', e); }
         const payload = { secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), liga: liga };
         return window.__hergarFirebaseSet('liga', payload);
     }
