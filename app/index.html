@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    204                                            ║
+  ║  Versión:    205                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1572,6 +1572,10 @@
                     <button id="cornerFavorBtn" class="btn-favor"><span class="icn">⛳</span>C.FAV<span class="badge" id="lsb_cornersF">0</span></button>
                     <button id="cornerContraBtn" class="btn-contra"><span class="icn">⛳</span>C.CON<span class="badge" id="lsb_cornersC">0</span></button>
                 </div>
+                <div class="controls-row" style="flex-wrap:nowrap;"><!-- v205 -->
+                    <button id="golPropiaRivalBtn" class="btn-favor" style="flex:1.4;"><span class="icn">⚽</span>GOL EN PROPIA DEL RIVAL</button>
+                    <button id="paloRivalBtn" class="btn-contra"><span class="icn">🪵</span>PALO RIV<span class="badge" id="lsb_palR">0</span></button>
+                </div>
                 <div class="controls-row" style="flex-wrap:nowrap;">
                     <button id="undoBtn" class="undo-btn" style="flex:0 0 46px;">↩</button>
                     <button id="endMatchBtn" class="btn-end-match" style="flex:1.35;">🏁 FINAL</button>
@@ -1786,7 +1790,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v204</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v205</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2594,6 +2598,7 @@
         <h3 style="margin-top:0; color:#f5a623; font-size:15px; font-family:'Montserrat',sans-serif;">TIPO DE DISPARO</h3>
         <div class="actions-modal-grid">
             <button class="btn-modal-goal" style="background:linear-gradient(135deg,#27ae60,#2ed573);" onclick="queueAction('DISPARO_PUERTA')">🎯 A PUERTA (+0.30)</button>
+            <button class="btn-modal-goal" style="background:linear-gradient(135deg,#8d6e63,#a1887f);" onclick="queueAction('PALO')">🪵 AL PALO (+0.30, como a puerta)</button>
             <button class="btn-modal-defense" style="background:linear-gradient(135deg,#f39c12,#f1c40f); color:#0a0e14;" onclick="queueAction('DISPARO_FUERA')">💨 FUERA / SIN PELIGRO (+0.10 · desde el 4.º −0.05)</button>
         </div>
         <button class="btn-modal-defense" style="margin-top:14px; background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px;" onclick="document.getElementById('disparoTypeModal').style.display='none'">❌ CANCELAR</button>
@@ -5247,6 +5252,7 @@
         { k: 'def', ic: '🛡️', t: 'Más acciones defensivas', v: j => j.accionesDef || 0 },
         { k: 'defC', ic: '🛡️⭐', t: 'Más acciones defensivas clave', v: j => j.accionesDefClave || 0 },
         { k: 'reg', ic: '🌀', t: 'Más regates / jugadas individuales', v: j => j.regates || 0 },
+        { k: 'fr', ic: '🟡', t: 'El que más faltas recibe', v: j => j.faltasRecibidas || 0 }, // v205
         { k: 'efi', ic: '🎯', t: 'Mejor eficacia de tiro (mín. 5 tiros)', v: j => { const e = (typeof eficaciaTiroJugador === 'function') ? eficaciaTiroJugador(j) : null; return (e && e.tiros >= 5) ? e.goles / e.tiros : 0; } },
         { k: 'imp', ic: '📈', t: "Mejor impacto por 70'", v: (j, minM) => ((j.minutos || 0) >= minM && (j.minutos || 0) > 0) ? (j.impactoAcum || 0) / j.minutos * 70 : -Infinity, sinMin: true }
     ];
@@ -5722,7 +5728,7 @@
         // v185 · MAPA DE GOLES: dónde se marcó (a favor) y dónde nos marcaron (en contra), con el color del origen
         {
             const ORI = { jugada: ['Jugada', [93, 173, 226]], robo: ['Robo / contra', [46, 213, 115]], rechace: ['Rechace', [168, 85, 247]], corner: ['Córner', [245, 166, 35]],
-                falta: ['Falta', [255, 159, 67]], penalti: ['Penalti', [255, 210, 63]], error: ['Error del rival', [148, 163, 184]], perdida: ['Pérdida nuestra', [148, 163, 184]] };
+                falta: ['Falta', [255, 159, 67]], penalti: ['Penalti', [255, 210, 63]], error: ['Error del rival', [148, 163, 184]], perdida: ['Pérdida nuestra', [148, 163, 184]], propia: ['En propia puerta', [100, 116, 139]] };
             const conSitio = (g) => g.penalti ? { x: 34, y: 11 } : (g.pos && g.pos.x != null && g.pos.y != null ? { x: Number(g.pos.x), y: Number(g.pos.y) } : null);
             const lados = [['A FAVOR', D.goles.filter(g => g.equipo === 'hergar')], ['EN CONTRA', D.goles.filter(g => g.equipo === 'rival')]];
             if (D.goles.some(g => conSitio(g))) {
@@ -6187,6 +6193,7 @@
             csFila('Pase clave', a.paseClave),
             csFila('Pase al área', a.paseArea),
             csFila('Disparo a puerta', a.disparoPuerta),
+            csFila('Al palo / larguero', a.disparoPuerta, 'Cuenta como un disparo a puerta. Al palo del rival le pasa lo mismo: resta como un tiro a puerta, pero no cuenta en las paradas del portero.'),
             csFila('Disparo fuera / sin peligro', a.disparoFuera, `Los ${a.disparoFueraUmbral || 3} primeros de cada partido. Desde el ${(a.disparoFueraUmbral || 3) + 1}.º, ${fmtPts(a.disparoFueraExceso || -0.05)} cada uno, marque o no.`), // v194
             csFila('Regate / jugada individual', a.regate, 'Supera a un rival o gana metros con el balón y no acaba en tiro, pase clave ni pase al área.'),
             csFila('Acción defensiva', a.defensa),
@@ -6195,7 +6202,8 @@
             csFila('Parada difícil (portero)', a.paradaDificil),
             csFila('Fuera de juego', a.fueraJuego, 'Resta poco a propósito: un desmarque que sale por poco no debe castigarse como un fallo. El del rival no suma a nadie.'),
             csFila('Fallo', a.fallo),
-            csFila('Fallo importante', a.falloImportante)
+            csFila('Fallo importante', a.falloImportante),
+            csFila('Falta recibida', 0, 'No suma ni resta: solo se cuenta quién recibe más faltas.')
         ].join('');
         const equipo = [
             csFila('Gol a favor', e.golFavor),
@@ -7387,6 +7395,7 @@
                 accionesDef: p.accionesDef || 0, accionesDefClave: p.accionesDefClave || 0, regates: p.regates || 0,
                 pasesArea: p.pasesArea || 0, pasesClave: p.pasesClave || 0,
                 disparosPuerta: p.disparosPuerta || 0, disparosFuera: p.disparosFuera || 0, fuerasJuego: p.fuerasJuego || 0, // v117
+                palos: p.palos || 0, faltasRecibidas: p.faltasRecibidas || 0, // v205
                 paradas: p.paradas || 0, paradasDificiles: p.paradasDificiles || 0,
                 golesRecibidos: p.golesRecibidos || 0, tirosPuertaEnPorteria: p.tirosPuertaEnPorteria || 0, // v114
                 impacto: parseFloat((p.impacto || 0).toFixed(2)),
@@ -7424,12 +7433,13 @@
                         if (ult && Array.isArray(ult.goles)) gs = ult.goles;
                     }
                     // v174: con el sitio del gol (cuando se ha apuntado) para el aviso de «gol más lejano» del visor
-                    return gs.map(g => { const o = { min: g.min, equipo: g.equipo, nombre: g.nombre || '' }; if (g.penalti) o.penalti = true; if (g.equipo === 'hergar' && !g.penalti && g.pos && g.pos.x != null && g.pos.y != null) o.pos = { x: Math.round(g.pos.x * 10) / 10, y: Math.round(g.pos.y * 10) / 10 }; return o; });
+                    return gs.map(g => { const o = { min: g.min, equipo: g.equipo, nombre: g.nombre || '' }; if (g.penalti) o.penalti = true; if (g.propia) o.propia = true; if (g.equipo === 'hergar' && !g.penalti && !g.propia && g.pos && g.pos.x != null && g.pos.y != null) o.pos = { x: Math.round(g.pos.x * 10) / 10, y: Math.round(g.pos.y * 10) / 10 }; return o; });
                 } catch (e) { return []; }
             })(),
             narracion: (() => { try { return narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); return []; } })(), // v193
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
             faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, // v117
+            palosNuestros, palosRival, // v205
             analisisIA: analisisIACompleto, resumenIA: resumenIACompleto, notasIA: MOSTRAR_NOTAS_IA ? notasIAPartido : {}
         };
         return payload;
@@ -7509,7 +7519,7 @@
     const ONESIGNAL_KEY_STORAGE = 'hergar_F11_onesignalKey'; // v138: la clave de OneSignal se mete en Ajustes, no va en el código
     function oneSignalKey() { try { return (localStorage.getItem(ONESIGNAL_KEY_STORAGE) || '').trim(); } catch (e) { return ''; } }
 
-    async function notificarGolPush(jugadorNombre) {
+    async function notificarGolPush(jugadorNombre, texto) {
         if (reproduciendoPrevio) return; // v129: los goles del tramo previo no mandan notificación
         if (!oneSignalKey()) return; // v138: sin clave de OneSignal en Ajustes no se manda el aviso
         const rivalName = document.getElementById("rivalNameInput")?.value || "RIVAL";
@@ -7524,7 +7534,7 @@
                     app_id: ONESIGNAL_APP_ID,
                     included_segments: ['Subscribed Users'],
                     headings: { en: '⚽ ¡GOOOL!' },
-                    contents: { en: `${jugadorNombre ? jugadorNombre + ' marca. ' : ''}HERGAR ${goalsLocal}-${goalsRival} ${rivalName}` },
+                    contents: { en: `${texto ? texto + ' ' : (jugadorNombre ? jugadorNombre + ' marca. ' : '')}HERGAR ${goalsLocal}-${goalsRival} ${rivalName}` },
                     url: matchShareCode ? `${LIVE_VIEWER_BASE_URL}?m=${matchShareCode}` : LIVE_VIEWER_BASE_URL
                 })
             });
@@ -7696,6 +7706,7 @@
     let actaDescanso = null; // v139: cómo iba el partido al descanso (para el acta por partes)
     let fuerasJuegoNuestros = 0; // v117
     let fuerasJuegoRival = 0;    // v117
+    let palosNuestros = 0, palosRival = 0; // v205: tiros al palo (también cuentan como tiros a puerta)
     let zonasRivales = {};
     let zonasEquipo = {};
     let momentumData = []; // [{min, delta, acum}] — histórico de momentum del partido
@@ -7838,7 +7849,7 @@
             benchSittingTime,
             substitutionTimeline, rivalName,
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             analisisIACompleto, resumenIACompleto, notasIAPartido,
             tiroGolRival: true // v110
         }));
@@ -7905,6 +7916,8 @@
             cornersContra = state.cornersContra || 0;
             fuerasJuegoNuestros = state.fuerasJuegoNuestros || 0; // v117
             fuerasJuegoRival = state.fuerasJuegoRival || 0;       // v117
+            palosNuestros = state.palosNuestros || 0; palosRival = state.palosRival || 0; // v205
+            { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
             tirosTrasCambio = state.tirosTrasCambio || { n: 0, r: 0 }; // v137
             actaDescanso = state.actaDescanso || null; // v139
             { const b = document.getElementById("lsb_fjR"); if (b) b.innerText = fuerasJuegoRival; }
@@ -8529,7 +8542,7 @@
             totales: {
                 goles: j.goles || 0, asistencias: j.asistencias || 0,
                 pasesArea: j.pasesArea || 0, pasesClave: j.pasesClave || 0,
-                accionesDef: j.accionesDef || 0, accionesDefClave: j.accionesDefClave || 0, regates: j.regates || 0, fuerasJuego: j.fuerasJuego || 0, paradas: j.paradas || 0,
+                accionesDef: j.accionesDef || 0, accionesDefClave: j.accionesDefClave || 0, regates: j.regates || 0, fuerasJuego: j.fuerasJuego || 0, palos: j.palos || 0, faltasRecibidas: j.faltasRecibidas || 0, paradas: j.paradas || 0,
                 paradasDificiles: j.paradasDificiles || 0, golesRecibidos: j.golesRecibidos || 0,
                 amarillas: j.amarillas || 0, rojas: j.rojas || 0,
                 disparosPuerta: j.disparosPuerta || 0, disparosFuera: j.disparosFuera || 0, golesConTiros: j.golesConTiros // v70
@@ -8558,7 +8571,7 @@
             totales: {
                 goles: p.goles || 0, asistencias: p.asistencias || 0,
                 pasesArea: p.pasesArea || 0, pasesClave: p.pasesClave || 0,
-                accionesDef: p.accionesDef || 0, accionesDefClave: p.accionesDefClave || 0, regates: p.regates || 0, fuerasJuego: p.fuerasJuego || 0, paradas: p.paradas || 0,
+                accionesDef: p.accionesDef || 0, accionesDefClave: p.accionesDefClave || 0, regates: p.regates || 0, fuerasJuego: p.fuerasJuego || 0, palos: p.palos || 0, faltasRecibidas: p.faltasRecibidas || 0, paradas: p.paradas || 0,
                 paradasDificiles: p.paradasDificiles || 0, golesRecibidos: p.golesRecibidos || 0,
                 amarillas: p.tarjetasAmarillas || 0, rojas: p.tarjetaRoja ? 1 : 0,
                 disparosPuerta: p.disparosPuerta || 0, disparosFuera: p.disparosFuera || 0, golesConTiros: p.goles || 0 // v70
@@ -8965,7 +8978,9 @@
               + fdStatRow('🛡️', 'Acciones defensivas', t.accionesDef, minutosTotal)
               + fdStatRow('🛡️⭐', 'Acciones def. clave', t.accionesDefClave, minutosTotal)
               + fdStatRow('🌀', 'Regates / jugadas individuales', t.regates, minutosTotal)
-              + (t.fuerasJuego ? fdStatRow('🚩', 'Fueras de juego', t.fuerasJuego, minutosTotal) : ''); // v117: solo si tiene alguno
+              + (t.fuerasJuego ? fdStatRow('🚩', 'Fueras de juego', t.fuerasJuego, minutosTotal) : '') // v117: solo si tiene alguno
+              + (t.palos ? fdStatRow('🪵', 'Tiros al palo', t.palos, minutosTotal) : '') // v205
+              + (t.faltasRecibidas ? fdStatRow('🟡', 'Faltas recibidas', t.faltasRecibidas, minutosTotal) : ''); // v205
 
         return `
             <div class="fd-header${stats.esPortero ? ' fd-portero' : ''}">
@@ -9148,7 +9163,7 @@
             return;
         }
 
-        if (type === 'DISPARO_PUERTA' || type === 'DISPARO_FUERA') {
+        if (type === 'DISPARO_PUERTA' || type === 'DISPARO_FUERA' || type === 'PALO') {
             document.getElementById("disparoTypeModal").style.display = "none";
         } else {
             document.getElementById("playerActionsModal").style.display = "none";
@@ -9220,6 +9235,12 @@
                 p.impacto += 0.30;
                 tirosNuestrosPuerta++; tirosEnCampoV135('n');
                 break;
+            case 'PALO': // v205 · al palo / larguero: cuenta como disparo a puerta (mismos puntos) y se apunta aparte
+                p.disparosPuerta = (p.disparosPuerta || 0) + 1;
+                p.palos = (p.palos || 0) + 1;
+                p.impacto += REGLAS_IMPACTO.acciones.disparoPuerta;
+                tirosNuestrosPuerta++; palosNuestros++; tirosEnCampoV135('n');
+                break;
             case 'DISPARO_FUERA':
                 p.disparosFuera = (p.disparosFuera || 0) + 1;
                 p.impacto = Math.max(p.impacto + valorTiroFueraV194(p.disparosFuera), -5); // v194: desde el 4.º, −0,05
@@ -9249,12 +9270,13 @@
             'DEFENSA_CLAVE': '🛡️⭐ Acción defensiva clave',
             'REGATE': '🌀 Regate / jugada individual',
             'DISPARO_PUERTA': '🎯 Disparo a puerta',
+            'PALO': '🎯 Disparo a puerta', // v205: con «(al palo)» al final, así todo lo que lee la cronología lo sigue contando como tiro a puerta
             'DISPARO_FUERA': '💨 Disparo fuera / sin peligro'
         };
-        substitutionTimeline.push(`[${minActual}'] ${accionLabel[pendingAction] || pendingAction} #${p.dorsal} ${p.name.split(' ')[0]}`);
+        substitutionTimeline.push(`[${minActual}'] ${accionLabel[pendingAction] || pendingAction} #${p.dorsal} ${p.name.split(' ')[0]}${pendingAction === 'PALO' ? ' (al palo)' : ''}`);
 
         // ── MOMENTUM ──
-        const momentumMap = { GOL: 3, DISPARO_PUERTA: 1, DISPARO_FUERA: 0.5, PASE_CLAVE: 0.5 };
+        const momentumMap = { GOL: 3, DISPARO_PUERTA: 1, PALO: 1, DISPARO_FUERA: 0.5, PASE_CLAVE: 0.5 };
         if (momentumMap[pendingAction]) registrarMomentum(minActual, momentumMap[pendingAction]);
         // v204 · acciones defensivas: de portero o defensa = aprieta el rival; de delantero = presión arriba del Hergar; de medio, nada
         if (pendingAction === 'DEFENSA' || pendingAction === 'DEFENSA_CLAVE') {
@@ -9331,6 +9353,15 @@
                 substitutionTimeline.push(`[${minActual}'] 🥅 Tiro rival a puerta`);
                 registrarMomentum(minActual, -1);
                 break;
+            case 'TIRO_RIVAL_PALO': // v205 · al palo del rival: resta como un tiro a puerta, pero no cuenta en las paradas del portero
+                tirosRivalesPuerta++; palosRival++; tirosEnCampoV135('r');
+                onFieldIds.forEach(id => {
+                    if (playersData[id]) penTiroRivalV192(playersData[id], REGLAS_IMPACTO.equipo.tiroRivalPuerta);
+                });
+                substitutionTimeline.push(`[${minActual}'] 🥅 Tiro rival a puerta (al palo)`);
+                registrarMomentum(minActual, -1);
+                { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
+                break;
             case 'TIRO_RIVAL_FUERA':
                 tirosRivalesFuera++; tirosEnCampoV135('r');
                 onFieldIds.forEach(id => {
@@ -9352,14 +9383,62 @@
 
     // ── FALTAS ──
 
-    document.getElementById("faltaFavorBtn").onclick = function() {
+    // v205 · FALTA A FAVOR: se apunta con un toque y después, si se quiere, a qué niño se la hicieron (sin puntos)
+    function registrarFaltaFavor(jid) {
         logSnapshot();
         faltasFavor++;
         const minActual = Math.floor(getElapsedSeconds() / 60);
-        substitutionTimeline.push(`[${minActual}'] 🟡 Falta a favor`);
+        const p = jid != null ? playersData[jid] : null;
+        if (p) p.faltasRecibidas = (p.faltasRecibidas || 0) + 1;
+        substitutionTimeline.push(`[${minActual}'] 🟡 Falta a favor${p ? ` · recibe #${p.dorsal} ${p.name.split(' ')[0]}` : ''}`);
         saveState();
         actualizarEstadisticasTiros();
         actualizarLiveStats();
+        return substitutionTimeline.length - 1;
+    }
+    // Pone el niño en una falta ya apuntada (la línea idx de la cronología)
+    function asignarFaltaRecibida(idx, jid) {
+        const linea = String(substitutionTimeline[idx] || '');
+        const m = /^\[(\d+)'\]\s*🟡 Falta a favor$/.exec(linea);
+        const p = playersData[jid];
+        if (!m || !p) return false;
+        p.faltasRecibidas = (p.faltasRecibidas || 0) + 1;
+        substitutionTimeline[idx] = `[${m[1]}'] 🟡 Falta a favor · recibe #${p.dorsal} ${p.name.split(' ')[0]}`;
+        saveState();
+        return true;
+    }
+    window.asignarFaltaRecibida = asignarFaltaRecibida;
+    document.getElementById("faltaFavorBtn").onclick = function() {
+        const idx = registrarFaltaFavor(null);
+        if (!reproduciendoPrevio && partidoEmpezado && !matchFinished && window.v205PreguntarFalta) window.v205PreguntarFalta(idx);
+    };
+
+    // v205 · GOL EN PROPIA PUERTA DEL RIVAL: sube nuestro marcador y cuenta como gol a favor para los que están en el campo,
+    // pero no es de ningún niño (no entra en goleadores, eficacia de tiro ni récords personales)
+    function registrarGolPropiaRival() {
+        logSnapshot();
+        const minActual = Math.floor(getElapsedSeconds() / 60);
+        goalsLocal++;
+        document.getElementById("scoreLocal").innerText = goalsLocal;
+        sumarGolEquipoEnCampo();
+        substitutionTimeline.push(`[${minActual}'] ⚽ Gol en propia puerta del rival`);
+        registrarMomentum(minActual, 3);
+        notificarGolPush('', 'Gol en propia puerta del rival.');
+        saveState();
+        renderPlayers();
+        actualizarLiveStats();
+        return substitutionTimeline.length - 1;
+    }
+    document.getElementById("golPropiaRivalBtn").onclick = function() {
+        if (!partidoEmpezado || matchFinished) { alert('El gol en propia se apunta con el partido en marcha.'); return; }
+        if (!confirm('⚽ ¿Gol en propia puerta del RIVAL?\n\nSube nuestro marcador y cuenta como gol a favor para los que están en el campo, sin goleador.')) return;
+        const k = registrarGolPropiaRival();
+        if (window.v169AbrirMapaGol) setTimeout(() => window.v169AbrirMapaGol(k, 'hergar'), 80);
+    };
+    document.getElementById("paloRivalBtn").onclick = function() {
+        if (matchFinished) return;
+        pendingAction = 'TIRO_RIVAL_PALO';
+        registrarAccionRival();
     };
 
     document.getElementById("faltaContraBtn").onclick = function() {
@@ -9416,9 +9495,9 @@
         const totalR = tirosRivalesPuerta + tirosRivalesFuera;
         const el = id => document.getElementById(id);
         if (el("lsb_tirosN"))    el("lsb_tirosN").innerText = totalN;
-        if (el("lsb_tirosNdet")) el("lsb_tirosNdet").innerText = `${tirosNuestrosPuerta}🎯 ${tirosNuestrosFuera}💨`;
+        if (el("lsb_tirosNdet")) el("lsb_tirosNdet").innerText = `${tirosNuestrosPuerta}🎯 ${tirosNuestrosFuera}💨${palosNuestros ? ` · ${palosNuestros}🪵` : ''}`;
         if (el("lsb_tirosR"))    el("lsb_tirosR").innerText = totalR;
-        if (el("lsb_tirosRdet")) el("lsb_tirosRdet").innerText = `${tirosRivalesPuerta}🎯 ${tirosRivalesFuera}💨`;
+        if (el("lsb_tirosRdet")) el("lsb_tirosRdet").innerText = `${tirosRivalesPuerta}🎯 ${tirosRivalesFuera}💨${palosRival ? ` · ${palosRival}🪵` : ''}`;
         if (el("lsb_faltasF"))   el("lsb_faltasF").innerText = faltasFavor;
         if (el("lsb_faltasC"))   el("lsb_faltasC").innerText = faltasContra;
         if (el("lsb_cornersF"))  el("lsb_cornersF").innerText = cornersFavor;
@@ -10054,7 +10133,7 @@
                 const rol = mins === 0 ? 'No jugó' : (titularesIniciales.includes(p.id) ? 'Titular' : 'Entró');
                 const portero = p.fuePortero ? ` Par:${p.paradas||0} ParD:${p.paradasDificiles||0} GolesRec:${p.golesRecibidos||0} TPR:${p.tirosPuertaEnPorteria||0}` : '';
                 const fallos = (p.fallos || 0) + (p.fallosImportantes || 0);
-                return `id:${p.id} #${p.dorsal} ${p.name} | ${posTxt(p)} | ${rol} | ${mins}' | G:${p.goles||0} A:${p.asistencias||0} PC:${p.pasesClave||0} PA:${p.pasesArea||0} DP:${p.disparosPuerta||0} DSP:${p.disparosFuera||0} Reg:${p.regates||0} Def:${p.accionesDef||0} DefC:${p.accionesDefClave||0} F:${fallos}${p.fallosImportantes ? ' (FI:'+p.fallosImportantes+')' : ''}${p.fuerasJuego ? ' FJ:'+p.fuerasJuego : ''}${portero} | Imp ${imp.toFixed(1)} (${imp70 === 'n/d' ? '/70 n/d' : imp70 + '/70'})${p.tarjetasAmarillas ? ' 🟨x'+p.tarjetasAmarillas : ''}${p.tarjetaRoja ? ' 🟥' : ''}`;
+                return `id:${p.id} #${p.dorsal} ${p.name} | ${posTxt(p)} | ${rol} | ${mins}' | G:${p.goles||0} A:${p.asistencias||0} PC:${p.pasesClave||0} PA:${p.pasesArea||0} DP:${p.disparosPuerta||0} DSP:${p.disparosFuera||0} Reg:${p.regates||0} Def:${p.accionesDef||0} DefC:${p.accionesDefClave||0} F:${fallos}${p.fallosImportantes ? ' (FI:'+p.fallosImportantes+')' : ''}${p.fuerasJuego ? ' FJ:'+p.fuerasJuego : ''}${p.palos ? ' Palo:'+p.palos : ''}${p.faltasRecibidas ? ' FR:'+p.faltasRecibidas : ''}${portero} | Imp ${imp.toFixed(1)} (${imp70 === 'n/d' ? '/70 n/d' : imp70 + '/70'})${p.tarjetasAmarillas ? ' 🟨x'+p.tarjetasAmarillas : ''}${p.tarjetaRoja ? ' 🟥' : ''}`;
             }).join('\n');
 
         // v126 · acumulado de temporada de cada convocado, SIN contar este partido (si ya se agregó, se le resta)
@@ -10119,6 +10198,7 @@
                 const min = g.min != null ? `${g.min}' ` : '';
                 const det = golDetalleIA(g); // v171: cómo llegó y desde dónde
                 if (g.equipo === 'rival') return `${min}${rivalName.toUpperCase()}${g.penalti ? ' (penalti)' : ''}${det}`;
+                if (g.propia) return `${min}gol en propia puerta del ${rivalName.toUpperCase()} (sin goleador del Hergar)`; // v205
                 return `${min}${g.nombre || '¿?'}${g.penalti ? ' (penalti)' : ''}${g.asistente ? ` (asist. ${g.asistente})` : ''}${det}`;
             }).join(' · ');
             const tem = origenGolesTemporadaIA(); // v171
@@ -10163,13 +10243,13 @@ CÓMO LEER LOS DATOS
 - El partido tiene dos partes de 35 minutos: el descanso es en el minuto 35 y el reloj de la 2.ª parte sigue desde el 35 hasta el 70. Para decir cuándo salió o entró alguien usa SOLO la línea CAMBIOS (un cambio en el 37' es al empezar la 2.ª parte, no antes del descanso); no lo deduzcas de los minutos jugados.
 - Para comparar rendimiento usa SIEMPRE el /70, no el total: quien juega menos minutos (normalmente los que entran en la 2.ª parte) siempre suma menos total. Con menos de 10 minutos el /70 no es fiable (n/d).
 - Línea donde jugó más tiempo: POR portero, DEF defensa, CEN centrocampista, DEL delantero (entre paréntesis, el puesto).
-- Abreviaturas: G goles, A asistencias, PC pases clave, PA pases al área, DP disparos a puerta, DSP disparos sin peligro (fuera o sin peligro para el portero; en el informe llámalos siempre "tiros sin peligro", nunca "tiros fuera"), Reg regates, Def acciones defensivas en total (incluye las clave), DefC cuántas de ellas fueron clave (no las sumes a Def), F fallos (FI importantes), FJ fueras de juego, Par paradas, ParD paradas difíciles, GolesRec goles recibidos, TPR tiros a puerta del rival que le llegaron mientras estaba en la portería.
+- Abreviaturas: G goles, A asistencias, PC pases clave, PA pases al área, DP disparos a puerta, DSP disparos sin peligro (fuera o sin peligro para el portero; en el informe llámalos siempre "tiros sin peligro", nunca "tiros fuera"), Reg regates, Def acciones defensivas en total (incluye las clave), DefC cuántas de ellas fueron clave (no las sumes a Def), F fallos (FI importantes), FJ fueras de juego, Palo tiros al palo o al larguero (ya están contados en DP), FR faltas que le hicieron (faltas a favor que recibió), Par paradas, ParD paradas difíciles, GolesRec goles recibidos, TPR tiros a puerta del rival que le llegaron mientras estaba en la portería.
 
 PARTIDO: HERGAR ${goalsLocal} - ${goalsRival} ${rivalName.toUpperCase()} | ${resultado} | ${duracion}
 FORMACIÓN: ${formacion}
 ${ligaTxt}CONTEXTO: Rival ${ctxRival} | ${ctxLocal} | ${ctxCesped} | Campo ${ctxCampo} | ${ctxClima}${ctxIATiempoTxt ? ` (${ctxIATiempoTxt})` : ''} | Hora de inicio ${ctxHora}
 ${ctxNotas ? `NOTAS DE QUIEN REGISTRA EL PARTIDO: ${ctxNotas}\n` : ''}GOLES: ${golesTxt || 'Sin goles'}
-TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta, ${tirosRivalesFuera} sin peligro)
+TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta${palosNuestros ? `, de ellos ${palosNuestros} al palo` : ''}, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta${palosRival ? `, de ellos ${palosRival} al palo` : ''}, ${tirosRivalesFuera} sin peligro)
 FALTAS/CÓRNERS: F.Favor ${faltasFavor} F.Contra ${faltasContra} | C.Favor ${cornersFavor} C.Contra ${cornersContra}
 FUERAS DE JUEGO: Hergar ${fuerasJuegoNuestros} | Rival ${fuerasJuegoRival} (los del rival suelen indicar que la línea defensiva sube bien)
 TOP SINERGIAS: ${topSinergias || 'Sin datos'}
@@ -10487,7 +10567,7 @@ REGLAS DE LAS NOTAS: incluye una nota para CADA jugador de la lista (también lo
             const prompt = `Eres el analista táctico del C.D. Hergar (fútbol 11 amateur). Pon nota a cada jugador por su rendimiento en este partido.
 
 PARTIDO: HERGAR ${goalsLocal} - ${goalsRival} ${rivalName.toUpperCase()} | ${resultado} | ${duracion}
-${ctxNotas ? `NOTAS DEL TÉCNICO: ${ctxNotas}\n` : ''}TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta, ${tirosRivalesFuera} sin peligro)
+${ctxNotas ? `NOTAS DEL TÉCNICO: ${ctxNotas}\n` : ''}TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta${palosNuestros ? `, de ellos ${palosNuestros} al palo` : ''}, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta${palosRival ? `, de ellos ${palosRival} al palo` : ''}, ${tirosRivalesFuera} sin peligro)
 CRONOLOGÍA: ${cronologia || 'Sin datos'}
 
 JUGADORES:
@@ -11019,6 +11099,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 activeActionPlayerId = j; pendingAction = MAP[e.k]; registrarAccionJugador();
                 break;
             case 'golR': pendingAction = 'GOL_RIVAL'; registrarAccionRival(); break;
+            case 'golP': registrarGolPropiaRival(); break; // v205
+            case 'palo': if (!playersData[j]) break; activeActionPlayerId = j; pendingAction = 'PALO'; registrarAccionJugador(); break; // v205
+            case 'palR': pendingAction = 'TIRO_RIVAL_PALO'; registrarAccionRival(); break; // v205
             case 'tfR': pendingAction = 'TIRO_RIVAL_FUERA'; registrarAccionRival(); break;
             case 'par': case 'parD':
                 if (onFieldIds[0] && playersData[onFieldIds[0]]) { activeActionPlayerId = onFieldIds[0]; registrarParada(e.k === 'parD' ? 'dificil' : 'normal'); }
@@ -11033,7 +11116,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             // v190 · sucesos que solo salen al rehacer un partido desde su cronología
             case 'fj': if (playersData[j]) { activeActionPlayerId = j; document.getElementById('actionFueraJuegoBtn').onclick(); } break;
             case 'tpR': pendingAction = 'TIRO_RIVAL_PUERTA'; registrarAccionRival(); break;
-            case 'ff': document.getElementById('faltaFavorBtn').onclick(); break;
+            case 'ff': registrarFaltaFavor(j != null && playersData[j] ? j : null); break; // v205: con el niño que la recibió
             case 'fc': document.getElementById('faltaContraBtn').onclick(); break;
             case 'fjR': fuerasJuegoRival++; substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🚩 Fuera de juego del rival`); break;
             case 'sub': selectedPlayerId = Number(e.s); handleBenchPlayerClick(Number(e.e)); break;
@@ -11124,7 +11207,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const ccMas = arrN(cc.mas).filter(id => playersData[id]), ccMenos = arrN(cc.menos).filter(id => playersData[id]);
         const ccTxt = (ccMas.length || ccMenos.length) ? `\n🔁 Convocatoria cambiada en el campo: ${[...ccMas.map(id => '+ ' + playersData[id].name), ...ccMenos.map(id => '− ' + playersData[id].name)].join(', ')}` : '';
         const minFin = Math.floor(Number(st.fase === 'final' ? (st.parte === 2 ? st.fin2 : st.fin1) : st.acum) / 60) || 0;
-        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas${ccTxt}\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
+        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles${n('golP') ? ` (+${n('golP')} en propia del rival)` : ''} · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta${n('palo') ? ` · 🪵 ${n('palo')} al palo` : ''} · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas${ccTxt}\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
         const backup = ltBackup();
         // Previa: convocatoria, once, banquillo, sistema y rival del delegado
         if (compartirEnVivo) desactivarCompartirPartido(); // la alineación publicada de este móvil no debe pisar al visor
@@ -11195,12 +11278,13 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         gol: ['⚽', 'Gol'], tp: ['🎯', 'Tiro a puerta'], tf: ['💨', 'Tiro sin peligro'], pc: ['🔑', 'Pase clave'], pa: ['📯', 'Pase al área'],
         def: ['🛡️', 'Acción defensiva'], defC: ['🛡️⭐', 'Acción def. clave'], reg: ['🌀', 'Regate'], fa: ['❌', 'Fallo'], faI: ['💥', 'Fallo importante'],
         fj: ['🚩', 'Fuera de juego'], am: ['🟨', 'Amarilla'], ro: ['🟥', 'Roja'],
+        golP: ['⚽', 'Gol en propia del rival'], palo: ['🪵', 'Al palo'], palR: ['🪵', 'Palo del rival'], // v205
         golR: ['🥅', 'Gol rival'], par: ['🧤', 'Parada'], parD: ['🧤⭐', 'Parada difícil'], tpR: ['🥅', 'Tiro rival a puerta'], tfR: ['💨', 'Tiro rival sin peligro'],
         cf: ['⛳', 'Córner a favor'], cc: ['⛳', 'Córner en contra'], ff: ['🟡', 'Falta a favor'], fc: ['🟠', 'Falta en contra'], fjR: ['🚩', 'Fuera de juego rival'],
         sub: ['🔄', 'Cambio'], swap: ['↔', 'Cambio de puesto'], form: ['🏟️', 'Cambio de sistema']
     };
-    const RV_JUG = ['gol', 'tp', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'fj', 'am', 'ro'];
-    const RV_ANADIR = ['sub', 'tp', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'am', 'ro', 'gol'];
+    const RV_JUG = ['gol', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'fj', 'am', 'ro'];
+    const RV_ANADIR = ['sub', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'am', 'ro', 'gol', 'golP'];
     let rv = null;
     const rvNorm = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const rvNom = (id) => { const p = playersData[id]; return p ? `${p.dorsal != null ? p.dorsal + ' ' : ''}${(p.name || '').split(' ')[0]}` : '¿?'; };
@@ -11231,6 +11315,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         Object.values(playersData).forEach(p => { if (p && p.dorsal != null) (porDorsal[String(p.dorsal)] = porDorsal[String(p.dorsal)] || []).push(p); });
         const quien = (d, n) => { const c = porDorsal[String(d)] || []; const p = c.find(x => (x.name || '').split(' ')[0] === n) || c.find(x => x.convocado) || c[0]; return p ? Number(p.id) : null; };
         const REG = [
+            [/^⚽ Gol en propia/, 'golP'], [/^🎯 Disparo a puerta #(\S+) (\S+).*\(al palo\)/, 'palo'], [/^🥅 Tiro rival a puerta.*\(al palo\)/, 'palR'], [/^🟡 Falta a favor · recibe #(\S+) (\S+)/, 'ff'], // v205
             [/^⚽ Gol #(\S+) (\S+)/, 'gol'], [/^📯 Pase al área #(\S+) (\S+)/, 'pa'], [/^🔑 Pase clave #(\S+) (\S+)/, 'pc'],
             [/^🛡️⭐ Acción defensiva clave #(\S+) (\S+)/, 'defC'], [/^🛡️ Acción defensiva #(\S+) (\S+)/, 'def'], [/^🌀 Regate[^#]*#(\S+) (\S+)/, 'reg'],
             [/^🎯 Disparo a puerta #(\S+) (\S+)/, 'tp'], [/^💨 Disparo fuera[^#]*#(\S+) (\S+)/, 'tf'], [/^❌ Fallo #(\S+) (\S+)/, 'fa'],
@@ -11271,7 +11356,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         // 1.ª o 2.ª parte: por orden; pasa a la 2.ª cuando el minuto baja, cuando ya no cabe en la 1.ª o cuando se supera lo que había al descanso
         const D = st.actaDescanso || null;
         const cuenta = { gl: 0, gr: 0, tnP: 0, tnF: 0, trP: 0, trF: 0, cf: 0, cc: 0, ff: 0, fc: 0, fjN: 0, fjR: 0 };
-        const SUMA = { gol: ['gl', 'tnP'], tp: ['tnP'], tf: ['tnF'], golR: ['gr', 'trP'], par: ['trP'], parD: ['trP'], tpR: ['trP'], tfR: ['trF'], cf: ['cf'], cc: ['cc'], ff: ['ff'], fc: ['fc'], fj: ['fjN'], fjR: ['fjR'] };
+        const SUMA = { gol: ['gl', 'tnP'], golP: ['gl'], palo: ['tnP'], palR: ['trP'], tp: ['tnP'], tf: ['tnF'], golR: ['gr', 'trP'], par: ['trP'], parD: ['trP'], tpR: ['trP'], tfR: ['trF'], cf: ['cf'], cc: ['cc'], ff: ['ff'], fc: ['fc'], fj: ['fjN'], fjR: ['fjR'] };
         let parte = 1, maxMin = 0;
         const minFin1 = Math.floor(fin1 / 60);
         crudos.forEach(o => {
@@ -11449,7 +11534,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         // el partido
         const xP = X.partido, yP = Y.partido, Pn = T.partidos[k];
         ['golesLocal', 'golesRival', 'tirosNuestrosPuerta', 'tirosNuestrosFuera', 'tirosRivalesPuerta', 'tirosRivalesFuera', 'faltasFavor', 'faltasContra',
-            'cornersFavor', 'cornersContra', 'fuerasJuegoNuestros', 'fuerasJuegoRival', 'accionesDefTotal', 'pasesAreaTotal', 'pasesClaveTotal'].forEach(c => {
+            'cornersFavor', 'cornersContra', 'fuerasJuegoNuestros', 'fuerasJuegoRival', 'palosNuestros', 'palosRival', 'accionesDefTotal', 'pasesAreaTotal', 'pasesClaveTotal'].forEach(c => {
             const d = (Number(yP[c]) || 0) - (Number(xP[c]) || 0);
             if (d) Pn[c] = Math.max(0, (Number(Pn[c]) || 0) + d);
         });
@@ -11461,21 +11546,21 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (yP.acta) { const liga = Pn.acta && Pn.acta.liga; Pn.acta = yP.acta; if (liga) Pn.acta.liga = liga; else delete Pn.acta.liga; }
         if (yP.minutos) Pn.minutos = yP.minutos;
         // goles: si se ha tocado alguno, se rehacen y se les pasa lo apuntado después (vídeo, origen, sitio…)
-        const firmaG = (evs) => JSON.stringify(evs.filter(e => e.k === 'gol' || e.k === 'golR').map(e => [e.k, e.p, e.t, e.j || null, e.a || null]));
+        const firmaG = (evs) => JSON.stringify(evs.filter(e => e.k === 'gol' || e.k === 'golR' || e.k === 'golP').map(e => [e.k, e.p, e.t, e.j || null, e.a || null]));
         let golesCambian = false;
         if (firmaG(rv.D.ev) !== firmaG(evsNuevos) && Array.isArray(yP.goles)) {
             golesCambian = true;
             const viejos = (Array.isArray(Pn.goles) ? Pn.goles : []).map(g => Object.assign({ usado: false }, g));
-            const BASE = new Set(['min', 'equipo', 'jugadorId', 'nombre', 'asistenteId', 'asistente', 'penalti', 'usado']);
+            const BASE = new Set(['min', 'equipo', 'jugadorId', 'nombre', 'asistenteId', 'asistente', 'penalti', 'propia', 'usado']);
             Pn.goles = yP.goles.map(g => {
                 const n = Object.assign({}, g);
-                const cand = viejos.filter(v => !v.usado && v.equipo === g.equipo && (g.equipo === 'rival' || String(v.jugadorId) === String(g.jugadorId)))
+                const cand = viejos.filter(v => !v.usado && v.equipo === g.equipo && (g.equipo === 'rival' || (String(v.jugadorId) === String(g.jugadorId) && !!v.propia === !!g.propia)))
                     .sort((a, b) => Math.abs((a.min ?? 99) - (g.min ?? 99)) - Math.abs((b.min ?? 99) - (g.min ?? 99)))[0];
                 if (cand) { cand.usado = true; Object.keys(cand).forEach(c => { if (!BASE.has(c)) n[c] = cand[c]; }); }
                 return n;
             });
             const nombres = {};
-            Pn.goles.filter(g => g.equipo === 'hergar').forEach(g => { const n = g.nombre || '¿?'; nombres[n] = (nombres[n] || 0) + 1; });
+            Pn.goles.filter(g => g.equipo === 'hergar' && !g.propia).forEach(g => { const n = g.nombre || '¿?'; nombres[n] = (nombres[n] || 0) + 1; });
             Pn.goleadores = Object.keys(nombres).map(n => `${n} (${nombres[n]})`).join(', ') || '-';
         }
         // MVP con los datos nuevos
@@ -12171,6 +12256,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 ${box('FALTAS F/C', `${faltasFavor}/${faltasContra}`)}
                 ${box('CÓRNERS F/C', `${cornersFavor}/${cornersContra}`)}
                 ${box('F. JUEGO H/R', `${fuerasJuegoNuestros}/${fuerasJuegoRival}`)}
+                ${(palosNuestros || palosRival) ? box('🪵 PALOS H/R', `${palosNuestros}/${palosRival}`) : ''}
                 ${box('ACC. DEFENSIVAS', accionesDefTotal)}
                 ${box('P.ÁREA / P.CLAVE', `${pasesAreaTotal}/${pasesClaveTotal}`)}
             </div>`;
@@ -13676,12 +13762,13 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             let g;
             if ((g = /^⚽ Gol de penalti #(\S+) (\S+)/.exec(t))) { const p = buscar(g[1], g[2]); goles.push({ idx, min, equipo: 'hergar', jugadorId: p ? p.id : null, nombre: nom(p, g[2]), penalti: true }); }
             else if ((g = /^⚽ Gol #(\S+) (\S+)/.exec(t))) { const p = buscar(g[1], g[2]); goles.push({ idx, min, equipo: 'hergar', jugadorId: p ? p.id : null, nombre: nom(p, g[2]), penalti: false }); }
+            else if (/^⚽ Gol en propia/.test(t)) goles.push({ idx, min, equipo: 'hergar', jugadorId: null, nombre: 'Gol en propia', propia: true, penalti: false }); // v205
             else if (/^🥅 Gol rival/.test(t)) goles.push({ idx, min, equipo: 'rival', penalti: /penalti/.test(t) });
             else if ((g = /^👟 Asistencia #(\S+) (\S+)/.exec(t))) { const p = buscar(g[1], g[2]); asist.push({ idx, min, id: p ? p.id : null, nombre: nom(p, g[2]) }); }
         });
         // Cada asistencia va al gol de Hergar del mismo minuto que tenga más cerca en la cronología
         asist.forEach(a => {
-            const cands = goles.filter(x => x.equipo === 'hergar' && !x.asistente && !x.penalti && x.min === a.min);
+            const cands = goles.filter(x => x.equipo === 'hergar' && !x.asistente && !x.penalti && !x.propia && x.min === a.min);
             if (!cands.length) return;
             cands.sort((x, y) => Math.abs(x.idx - a.idx) - Math.abs(y.idx - a.idx));
             cands[0].asistenteId = a.id; cands[0].asistente = a.nombre;
@@ -13689,6 +13776,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const mgd = mgdLeer(); // v169
         goles.forEach(g => {
             const e = mgd.find(x => x.idx === g.idx && x.linea === substitutionTimeline[g.idx]);
+            if (g.propia && !(e && e.origen)) g.origen = 'propia'; // v205
             if (!e || g.penalti) return;
             if (e.origen) g.origen = e.origen;
             if (e.pos) g.pos = { x: e.pos.x, y: e.pos.y };
@@ -13736,10 +13824,14 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             empata: ['El rival empata', 'El {RIV} iguala el partido', 'Empate del rival', 'El {RIV} consigue igualar'],
             amplia: ['El rival amplía su ventaja', 'Nuevo gol del {RIV}', 'El {RIV} marca otra vez', 'Otro gol del rival'],
             recorta: ['El rival recorta', 'Gol del {RIV}, que acorta distancias', 'El {RIV} marca', 'El rival hace su gol'],
-            origen: { corner: ['a la salida de un córner', 'en un córner'], falta: ['de falta', 'a balón parado'], penalti: ['de penalti', 'desde el punto de penalti'], rechace: ['en un rechace', 'tras un balón suelto'], robo: ['a la contra', 'tras recuperar el balón'], perdida: ['a la contra', 'tras recuperar el balón'], jugada: ['tras una jugada', 'después de una buena jugada'], error: ['', ''], nada: ['', ''] },
+            origen: { corner: ['a la salida de un córner', 'en un córner'], falta: ['de falta', 'a balón parado'], penalti: ['de penalti', 'desde el punto de penalti'], rechace: ['en un rechace', 'tras un balón suelto'], robo: ['a la contra', 'tras recuperar el balón'], perdida: ['a la contra', 'tras recuperar el balón'], propia: ['', ''], jugada: ['tras una jugada', 'después de una buena jugada'], error: ['', ''], nada: ['', ''] },
             animo: ['Toca reaccionar.', 'Queda partido.', '¡Arriba, Hergar!', 'Hay tiempo para darle la vuelta.', 'A levantarse.'],
+            propiaNuestra: ['¡Mala suerte! Gol en propia puerta', 'Desgracia en la defensa del Hergar: gol en propia', 'El balón acaba en nuestra portería tras tocar en un defensa'],
             sigue: ['El Hergar sigue por delante.', 'Sigue mandando el Hergar.', 'La ventaja se mantiene.']
         },
+        // v205 · gol en propia puerta del rival (a favor del Hergar)
+        propia: ['¡Gol en propia puerta del {RIV}!', '¡El {RIV} marca en su propia portería!', '¡Autogol del {RIV}!', '¡Regalo del {RIV}: gol en propia!', '¡El balón acaba en la portería del {RIV}!'],
+        propiaCtx: { abre: ['El Hergar se pone por delante.', 'Y el Hergar abre el marcador.'], empata: ['Y es el empate.', 'Sirve para empatar.'], adelanta: ['El Hergar se pone por delante.', 'Y el Hergar manda en el marcador.'], remonta: ['¡Y el Hergar le da la vuelta!', 'Remontada del Hergar.'], amplia: ['El Hergar amplía la ventaja.', 'Más ventaja para el Hergar.'], goleada: ['Otro más para la cuenta.', 'Sigue la fiesta.'], recorta: ['El Hergar recorta.', 'Y el Hergar se mete en el partido.'] },
         parada: ['¡Paradón de {J}!', '¡Qué parada de {J}!', '{J} saca una mano salvadora', '{J} vuela para evitar el gol', 'Intervención de mérito de {J}', '¡{J} dice que no!', '¡Seguridad de {J} bajo palos!'],
         paradaCtx: { cero: ['y el marcador sigue a cero.', 'y todo sigue igual.'], ventaja: ['y mantiene la ventaja.', 'para que el Hergar siga por delante.', 'y protege el resultado.'], empate: ['y sostiene el empate.', 'y mantiene la igualdad.'], detras: ['y mantiene vivo al equipo.', 'para que siga habiendo partido.'] },
         penParado: ['¡{J} para un penalti!', '¡Penalti detenido por {J}!', '¡{J} adivina la intención y para el penalti!', '¡{J} se hace gigante y para el penalti!'],
@@ -13839,7 +13931,17 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 const antes = { H, R };
                 if (h.eq === 'hergar') H++; else R++;
                 const g = h.gol || {};
-                if (h.eq === 'hergar') {
+                if (h.eq === 'hergar' && g.propia) { // v205 · gol en propia puerta del rival
+                    let sit;
+                    if (antes.H === 0 && antes.R === 0) sit = 'abre';
+                    else if (H === R) sit = 'empata';
+                    else if (antes.H === antes.R) sit = fueDetras ? 'remonta' : 'adelanta';
+                    else if (H > R) sit = H - R >= 3 ? 'goleada' : 'amplia';
+                    else sit = 'recorta';
+                    const tit = narrRellena(narrElige(ctx, 'propia', NARR.propia, clave), { RIV });
+                    const cuerpo = narrElige(ctx, 'pctx_' + sit, NARR.propiaCtx[sit], clave) + ' ' + narrRellena(narrElige(ctx, 'marc', NARR.marcador, clave), { H, R });
+                    res.push({ m: h.min, ic: '⚽', k: 'gol', h: tit, x: cuerpo.replace(/\s+/g, ' ').trim() });
+                } else if (h.eq === 'hergar') {
                     const J = g.nombre || 'el Hergar';
                     golesDe[J] = (golesDe[J] || 0) + 1;
                     let sit;
@@ -13876,7 +13978,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                     else sit = 'recorta';
                     const og = g.penalti ? 'penalti' : (g.origen && NARR.rival.origen[g.origen] ? g.origen : 'nada');
                     const coletilla = narrElige(ctx, 'ror_' + og, NARR.rival.origen[og], clave);
-                    let txt = narrRellena(narrElige(ctx, 'riv_' + sit, NARR.rival[sit], clave), { RIV }) + (coletilla ? ' ' + coletilla : '') + `. ${H}-${R}.`;
+                    let txt = og === 'propia' // v205 · gol en propia nuestro: sin señalar a nadie
+                        ? narrElige(ctx, 'propiaN', NARR.rival.propiaNuestra, clave) + `. ${H}-${R}.`
+                        : narrRellena(narrElige(ctx, 'riv_' + sit, NARR.rival[sit], clave), { RIV }) + (coletilla ? ' ' + coletilla : '') + `. ${H}-${R}.`;
                     if (H > R) txt += ' ' + narrElige(ctx, 'sigue', NARR.rival.sigue, clave);
                     else if (h.min < DUR - 5) txt += ' ' + narrElige(ctx, 'animo', NARR.rival.animo, clave);
                     res.push({ m: h.min, ic: '🥅', k: 'golr', h: '', x: txt });
@@ -13930,7 +14034,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     }
 
     // ── v171 · Origen y lado de los goles para el informe IA ──
-    const ORIGEN_IA = { jugada: 'jugada', robo: 'robo/contraataque', rechace: 'rechace', corner: 'córner', falta: 'falta', penalti: 'penalti', error: 'error del rival', perdida: 'pérdida nuestra' };
+    const ORIGEN_IA = { jugada: 'jugada', robo: 'robo/contraataque', rechace: 'rechace', corner: 'córner', falta: 'falta', penalti: 'penalti', error: 'error del rival', perdida: 'pérdida nuestra', propia: 'gol en propia puerta' };
     // Lado desde el que se marca: tercios del ancho del campo. Los goles del rival, vistos desde nuestra portería.
     function ladoGol(g) {
         if (!g || g.penalti || !g.pos || g.pos.x == null) return null;
@@ -14005,7 +14109,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const accionesDefTotal = convocadosPartido.reduce((s,p)=>s+(p.accionesDef||0),0);
         const pasesAreaTotal = convocadosPartido.reduce((s,p)=>s+(p.pasesArea||0),0);
         const pasesClaveTotal = convocadosPartido.reduce((s,p)=>s+(p.pasesClave||0),0);
-        const partido = { fecha:fechaHoy, rival:rivalName, golesLocal:goalsLocal, golesRival:goalsRival, resultado, duracion:formatTime(getElapsedSeconds()), mvp:mvpNombre, mvpId, mvpStats, goleadores:Object.values(playersData).filter(p=>p.goles>0).map(p=>`${p.name.split(' ')[0]} (${p.goles})`).join(', ')||'-', tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera, faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tirosTrasCambio: { n: tirosTrasCambio.n, r: tirosTrasCambio.r }, accionesDefTotal, pasesAreaTotal, pasesClaveTotal };
+        const partido = { fecha:fechaHoy, rival:rivalName, golesLocal:goalsLocal, golesRival:goalsRival, resultado, duracion:formatTime(getElapsedSeconds()), mvp:mvpNombre, mvpId, mvpStats, goleadores:Object.values(playersData).filter(p=>p.goles>0).map(p=>`${p.name.split(' ')[0]} (${p.goles})`).join(', ')||'-', tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera, faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio: { n: tirosTrasCambio.n, r: tirosTrasCambio.r }, accionesDefTotal, pasesAreaTotal, pasesClaveTotal };
         partido.notasIASumadas = Object.keys(notasIAPartido).length > 0; // v59
         partido.tiroGolRival = true; // v110: sus tiros a puerta del rival ya incluyen los goles del rival
         partido.titulares = titularesIniciales.slice(); // v68: titulares de este partido
@@ -14034,7 +14138,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             if (!j.notaIAacum) j.notaIAacum = 0;
             if (!j.notaIApartidos) j.notaIApartidos = 0;
             if (p.invitado) { j.invitado = true; j.equipoOrigen = p.equipoOrigen || ''; } // v118: sube de otro equipo (cuenta como uno más)
-            j.name = p.name; j.dorsal = p.dorsal; j.partidos++; j.minutos += mins; j.goles += p.goles||0; j.asistencias += p.asistencias||0; j.pasesArea += p.pasesArea||0; j.pasesClave += p.pasesClave||0; j.accionesDef += p.accionesDef||0; j.accionesDefClave = (j.accionesDefClave||0) + (p.accionesDefClave||0); j.regates = (j.regates||0) + (p.regates||0); j.fuerasJuego = (j.fuerasJuego||0) + (p.fuerasJuego||0); j.amarillas += p.tarjetasAmarillas||0; j.rojas += p.tarjetaRoja?1:0; j.impactoAcum += parseFloat(p.impacto)||0;
+            j.name = p.name; j.dorsal = p.dorsal; j.partidos++; j.minutos += mins; j.goles += p.goles||0; j.asistencias += p.asistencias||0; j.pasesArea += p.pasesArea||0; j.pasesClave += p.pasesClave||0; j.accionesDef += p.accionesDef||0; j.accionesDefClave = (j.accionesDefClave||0) + (p.accionesDefClave||0); j.regates = (j.regates||0) + (p.regates||0); j.fuerasJuego = (j.fuerasJuego||0) + (p.fuerasJuego||0); j.palos = (j.palos||0) + (p.palos||0); j.faltasRecibidas = (j.faltasRecibidas||0) + (p.faltasRecibidas||0); j.amarillas += p.tarjetasAmarillas||0; j.rojas += p.tarjetaRoja?1:0; j.impactoAcum += parseFloat(p.impacto)||0;
             // FIX: acumular a temporada los datos de portero (antes se quedaban solo en el partido y nunca llegaban aquí)
             if (!j.paradas) j.paradas = 0; if (!j.paradasDificiles) j.paradasDificiles = 0; if (!j.disparosPuerta) j.disparosPuerta = 0; if (!j.disparosFuera) j.disparosFuera = 0; if (!j.golesRecibidos) j.golesRecibidos = 0;
             j.paradas += p.paradas||0; j.paradasDificiles += p.paradasDificiles||0; j.disparosPuerta += p.disparosPuerta||0; j.disparosFuera += p.disparosFuera||0; j.golesRecibidos += p.golesRecibidos||0;
@@ -14052,7 +14156,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             if (!j.historial) j.historial = [];
             const impPondPartido = mins > 0 ? parseFloat((p.impacto / mins * 70).toFixed(2)) : 0;
             // v104: impacto total del partido, si fue titular y el detalle de sus acciones (para "Actuación de cada jugador")
-            const accH = { dp: p.disparosPuerta||0, df: p.disparosFuera||0, pc: p.pasesClave||0, pa: p.pasesArea||0, reg: p.regates||0, fj: p.fuerasJuego||0, def: p.accionesDef||0, defC: p.accionesDefClave||0, par: p.paradas||0, parD: p.paradasDificiles||0, am: p.tarjetasAmarillas||0, ro: p.tarjetaRoja?1:0 };
+            const accH = { dp: p.disparosPuerta||0, df: p.disparosFuera||0, pc: p.pasesClave||0, pa: p.pasesArea||0, reg: p.regates||0, fj: p.fuerasJuego||0, pal: p.palos||0, fr: p.faltasRecibidas||0, def: p.accionesDef||0, defC: p.accionesDefClave||0, par: p.paradas||0, parD: p.paradasDificiles||0, am: p.tarjetasAmarillas||0, ro: p.tarjetaRoja?1:0 };
             Object.keys(accH).forEach(k => { if (!accH[k]) delete accH[k]; });
             j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), acc: accH, gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, tr192: true, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
             // Acumular nota IA si existe
@@ -14636,7 +14740,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 <button type="button" onclick="egQuitar(this)" aria-label="Quitar gol" style="background:rgba(255,71,87,0.12); color:#ff4757; border:none; border-radius:7px; padding:6px 9px; font-weight:800;">✕</button>
             </div>
             <div class="eg-jug" style="display:${esH ? 'flex' : 'none'}; gap:6px;">
-                <select class="eg-goleador" onchange="egPintarVideo(this.closest('.eg-row'))" style="${est} flex:1;">${egOpciones(g.jugadorId, '¿Quién marcó?')}</select>
+                <select class="eg-goleador" onchange="egPintarVideo(this.closest('.eg-row'))" style="${est} flex:1;">${egOpciones(g.propia ? null : g.jugadorId, '¿Quién marcó?')}<option value="propia" data-nombre="Gol en propia" ${g.propia ? 'selected' : ''}>⚽ En propia (del rival)</option></select>
                 <select class="eg-asist" data-prev="${g.asistenteId != null ? g.asistenteId : ''}" onchange="egAsistCambia(this)" style="${est} flex:1;">${egOpciones(g.asistenteId, 'Sin asistencia')}</select>
                 <button type="button" class="eg-vbtn" onclick="egAbrirVideo(this)" aria-label="Vídeo del gol">🎥</button>
             </div>
@@ -14676,7 +14780,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     // Del rival solo se apuntan los goles (no la posición de sus tiros). Todo es opcional y no toca el impacto.
     const GOL_ORIGENES = {
         hergar: [['jugada', 'Jugada'], ['robo', 'Robo / contraataque'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['error', 'Error del rival']],
-        rival: [['jugada', 'Jugada'], ['robo', 'Robo / contraataque'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra']]
+        rival: [['jugada', 'Jugada'], ['robo', 'Robo / contraataque'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra'], ['propia', 'En propia puerta']]
     };
     function egOrigenOpciones(equipo, sel) {
         return '<option value="">¿Cómo llegó?</option>' + GOL_ORIGENES[equipo === 'rival' ? 'rival' : 'hergar'].map(([v, t]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${t}</option>`).join('');
@@ -14796,7 +14900,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (!btn) return;
         const vid = row.querySelector('.eg-vid').value, ocu = row.querySelector('.eg-vocu').checked;
         const gid = row.querySelector('.eg-goleador').value;
-        const bloq = gid && !permisoVideo(/^\d+$/.test(gid) ? Number(gid) : gid);
+        const bloq = gid && gid !== 'propia' && !permisoVideo(/^\d+$/.test(gid) ? Number(gid) : gid);
         btn.className = 'eg-vbtn' + (bloq ? ' bloq' : (ocu ? ' oculto' : (vid ? ' ok' : '')));
         row.querySelector('.eg-vacc').style.display = vid ? 'flex' : 'none';
         const a = row.querySelector('.eg-vprobar'); if (a) a.href = vid ? urlVideoGol(vid) : '#';
@@ -14805,7 +14909,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     window.egAbrirVideo = function (btn) {
         const row = btn.closest('.eg-row');
         const gid = row.querySelector('.eg-goleador').value;
-        if (gid && !permisoVideo(/^\d+$/.test(gid) ? Number(gid) : gid)) { alert('Este niño no tiene permiso de vídeo. Se cambia en Convocatoria → Editar plantilla y configuración → Vídeos de los goles.'); return; }
+        if (gid && gid !== 'propia' && !permisoVideo(/^\d+$/.test(gid) ? Number(gid) : gid)) { alert('Este niño no tiene permiso de vídeo. Se cambia en Convocatoria → Editar plantilla y configuración → Vídeos de los goles.'); return; }
         const box = row.querySelector('.eg-vbox');
         box.style.display = box.style.display === 'none' ? 'flex' : 'none';
     };
@@ -15070,7 +15174,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         filas.forEach(r => {
             if (r.querySelector('.eg-vid').value || r.querySelector('.eg-vocu').checked) return;
             const gid = r.querySelector('.eg-goleador').value;
-            if (gid && !permisoVideo(/^\d+$/.test(gid) ? Number(gid) : gid)) { saltados.push(r); return; }
+            if (gid && gid !== 'propia' && !permisoVideo(/^\d+$/.test(gid) ? Number(gid) : gid)) { saltados.push(r); return; }
             destino.push(r);
         });
         const out = []; let k = 0;
@@ -15160,6 +15264,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             if (equipo === 'rival') return Object.assign({ min, equipo, penalti }, extra);
             const sg = row.querySelector('.eg-goleador'), sa = row.querySelector('.eg-asist');
             const g = Object.assign({ min, equipo, jugadorId: idDe(sg.value), nombre: nombreDe(sg), asistenteId: idDe(sa.value), asistente: nombreDe(sa), penalti }, extra);
+            if (sg.value === 'propia') { Object.assign(g, { jugadorId: null, nombre: 'Gol en propia', propia: true, asistenteId: null, asistente: null, penalti: false }); if (!g.origen) g.origen = 'propia'; } // v205
             const vid = row.querySelector('.eg-vid').value; if (vid) g.video = vid;              // v119
             if (row.querySelector('.eg-vocu').checked) g.videoOculto = true;                      // v119
             return g;
@@ -16319,6 +16424,8 @@ ${separador}`;
         cornersFavor = 0;
         cornersContra = 0;
         fuerasJuegoNuestros = 0; fuerasJuegoRival = 0; // v117
+        palosNuestros = 0; palosRival = 0; // v205
+        { const b = document.getElementById("lsb_palR"); if (b) b.innerText = 0; }
         tirosTrasCambio = { n: 0, r: 0 }; // v137
         actaDescanso = null; // v139
         { const b = document.getElementById("lsb_fjR"); if (b) b.innerText = 0; }
@@ -16352,6 +16459,7 @@ ${separador}`;
             p.accionesDef = 0;
             p.accionesDefClave = 0; p.regates = 0; // v67
             p.fuerasJuego = 0; // v117
+            p.palos = 0; p.faltasRecibidas = 0; // v205
             p.segsPorLinea = {}; p.golesContraEnCampo = 0; p.tirosFavorEnCampo = 0; p.tirosContraEnCampo = 0; p.bonusPorteriaCero = 0; p.golesFavorEnCampo = 0; p.bonusGolEquipo = 0; p.equipoImp = 0; p.tirRivBruto = 0; p.tirRivPen = 0; // v192 · v67: portería a cero · v145: parte de equipo
             p.impPorLinea = {}; p._impUlt = 0; // v94
             p.segsPorPuesto = {}; p.impPorPuesto = {}; // v95
@@ -16731,7 +16839,7 @@ ${separador}`;
             playersData, goalsLocal, goalsRival,
             benchSittingTime,
             substitutionTimeline, tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             accumulatedSeconds: getElapsedSeconds() // BUG FIX: incluir tiempo para coherencia en undo
         }, sinFoto));
         if (actionHistory.length>25) actionHistory.shift();
@@ -16755,6 +16863,8 @@ ${separador}`;
         document.getElementById("lsb_cornersF").innerText = cornersFavor;
         document.getElementById("lsb_cornersC").innerText = cornersContra;
         fuerasJuegoNuestros = prev.fuerasJuegoNuestros||0; fuerasJuegoRival = prev.fuerasJuegoRival||0; // v117
+        palosNuestros = prev.palosNuestros||0; palosRival = prev.palosRival||0; // v205
+        { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
         tirosTrasCambio = prev.tirosTrasCambio || { n: 0, r: 0 }; // v137
         actaDescanso = prev.actaDescanso || null; // v139
         document.getElementById("lsb_fjR").innerText = fuerasJuegoRival;
@@ -20696,7 +20806,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         const fila = (id, cols, botones) => { const f = document.createElement('div'); f.id = id; f.className = 'v163-fila v163-extra ' + cols; botones.forEach(b => f.appendChild(b)); return f; };
         // queueAction cierra la ventanita vieja de disparo; aquí se cierra el panel de acciones
         const disparoDirecto = (tipo) => { document.getElementById('playerActionsModal').style.display = 'none'; queueAction(tipo); };
-        const tiro = fam('v163-tiro', 'TIRO', 'c3', [B('actionGoalBtn', '⚽ Gol', 'v163-gol'), nuevo('v163PuertaBtn', '🎯 A puerta', () => disparoDirecto('DISPARO_PUERTA')), nuevo('v163FueraBtn', '💨 Sin peligro', () => disparoDirecto('DISPARO_FUERA'))]);
+        const tiro = fam('v163-tiro', 'TIRO', 'c4', [B('actionGoalBtn', '⚽ Gol', 'v163-gol'), nuevo('v163PuertaBtn', '🎯 A puerta', () => disparoDirecto('DISPARO_PUERTA')), nuevo('v163PaloBtn', '🪵 Al palo', () => disparoDirecto('PALO')), nuevo('v163FueraBtn', '💨 Sin peligro', () => disparoDirecto('DISPARO_FUERA'))]); // v205: + al palo
         const pase = fam('v163-pase', 'PASE Y JUGADA', 'c3', [B('actionPassKeyBtn', '🔑 Pase clave'), B('actionPassAreaBtn', '📯 Pase al área'), B('actionDribbleBtn', '🌀 Regate')]);
         const def = fam('v163-def', 'DEFENSA', 'c2', [B('actionDefenseBtn', '🛡️ Defensa'), B('actionDefenseKeyBtn', '🛡️⭐ Def. clave')]);
         const toggle = (idFila) => () => { ['v163FilaTarjetas', 'v163FilaMas'].forEach(f => { const el = document.getElementById(f); el.classList.toggle('on', f === idFila && !el.classList.contains('on')); }); };
@@ -20786,6 +20896,46 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         refrescarModo();
     })();
 </script>
+<!-- v205 · FALTA A FAVOR: ¿A QUIÉN SE LA HICIERON? -->
+<style>
+    #v205FaltaModal { position: fixed; inset: 0; z-index: 10550; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.72); }
+    #v205FaltaModal.on { display: flex; }
+    #v205FaltaModal .caja { width: 100%; max-width: 480px; background: #111827; border-radius: 20px 20px 0 0; border-top: 2px solid #f1c40f; padding: 14px 12px calc(14px + env(safe-area-inset-bottom)); }
+    #v205FaltaModal .tit { text-align: center; font-family: 'Montserrat', sans-serif; font-weight: 900; color: #fff; font-size: 15px; }
+    #v205FaltaModal .sub { text-align: center; font-size: 11px; color: #94a3b8; margin: 2px 0 10px; }
+    #v205FaltaModal .lista { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px; }
+    #v205FaltaModal .lista button { min-height: 50px; border-radius: 11px; border: none; background: #854d0e; color: #fff; font-weight: 800; font-size: 13.5px; }
+    #v205FaltaModal .nadie { width: 100%; min-height: 50px; margin-top: 8px; border-radius: 11px; border: none; background: #1e293b; color: #94a3b8; font-weight: 800; font-size: 13.5px; }
+</style>
+<div id="v205FaltaModal" role="dialog" aria-modal="true" aria-label="¿A quién le hicieron la falta?"><div class="caja">
+    <div class="tit" id="v205FaltaTit">🟡 Falta a favor · ¿a quién se la hicieron?</div>
+    <div class="sub">Opcional · no suma puntos: solo cuenta quién recibe más faltas</div>
+    <div class="lista" id="v205FaltaLista"></div>
+    <button type="button" class="nadie" id="v205FaltaNadie">Saltar (sin niño)</button>
+</div></div>
+<script>
+    (function () {
+        const modal = document.getElementById('v205FaltaModal');
+        let idxFalta = null;
+        const cerrar = () => { modal.classList.remove('on'); idxFalta = null; };
+        window.v205PreguntarFalta = function (idx) {
+            idxFalta = idx;
+            const m = /^\[(\d+)'\]/.exec(String(substitutionTimeline[idx] || ''));
+            document.getElementById('v205FaltaTit').textContent = `🟡 Falta a favor${m ? ' · ' + m[1] + "'" : ''} · ¿a quién se la hicieron?`;
+            const lista = document.getElementById('v205FaltaLista');
+            lista.innerHTML = '';
+            onFieldIds.filter(i => playersData[i]).slice().sort((a, b) => (playersData[a].dorsal ?? 99) - (playersData[b].dorsal ?? 99)).forEach(i => {
+                const q = playersData[i];
+                const b = document.createElement('button'); b.type = 'button'; b.textContent = `${q.dorsal ?? ''} ${q.name.split(' ')[0]}`;
+                b.onclick = () => { const k = idxFalta; cerrar(); if (k != null) window.asignarFaltaRecibida(k, i); };
+                lista.appendChild(b);
+            });
+            modal.classList.add('on');
+        };
+        document.getElementById('v205FaltaNadie').onclick = cerrar;
+        modal.addEventListener('click', (e) => { if (e.target === modal) cerrar(); });
+    })();
+</script>
 <!-- v169 · ORIGEN Y POSICIÓN DEL GOL EN DIRECTO -->
 <style>
     #v169MapaModal { position: fixed; inset: 0; z-index: 10560; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.78); }
@@ -20813,7 +20963,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     (function () {
         const ORI = {
             hergar: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['error', 'Error rival']],
-            rival: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra']]
+            rival: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra'], ['propia', 'En propia']]
         };
         let idxGol = null, origen = null, pos = null;
         const $ = (id) => document.getElementById(id);
@@ -20825,10 +20975,12 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         window.v169AbrirMapaGol = function (idx, equipo) {
             idxGol = idx; origen = null; pos = null;
             const m = /^\[(\d+)'\]\s*(.*)$/.exec(String(substitutionTimeline[idx] || ''));
-            const quien = equipo === 'rival' ? 'del rival' : ((m && /⚽ Gol #\S+ (\S+)/.exec(m[2])) ? 'de ' + /⚽ Gol #\S+ (\S+)/.exec(m[2])[1] : '');
+            const esPropia = !!(m && /^⚽ Gol en propia/.test(m[2])); // v205
+            if (esPropia) origen = 'propia';
+            const quien = esPropia ? 'en propia del rival' : equipo === 'rival' ? 'del rival' : ((m && /⚽ Gol #\S+ (\S+)/.exec(m[2])) ? 'de ' + /⚽ Gol #\S+ (\S+)/.exec(m[2])[1] : '');
             $('v169MapaTit').textContent = `${equipo === 'rival' ? '🥅' : '⚽'} Gol ${quien}${m ? ' · ' + m[1] + "'" : ''}`;
             $('v169MapaSub').innerHTML = `Opcional · arriba, ${equipo === 'rival' ? '<b>nuestra portería</b>' : '<b>la portería del rival</b>'}`;
-            $('v169MapaOri').innerHTML = ORI[equipo === 'rival' ? 'rival' : 'hergar'].map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join('');
+            $('v169MapaOri').innerHTML = (esPropia ? [['propia', 'En propia']] : []).concat(ORI[equipo === 'rival' ? 'rival' : 'hergar']).map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join('');
             [...$('v169MapaOri').children].forEach(b => b.onclick = () => { origen = origen === b.dataset.v ? null : b.dataset.v; pintar(); });
             pintar();
             $('v169MapaModal').classList.add('on');
