@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    202                                            ║
+  ║  Versión:    203                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1692,6 +1692,15 @@
                 </label>
                 <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">En el visor sale completa, igual que la tuya (visor v168 o posterior). Tú la descargas siempre desde la pestaña Partidos.</div>
             </div>
+            <!-- v203 · RESUMEN DEL PARTIDO EN EL VISOR -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎬 RESUMEN DEL PARTIDO (VISOR)</div>
+                <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer;">
+                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Con rótulos de datos: once inicial, números, dominio y Liga</span>
+                    <input id="resumenDatosChk" type="checkbox" onchange="guardarResumenDatos(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
+                </label>
+                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">Si lo apagas, el resumen de todos los partidos vuelve a ser solo la entrada, los goles y el final. Cambia al momento en el visor.</div>
+            </div>
             <!-- v119 · VÍDEOS DE LOS GOLES -->
             <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
                 <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎥 VÍDEOS DE LOS GOLES</div>
@@ -1777,7 +1786,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v202</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v203</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -5264,6 +5273,11 @@
     window.guardarActaVisor = function (on) { try { localStorage.setItem(ACTA_VISOR_KEY, on ? '1' : '0'); } catch (e) {} try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} };
     window.descargarActaPartido = function (i) { try { actaDescargar(getTemporada(), i, { familias: false }); } catch (e) { alert('No se pudo generar el acta: ' + e.message); } };
     setTimeout(() => { const c = document.getElementById('actaVisorChk'); if (c) c.checked = actaVisorOn(); }, 0);
+    // v203 · rótulos de datos en el resumen tipo tele del visor (encendidos salvo que se apaguen aquí)
+    const RESUMEN_DATOS_KEY = 'hergar_F11_resumenDatos';
+    function resumenDatosOn() { try { return localStorage.getItem(RESUMEN_DATOS_KEY) !== '0'; } catch (e) { return true; } }
+    window.guardarResumenDatos = function (on) { try { localStorage.setItem(RESUMEN_DATOS_KEY, on ? '1' : '0'); } catch (e) {} try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} };
+    setTimeout(() => { const c = document.getElementById('resumenDatosChk'); if (c) c.checked = resumenDatosOn(); }, 0);
 
     // ── v139 · ACTA DEL PARTIDO EN PDF (misma función en la app y en el visor) ──
     // Se hace con el partido guardado en la temporada (t.partidos[i]) y lo que cada niño guarda en su historial.
@@ -6206,6 +6220,7 @@
         const c = Object.assign({}, t); delete c.convocatorias;
         if (Array.isArray(c.partidos)) c.partidos = c.partidos.map(p => { if (!p || !p.dlg) return p; const q = Object.assign({}, p); delete q.dlg; return q; }); // v190: los apuntes del delegado no viajan al visor
         c.actaVisor = (typeof actaVisorOn === 'function') ? actaVisorOn() : false; // v139
+        c.resumenDatos = (typeof resumenDatosOn === 'function') ? resumenDatosOn() : true; // v203
         // v119 · solo viaja el vídeo si se pueden ver vídeos, el gol no está oculto y el goleador tiene permiso
         const global = (typeof videosGlobalOn === 'function') ? videosGlobalOn() : true;
         if (Array.isArray(c.partidos)) c.partidos = c.partidos.map(p => {
