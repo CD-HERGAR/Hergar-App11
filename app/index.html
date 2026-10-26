@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    203                                            ║
+  ║  Versión:    204                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1786,7 +1786,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v203</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v204</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2383,7 +2383,7 @@
         <div style="font-size:10px; font-weight:800; color:#64748b; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px;">⭐ Top 3 por impacto</div>
         <div id="vestuarioTop3" style="display:flex; flex-direction:column; gap:6px; margin-bottom:14px;"></div>
         <!-- MOMENTUM 1ª PARTE -->
-        <div style="font-size:10px; font-weight:800; color:#64748b; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px;">⚡ Momentum 1ª parte</div>
+        <div style="font-size:10px; font-weight:800; color:#64748b; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:6px;">⚡ Dominio 1ª parte</div>
         <div style="background:#0f172a; border-radius:10px; padding:8px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.04);">
             <canvas id="vestuarioMomentumCanvas" width="340" height="60" style="width:100%; display:block; border-radius:6px;"></canvas>
         </div>
@@ -2420,7 +2420,7 @@
         <button class="banner-finalizado-btn" id="bannerCloseBtn" style="margin-bottom:8px;">2️⃣ VER ACTA COMPLETA</button>
         <div id="bannerResumenIA" style="display:none; margin:8px 0; background:rgba(142,68,173,0.1); border:1px solid rgba(142,68,173,0.25); border-radius:10px; padding:10px 14px; font-size:12px; color:#c084fc; font-style:italic; text-align:center;"></div>
         <div style="margin:8px 0;">
-            <div style="color:#64748b; font-size:9px; font-weight:700; letter-spacing:1px; text-align:center; margin-bottom:4px;">📈 MATCH MOMENTUM</div>
+            <div style="color:#64748b; font-size:9px; font-weight:700; letter-spacing:1px; text-align:center; margin-bottom:4px;">📈 DOMINIO DEL PARTIDO</div>
             <canvas id="momentumMiniCanvas" width="300" height="70" style="border-radius:8px; background:#0f172a; width:100%; max-width:300px; display:block; margin:0 auto;"></canvas>
         </div>
         <!-- COMPARATIVA 1ª / 2ª PARTE -->
@@ -2867,7 +2867,7 @@
         <div class="tabs-header" style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:10px;">
             <div class="tab-btn active" onclick="switchLiveTab('tabRendimiento', this)">📊 Stats</div>
             <div class="tab-btn" onclick="switchLiveTab('tabGeolocalizacion', this)">📋 General</div>
-            <div class="tab-btn" onclick="switchLiveTab('tabMomentum', this)">⚡ Moment.</div>
+            <div class="tab-btn" onclick="switchLiveTab('tabMomentum', this)">⚡ Dominio</div>
             <div class="tab-btn" onclick="switchLiveTab('tabRotaciones', this)">💤 Rotación</div>
             <div class="tab-btn" onclick="switchLiveTab('tabLiveSinergias', this)">🔗 Sinergias</div>
             <div class="tab-btn" onclick="switchLiveTab('tabPerfil', this)">🕸️ Perfil</div>
@@ -2917,7 +2917,7 @@
 
         <div id="tabMomentum" class="tab-content">
             <div style="padding:6px 2px;">
-                <div style="color:#f5a623; font-size:10px; font-weight:800; letter-spacing:1px; margin-bottom:6px;">📈 MATCH MOMENTUM</div>
+                <div style="color:#f5a623; font-size:10px; font-weight:800; letter-spacing:1px; margin-bottom:6px;">📈 DOMINIO DEL PARTIDO</div>
                 <div style="display:flex; justify-content:center;">
                     <canvas id="momentumCanvas" width="300" height="160" style="border-radius:10px; background:#0f172a;"></canvas>
                 </div>
@@ -2986,6 +2986,52 @@
     };
 
     // Impacto de temporada normalizado a 70 min y elegibilidad para el ranking
+    // ── v204 · DOMINIO / MOMENTUM POR TRAMOS (misma función en la app y en el visor) ──
+    // Lo que se guarda es el acumulado (suma lo del Hergar y resta lo del rival desde el 0'), que casi siempre va por encima
+    // de cero porque del Hergar se apuntan más cosas. Para dibujar se usa lo que se movió en los últimos MOMENTUM_VENTANA
+    // minutos: por encima de la línea aprieta el Hergar; por debajo, el rival. Con raíz, para que un gol no aplaste el resto.
+    const MOMENTUM_VENTANA = 6;
+    function momentumVentana(pts, dur) {
+        const raw = (pts || []).map(q => ({ m: Number(q.m != null ? q.m : q.min) || 0, v: Number(q.v != null ? q.v : q.acum) || 0 })).sort((a, b) => a.m - b.m);
+        const D = Math.max(1, Math.round(dur || 70)), dm = {};
+        let prev = 0;
+        raw.forEach(q => { const m = Math.max(0, Math.min(D, Math.round(q.m))); dm[m] = (dm[m] || 0) + (q.v - prev); prev = q.v; });
+        const s = [];
+        for (let m = 0; m <= D; m++) { let t = 0; for (let k = m - MOMENTUM_VENTANA + 1; k <= m; k++) t += dm[k] || 0; s.push(t); }
+        const suave = s.map((v, i) => 0.25 * (s[i - 1] ?? v) + 0.5 * v + 0.25 * (s[i + 1] ?? v));
+        return suave.map(v => Math.sign(v) * Math.sqrt(Math.abs(v)));
+    }
+    // Minuto en el que más apretó cada equipo (para el texto de debajo de los gráficos)
+    function momentumPicos(serie) {
+        let h = { m: null, v: 0 }, r = { m: null, v: 0 };
+        (serie || []).forEach((v, m) => { if (v > h.v) h = { m, v }; if (v < r.v) r = { m, v }; });
+        return { hergar: h.m, rival: r.m };
+    }
+    // Dibuja la serie en un lienzo: rojo arriba (Hergar), gris abajo (rival). o: { x, y, w, h, dur, hasta, goles: [{min, equipo}], descanso }
+    function momentumPintarSerie(ctx, serie, o) {
+        const n = serie.length, dur = o.dur || (n - 1) || 1, hasta = Math.min(o.hasta != null ? o.hasta : dur, n - 1);
+        const amp = Math.max(1, ...serie.map(v => Math.abs(v))) * 1.12, mid = o.y + o.h / 2;
+        const X = (m) => o.x + Math.min(1, m / dur) * o.w, Y = (v) => mid - v / amp * (o.h / 2);
+        const traza = () => {
+            ctx.beginPath(); ctx.moveTo(X(0), mid); ctx.lineTo(X(0), Y(serie[0]));
+            for (let m = 1; m <= hasta; m++) { const xm = (X(m - 1) + X(m)) / 2, ym = (Y(serie[m - 1]) + Y(serie[m])) / 2; ctx.quadraticCurveTo(X(m - 1), Y(serie[m - 1]), xm, ym); }
+            ctx.lineTo(X(hasta), Y(serie[hasta])); ctx.lineTo(X(hasta), mid); ctx.closePath();
+        };
+        if (o.descanso) {
+            ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(X(35), o.y); ctx.lineTo(X(35), o.y + o.h); ctx.stroke(); ctx.restore();
+        }
+        ctx.save(); ctx.beginPath(); ctx.rect(o.x - 1, o.y - 1, o.w + 2, mid - o.y + 1); ctx.clip(); traza(); ctx.fillStyle = 'rgb(180,20,56)'; ctx.fill(); ctx.restore();
+        ctx.save(); ctx.beginPath(); ctx.rect(o.x - 1, mid, o.w + 2, o.y + o.h - mid + 1); ctx.clip(); traza(); ctx.fillStyle = '#64748b'; ctx.fill(); ctx.restore();
+        ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(o.x, mid); ctx.lineTo(o.x + o.w, mid); ctx.stroke();
+        (o.goles || []).forEach(g => {
+            if (g.min == null || g.min > hasta) return;
+            const xg = X(g.min), nuestro = g.equipo !== 'rival';
+            ctx.strokeStyle = nuestro ? '#fff' : '#cbd5e1'; ctx.lineWidth = 1.5; ctx.beginPath();
+            ctx.moveTo(xg, nuestro ? o.y + 2 : mid); ctx.lineTo(xg, nuestro ? mid : o.y + o.h - 2); ctx.stroke();
+        });
+    }
+
     function impactoPor70(j) { return (j && (j.minutos || 0) > 0) ? (j.impactoAcum || 0) / j.minutos * 70 : 0; }
 
     // ── v132 · PESO EN EL EQUIPO (misma función en la app y en el visor) ──
@@ -5646,25 +5692,32 @@
         }
         if (D.momentum) {
             sitio(52); // v185: que el título no se quede solo al final de la página
-            titulo('MOMENTUM (por encima de la línea, mejor el Hergar)');
-            sitio(40);
-            const x0 = M, w = CW, h = 30, y0 = y;
-            fill([248, 250, 252]); draw([229, 231, 235]); doc.setLineWidth(0.2); doc.rect(x0, y0, w, h, 'FD');
-            const pts = D.momentum.map(q => ({ m: Number(q[0]) || 0, v: Number(q[1]) || 0 }));
-            const maxM = Math.max(D.dur, ...pts.map(q => q.m), 70), amp = Math.max(1, ...pts.map(q => Math.abs(q.v)));
-            const X = (m) => x0 + m / maxM * w, Y = (v) => y0 + h / 2 - v / amp * (h / 2 - 2);
-            doc.setLineDashPattern([1, 1], 0); draw([203, 213, 225]); doc.line(x0, y0 + h / 2, x0 + w, y0 + h / 2);
-            draw([148, 163, 184]); doc.line(X(35), y0, X(35), y0 + h); doc.setLineDashPattern([], 0);
-            font('normal', 6.5); color(ACTA_GRIS); doc.text('Descanso', X(35) + 1, y0 + 3);
-            draw(ACTA_ROJO); doc.setLineWidth(0.6);
-            let prev = { m: 0, v: 0 };
-            pts.forEach(q => { doc.line(X(prev.m), Y(prev.v), X(q.m), Y(q.v)); prev = q; });
-            const vEn = (m) => { let v = 0; pts.forEach(q => { if (q.m <= m) v = q.v; }); return v; };
-            D.goles.forEach(g => { if (g.min == null) return; const c = g.equipo === 'hergar' ? ACTA_ROJO : ACTA_AZUL; fill(c); doc.circle(X(g.min), Y(vEn(g.min)), 1.4, 'F');
-                font('bold', 6.5); color(c); doc.text(`${g.min}'`, X(g.min) + 1.8, Y(vEn(g.min)) - 1.6); }); // v185: los nombres ya salen en la línea de tiempo
-            doc.setLineWidth(0.2);
-            font('normal', 6.5); color(ACTA_GRIS); doc.text("0'", x0, y0 + h + 3); doc.text("35'", X(35), y0 + h + 3, { align: 'center' }); doc.text(`${maxM}'`, x0 + w, y0 + h + 3, { align: 'right' });
-            y = y0 + h + 5;
+            titulo(`DOMINIO: arriba aprieta el Hergar, abajo el rival (ultimos ${MOMENTUM_VENTANA} minutos)`);
+          sitio(40);
+          const x0 = M, w = CW, h = 30, y0 = y;
+          fill([248, 250, 252]); draw([229, 231, 235]); doc.setLineWidth(0.2); doc.rect(x0, y0, w, h, 'FD');
+          const pts = D.momentum.map(q => ({ m: Number(q[0]) || 0, v: Number(q[1]) || 0 }));
+          const maxM = Math.max(D.dur, ...pts.map(q => q.m), 70);
+          const serie = momentumVentana(pts, maxM), amp = Math.max(1, ...serie.map(v => Math.abs(v))) * 1.1; // v204: por tramos, no el acumulado
+          const X = (m) => x0 + m / maxM * w, Y = (v) => y0 + h / 2 - v / amp * (h / 2 - 1.5), bw = w / maxM;
+          serie.forEach((v, m) => {
+              if (Math.abs(v) < 1e-6) return;
+              fill(v > 0 ? ACTA_ROJO : [148, 163, 184]);
+              const ya = Y(Math.max(v, 0)), yb = Y(Math.min(v, 0));
+              const xa = Math.max(x0, X(m) - bw / 2 + 0.05), xb = Math.min(x0 + w, X(m) + bw / 2 - 0.05); if (xb > xa) doc.rect(xa, Math.min(ya, yb), xb - xa, Math.max(0.1, Math.abs(yb - ya)), 'F');
+          });
+          doc.setLineDashPattern([1, 1], 0); draw([203, 213, 225]); doc.line(x0, y0 + h / 2, x0 + w, y0 + h / 2);
+          draw([148, 163, 184]); doc.line(X(35), y0, X(35), y0 + h); doc.setLineDashPattern([], 0);
+          font('normal', 6.5); color(ACTA_GRIS); doc.text('Descanso', X(35) + 1, y0 + 3);
+          D.goles.forEach(g => {
+              if (g.min == null) return;
+              const nuestro = g.equipo === 'hergar', c = nuestro ? ACTA_ROJO : ACTA_AZUL;
+              draw(c); doc.setLineWidth(0.4); doc.line(X(g.min), nuestro ? y0 + 1 : y0 + h / 2, X(g.min), nuestro ? y0 + h / 2 : y0 + h - 1);
+              font('bold', 6.5); color(c); doc.text(`${g.min}'`, X(g.min) + 1, nuestro ? y0 + 3 : y0 + h - 1.5);
+          });
+          doc.setLineWidth(0.2);
+          font('normal', 6.5); color(ACTA_GRIS); doc.text("0'", x0, y0 + h + 3); doc.text("35'", X(35), y0 + h + 3, { align: 'center' }); doc.text(`${maxM}'`, x0 + w, y0 + h + 3, { align: 'right' });
+          y = y0 + h + 5;
         }
         // v185 · MAPA DE GOLES: dónde se marcó (a favor) y dónde nos marcaron (en contra), con el color del origen
         {
@@ -9203,6 +9256,11 @@
         // ── MOMENTUM ──
         const momentumMap = { GOL: 3, DISPARO_PUERTA: 1, DISPARO_FUERA: 0.5, PASE_CLAVE: 0.5 };
         if (momentumMap[pendingAction]) registrarMomentum(minActual, momentumMap[pendingAction]);
+        // v204 · acciones defensivas: de portero o defensa = aprieta el rival; de delantero = presión arriba del Hergar; de medio, nada
+        if (pendingAction === 'DEFENSA' || pendingAction === 'DEFENSA_CLAVE') {
+            const sentido = { portero: -1, defensa: -1, centrocampista: 0, delantero: 1 }[lineaActual] || 0;
+            if (sentido) registrarMomentum(minActual, sentido * (pendingAction === 'DEFENSA_CLAVE' ? 0.5 : 0.3));
+        }
 
         // ── LIMPIAR VARIABLES ──
         activeActionPlayerId = null;
@@ -16451,7 +16509,7 @@ ${separador}`;
             if (momentumData && momentumData.length > 0) {
                 const mY = volcY + 13;
                 doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(245, 166, 35);
-                doc.text("MATCH MOMENTUM", margin, mY);
+                doc.text("DOMINIO (ultimos 6 minutos)", margin, mY);
                 const mChartY = mY + 3;
                 const mChartH = 18;
                 const mChartW = W - margin * 2;
@@ -16459,38 +16517,24 @@ ${separador}`;
                 doc.setFillColor(15, 23, 42);
                 doc.roundedRect(margin, mChartY, mChartW, mChartH, 2, 2, 'F');
                 // Calcular rango
-                const mVals = momentumData.map(d => d.acum);
-                const mMin = Math.min(...mVals, -1);
-                const mMax = Math.max(...mVals, 1);
-                const mRange = Math.max(Math.abs(mMin), Math.abs(mMax));
-                const mRangeTotal = mRange * 2 || 1;
-                const zeroLineY = mChartY + mChartH * (mRange / mRangeTotal);
-                // Línea cero
-                doc.setDrawColor(100, 116, 139);
-                doc.setLineWidth(0.3);
+                // v204 · dominio por tramos (rojo arriba Hergar, gris abajo rival)
+                const mDur = Math.max(70, ...momentumData.map(d => Number(d.min) || 0));
+                const mSerie = momentumVentana(momentumData, mDur), mAmp = Math.max(1, ...mSerie.map(v => Math.abs(v))) * 1.1;
+                const zeroLineY = mChartY + mChartH / 2, mBw = mChartW / mDur;
+                mSerie.forEach((v, m) => {
+                    if (Math.abs(v) < 1e-6) return;
+                    const hh = v / mAmp * (mChartH / 2 - 1);
+                    if (v > 0) doc.setFillColor(180, 20, 56); else doc.setFillColor(100, 116, 139);
+                    doc.rect(margin + m * mBw - mBw / 2 + 0.05, v > 0 ? zeroLineY - hh : zeroLineY, Math.max(0.1, mBw - 0.1), Math.abs(hh), 'F');
+                });
+                doc.setDrawColor(100, 116, 139); doc.setLineWidth(0.3);
                 doc.line(margin, zeroLineY, margin + mChartW, zeroLineY);
-                // Dibujar línea de momentum
-                const mPoints = [{min: 0, acum: 0}, ...momentumData];
-                for (let i = 1; i < mPoints.length; i++) {
-                    const x1 = margin + (mPoints[i-1].min / 70) * mChartW;
-                    const y1 = mChartY + mChartH * ((mRange - mPoints[i-1].acum) / mRangeTotal);
-                    const x2 = margin + (mPoints[i].min / 70) * mChartW;
-                    const y2 = mChartY + mChartH * ((mRange - mPoints[i].acum) / mRangeTotal);
-                    const color = mPoints[i].acum >= 0 ? [46, 213, 115] : [255, 71, 87];
-                    doc.setDrawColor(...color);
-                    doc.setLineWidth(0.8);
-                    doc.line(x1, y1, x2, y2);
-                }
-                // Stats bajo el gráfico
-                const mMaxAcum = Math.max(...mVals);
-                const mMinAcum = Math.min(...mVals);
-                const mMaxP = momentumData.find(d => d.acum === mMaxAcum);
-                const mMinP = momentumData.find(d => d.acum === mMinAcum);
+                const mPk = momentumPicos(mSerie);
                 doc.setFontSize(6.5); doc.setFont('helvetica', 'normal');
-                doc.setTextColor(46, 213, 115);
-                doc.text(`▲ Pico: min ${mMaxP?.min||0}' (+${mMaxAcum})`, margin, mChartY + mChartH + 5);
-                doc.setTextColor(255, 71, 87);
-                doc.text(`▼ Punto más bajo: min ${mMinP?.min||0}' (${mMinAcum})`, margin + mChartW/2, mChartY + mChartH + 5);
+                doc.setTextColor(180, 20, 56);
+                doc.text(`Mas apreto el Hergar: min ${mPk.hergar != null ? mPk.hergar : '-'}'`, margin, mChartY + mChartH + 5);
+                doc.setTextColor(100, 116, 139);
+                doc.text(`Mas apreto el rival: min ${mPk.rival != null ? mPk.rival : '-'}'`, margin + mChartW/2, mChartY + mChartH + 5);
             }
 
             // ── 4. TABLA JUGADORES — top 3 en verde ──
@@ -16724,108 +16768,43 @@ ${separador}`;
 
     // ── M24 · MATCH MOMENTUM ───────────────────────────────────────────
     function dibujarMomentum(canvasId, data, mini) {
+        // v204 · dominio por tramos: quién aprieta en los últimos minutos (rojo arriba Hergar, gris abajo rival)
         const canvas = document.getElementById(canvasId);
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         const W = canvas.width, H = canvas.height;
         ctx.clearRect(0, 0, W, H);
-
         if (!data || data.length === 0) {
             ctx.fillStyle = '#1e293b';
             ctx.fillRect(0, 0, W, H);
             if (!mini) {
-                ctx.fillStyle = '#52665c';
-                ctx.font = '11px Inter';
-                ctx.textAlign = 'center';
-                ctx.fillText('Sin datos — registra acciones para ver el momentum', W/2, H/2);
+                ctx.fillStyle = '#52665c'; ctx.font = '11px Inter'; ctx.textAlign = 'center';
+                ctx.fillText('Sin datos — registra acciones para ver el dominio', W / 2, H / 2);
             }
             return;
         }
-
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, W, H);
-
-        const pad = mini ? 4 : 28;
-        const chartW = W - pad * 2;
-        const chartH = H - (mini ? 4 : 20) * 2;
-        const chartTop = mini ? 4 : 20;
-        const chartLeft = pad;
-
-        const vals = data.map(d => d.acum);
-        const minVal = Math.min(...vals, -1);
-        const maxVal = Math.max(...vals, 1);
-        const range = Math.max(Math.abs(minVal), Math.abs(maxVal));
-        const rangeTotal = range * 2 || 1;
-        const zeroY = chartTop + chartH * (range / rangeTotal);
-
-        // Línea cero
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath(); ctx.moveTo(chartLeft, zeroY); ctx.lineTo(chartLeft + chartW, zeroY); ctx.stroke();
-        ctx.setLineDash([]);
-
+        const ultimo = Math.max(...data.map(d => Number(d.min) || 0));
+        const vestuario = canvasId === 'vestuarioMomentumCanvas';
+        const dur = vestuario ? Math.max(35, ultimo) : Math.max(70, ultimo);
+        let ahora = ultimo;
+        try { ahora = Math.max(ultimo, Math.floor(getElapsedSeconds() / 60)); } catch (e) {}
+        const hasta = matchFinished ? dur : Math.min(dur, ahora);
+        const serie = momentumVentana(data, dur);
+        let goles = [];
+        try { goles = golesDesdeCronologia(); } catch (e) { goles = []; }
+        const pad = mini ? 4 : 26, top = mini ? 4 : 16, bottom = mini ? 4 : 18;
+        momentumPintarSerie(ctx, serie, { x: pad, y: top, w: W - pad * 2, h: H - top - bottom, dur, hasta, goles, descanso: !vestuario });
         if (!mini) {
-            ctx.fillStyle = '#52665c';
-            ctx.font = '9px Inter';
-            ctx.textAlign = 'center';
-            [0, 10, 20, 30, 35, 45, 55, 60, 70].forEach(min => {
-                const x = chartLeft + (min / 70) * chartW;
-                ctx.fillText(min + "'", x, H - 4);
-                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-                ctx.lineWidth = 0.5;
-                ctx.beginPath(); ctx.moveTo(x, chartTop); ctx.lineTo(x, chartTop + chartH); ctx.stroke();
-            });
-        }
-
-        const points = [{min: 0, acum: 0}, ...data];
-
-        // Relleno
-        ctx.beginPath();
-        points.forEach((d, i) => {
-            const x = chartLeft + (d.min / 70) * chartW;
-            const y = chartTop + chartH * ((range - d.acum) / rangeTotal);
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        });
-        const lastX = chartLeft + (points[points.length-1].min / 70) * chartW;
-        ctx.lineTo(lastX, zeroY);
-        ctx.lineTo(chartLeft, zeroY);
-        ctx.closePath();
-        const grad = ctx.createLinearGradient(0, chartTop, 0, chartTop + chartH);
-        grad.addColorStop(0, 'rgba(46,213,115,0.25)');
-        grad.addColorStop(0.5, 'rgba(46,213,115,0.05)');
-        grad.addColorStop(0.5, 'rgba(255,71,87,0.05)');
-        grad.addColorStop(1, 'rgba(255,71,87,0.25)');
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        // Línea
-        ctx.beginPath();
-        points.forEach((d, i) => {
-            const x = chartLeft + (d.min / 70) * chartW;
-            const y = chartTop + chartH * ((range - d.acum) / rangeTotal);
-            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        });
-        ctx.strokeStyle = '#f5a623';
-        ctx.lineWidth = mini ? 1.5 : 2;
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-
-        if (!mini) {
-            data.forEach(d => {
-                const x = chartLeft + (d.min / 70) * chartW;
-                const y = chartTop + chartH * ((range - d.acum) / rangeTotal);
-                ctx.beginPath();
-                ctx.arc(x, y, 3, 0, 2*Math.PI);
-                ctx.fillStyle = d.delta > 0 ? '#2ed573' : '#ff4757';
-                ctx.fill();
-            });
-            const maxAcum = Math.max(...vals);
-            const minAcum = Math.min(...vals);
-            const maxP = data.find(d => d.acum === maxAcum);
-            const minP = data.find(d => d.acum === minAcum);
+            ctx.font = '9px Inter'; ctx.fillStyle = '#64748b'; ctx.textAlign = 'center';
+            ctx.fillText("0'", pad, H - 4); if (!vestuario) ctx.fillText("35'", pad + (W - pad * 2) * 35 / dur, H - 4); ctx.fillText(dur + "'", W - pad, H - 4);
+            ctx.textAlign = 'left'; ctx.font = '700 9px Inter';
+            ctx.fillStyle = '#ff6b85'; ctx.fillText('▲ HERGAR', pad, 11);
+            ctx.fillStyle = '#94a3b8'; ctx.fillText('▼ RIVAL', pad + 64, 11);
+            const pk = momentumPicos(serie.slice(0, hasta + 1));
             const el = document.getElementById('momentumStats');
-            if (el) el.innerHTML = `<span style="color:#2ed573">▲ Pico: min ${maxP?.min||0}' (+${maxAcum})</span>  ·  <span style="color:#ff4757">▼ Bajo: min ${minP?.min||0}' (${minAcum})</span>`;
+            if (el) el.innerHTML = `Quién aprieta en los últimos ${MOMENTUM_VENTANA} minutos (tiros, córners, pases clave, goles y acciones defensivas).<br><span style="color:#ff6b85">▲ Más apretó el Hergar: ${pk.hergar != null ? pk.hergar + "'" : '—'}</span>  ·  <span style="color:#94a3b8">▼ Más apretó el rival: ${pk.rival != null ? pk.rival + "'" : '—'}</span>`;
         }
     }
 
