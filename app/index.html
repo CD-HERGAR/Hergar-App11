@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    199                                            ║
+  ║  Versión:    200                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1777,7 +1777,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v199</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v200</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -7203,6 +7203,21 @@
     }
     function otroModeloIA() { return getModeloIA() === 'claude-sonnet-5-5' ? 'claude-sonnet-4-6' : 'claude-sonnet-5-5'; }
     function nombreModeloIA(m) { return MODELOS_IA[m] || m; }
+    // v200 · Sonnet 5.5 piensa por defecto antes de escribir y ese pensamiento gasta del mismo límite que el texto:
+    // a veces se comía todo el límite y llegaba sin texto («Sin análisis generado»). Para estos informes se le pide
+    // que no piense por separado (between_tools = lo mínimo; sin herramientas, solo texto) y se le da algo más de margen,
+    // porque además cuenta las palabras en trozos más pequeños (~30 % más).
+    function cuerpoIA(modelo, maxTokens, messages) {
+        if (/^claude-sonnet-5/.test(modelo)) return { model: modelo, max_tokens: Math.ceil(maxTokens * 1.5), thinking: { type: 'between_tools' }, output_config: { effort: 'high' }, messages };
+        return { model: modelo, max_tokens: maxTokens, messages };
+    }
+    // v200 · junta el texto de la respuesta (puede venir detrás de bloques de pensamiento) y avisa si se cortó o llegó vacía
+    function textoRespuestaIA(data) {
+        const txt = ((data && data.content) || []).filter(b => b && b.type === 'text').map(b => b.text || '').join('').trim();
+        if (data && data.stop_reason === 'max_tokens') throw new Error('La IA se quedó sin espacio antes de terminar. Inténtalo de nuevo.');
+        if (!txt) throw new Error('La IA no devolvió texto. Inténtalo de nuevo.');
+        return txt;
+    }
     function saveApiKey(key) {
         localStorage.setItem("hergar_api_key", key.trim());
     }
@@ -10110,7 +10125,7 @@ REGLAS DE LAS NOTAS: incluye una nota para CADA jugador de la lista (también lo
         if (box) box.style.display = 'none';
         if (res) { res.style.display = 'none'; res.innerHTML = ''; }
         if (us) us.style.display = 'none';
-        const btn = document.getElementById('iaCompararBtn'); if (btn) { btn.disabled = false; btn.style.display = ''; }
+        const btn = document.getElementById('iaCompararBtn'); if (btn) { btn.disabled = false; btn.style.display = ''; if (btn.nextElementSibling) btn.nextElementSibling.style.display = ''; }
     }
     function iaMostrarComparar(modelo) {
         iaResetComparar();
@@ -10132,11 +10147,11 @@ REGLAS DE LAS NOTAS: incluye una nota para CADA jugador de la lista (también lo
             const response = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-api-key": getApiKey(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-                body: JSON.stringify({ model: otro, max_tokens: 3500, messages: [{ role: "user", content: iaPromptUltimo }] })
+                body: JSON.stringify(cuerpoIA(otro, 3500, [{ role: "user", content: iaPromptUltimo }]))
             });
             if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error?.message || `Error ${response.status}`); }
             const data = await response.json();
-            const raw = data.content?.find(b => b.type === 'text')?.text || '{}';
+            const raw = textoRespuestaIA(data);
             const limpio = raw.replace(/```json|```/g, '').trim();
             const ini = limpio.indexOf('{'), fin = limpio.lastIndexOf('}');
             let parsed;
@@ -10214,7 +10229,7 @@ REGLAS DE LAS NOTAS: incluye una nota para CADA jugador de la lista (también lo
                     "anthropic-version": "2023-06-01",
                     "anthropic-dangerous-direct-browser-access": "true"
                 },
-                body: JSON.stringify({ model: getModeloIA(), max_tokens: 3500, messages: [{ role: "user", content: prompt }] })
+                body: JSON.stringify(cuerpoIA(getModeloIA(), 3500, [{ role: "user", content: prompt }]))
             });
 
             if (!response.ok) {
@@ -10223,7 +10238,7 @@ REGLAS DE LAS NOTAS: incluye una nota para CADA jugador de la lista (también lo
             }
 
             const data = await response.json();
-            const raw = data.content?.find(b => b.type === 'text')?.text || '{}';
+            const raw = textoRespuestaIA(data);
             let parsed;
             try { parsed = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
             catch(e) { throw new Error('Respuesta IA no válida. Inténtalo de nuevo.'); }
@@ -10271,7 +10286,7 @@ REGLAS DE LAS NOTAS: incluye una nota para CADA jugador de la lista (también lo
             try { iaMostrarComparar(modeloUsadoIA); } catch (e) {} // v197
             if (iaConservar) { // v199
                 const us = document.getElementById('iaModeloUsado'); if (us) { us.innerText = `Guardado: ${iaEtiquetaInforme(iaPrevio)}. El nuevo (${nombreModeloIA(iaNuevo.modelo)}) está debajo, sin guardar.`; us.style.display = 'block'; }
-                const btn = document.getElementById('iaCompararBtn'); if (btn) btn.style.display = 'none';
+                const btn = document.getElementById('iaCompararBtn'); if (btn) { btn.style.display = 'none'; if (btn.nextElementSibling) btn.nextElementSibling.style.display = 'none'; }
                 iaPintarComparado();
             }
 
@@ -10420,14 +10435,14 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                     "anthropic-version": "2023-06-01",
                     "anthropic-dangerous-direct-browser-access": "true"
                 },
-                body: JSON.stringify({ model: getModeloIA(), max_tokens: 2500, messages: [{ role: "user", content: prompt }] })
+                body: JSON.stringify(cuerpoIA(getModeloIA(), 2500, [{ role: "user", content: prompt }]))
             });
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
                 throw new Error(err.error?.message || `Error ${response.status}`);
             }
             const data = await response.json();
-            const raw = data.content?.find(b => b.type === 'text')?.text || '{}';
+            const raw = textoRespuestaIA(data);
             let parsed;
             try { parsed = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
             catch(e) { throw new Error('Respuesta IA no válida. Inténtalo de nuevo.'); }
@@ -19495,11 +19510,11 @@ ${separador}`;
         const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: { "Content-Type": "application/json", "x-api-key": getApiKey(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-            body: JSON.stringify({ model: getModeloIA(), max_tokens: maxTokens, messages: [{ role: "user", content }] })
+            body: JSON.stringify(cuerpoIA(getModeloIA(), maxTokens, [{ role: "user", content }]))
         });
         if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error?.message || `Error ${response.status}`); }
         const data = await response.json();
-        const raw = data.content?.find(b => b.type === 'text')?.text || '';
+        const raw = textoRespuestaIA(data);
         const limpio = raw.replace(/```json|```/g, '').trim();
         const ini = limpio.indexOf('{'), fin = limpio.lastIndexOf('}');
         try { return JSON.parse(ini >= 0 && fin > ini ? limpio.slice(ini, fin + 1) : limpio); }
@@ -20026,14 +20041,14 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 "anthropic-version": "2023-06-01",
                 "anthropic-dangerous-direct-browser-access": "true"
             },
-            body: JSON.stringify({ model: getModeloIA(), max_tokens: 4000, messages: [{ role: "user", content }] })
+            body: JSON.stringify(cuerpoIA(getModeloIA(), 4000, [{ role: "user", content }]))
         });
         if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             throw new Error(err.error?.message || `Error ${response.status}`);
         }
         const data = await response.json();
-        const raw = data.content?.find(b => b.type === 'text')?.text || '';
+        const raw = textoRespuestaIA(data);
         let parsed;
         try {
             const limpio = raw.replace(/```json|```/g, '').trim();
