@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    190                                            ║
+  ║  Versión:    196                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1768,7 +1768,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v191</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v196</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2569,7 +2569,7 @@
         <h3 style="margin-top:0; color:#f5a623; font-size:15px; font-family:'Montserrat',sans-serif;">TIPO DE DISPARO</h3>
         <div class="actions-modal-grid">
             <button class="btn-modal-goal" style="background:linear-gradient(135deg,#27ae60,#2ed573);" onclick="queueAction('DISPARO_PUERTA')">🎯 A PUERTA (+0.30)</button>
-            <button class="btn-modal-defense" style="background:linear-gradient(135deg,#f39c12,#f1c40f); color:#0a0e14;" onclick="queueAction('DISPARO_FUERA')">💨 FUERA / SIN PELIGRO (+0.10)</button>
+            <button class="btn-modal-defense" style="background:linear-gradient(135deg,#f39c12,#f1c40f); color:#0a0e14;" onclick="queueAction('DISPARO_FUERA')">💨 FUERA / SIN PELIGRO (+0.10 · desde el 4.º −0.05)</button>
         </div>
         <button class="btn-modal-defense" style="margin-top:14px; background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px;" onclick="document.getElementById('disparoTypeModal').style.display='none'">❌ CANCELAR</button>
     </div>
@@ -2946,7 +2946,7 @@
         acciones: {
             gol: 0.75, golExtraDefensa: 1.25, golExtraMedio: 0.15,
             asistencia: 0.40, paseClave: 0.25, paseArea: 0.15,
-            disparoPuerta: 0.30, disparoFuera: 0.10,
+            disparoPuerta: 0.30, disparoFuera: 0.10, disparoFueraUmbral: 3, disparoFueraExceso: -0.05, // v194: desde el 4.º tiro fuera del partido, −0,05
             regate: 0.10,          // (*) v102 (antes 0.05)
             defensa: 0.30,         // (*) v67 (antes 0.20)
             defensaClave: 1.00,    // (*) v67
@@ -2954,7 +2954,7 @@
             fallo: -0.20, falloImportante: -0.50,
             fueraJuego: -0.05      // (*) v117
         },
-        equipo: { golFavor: 1.00, golContra: -1.00, tiroRivalPuerta: -0.15, tiroRivalFuera: -0.05, golesSinReparto: 4 }, // v105: en goleadas el bonus se reparte entre todos los goles
+        equipo: { golFavor: 1.00, golContra: -1.00, tiroRivalPuerta: -0.10, tiroRivalFuera: 0, topeTirosRival70: 0.75, golesSinReparto: 4 }, // v192: tiros rivales −0,10 / 0 con tope −0,75 por 70' (antes −0,15 / −0,05 sin tope) · v105: en goleadas el bonus se reparte entre todos los goles
         porteriaCero: { portero: 1.50, defensa: 1.25, centrocampista: 0.30, delantero: 0 },   // (*) v67 · v190: por línea, solo cuando no se sabe el puesto (partidos cargados a mano)
         porteriaCeroPuesto: { POR: 1.50, LI: 1.25, DFC: 1.25, LD: 1.25, MCD: 0.60, MC: 0.30, MI: 0, MD: 0, MP: 0, EI: 0, ED: 0, DC: 0 }, // (*) v190: por puesto
         penaltis: { marca: 0.50, falla: -0.75, provocado: 0.40, contraGolCampo: -0.50, paradoPortero: 1.00 }
@@ -3969,6 +3969,130 @@
         } catch (e) { console.error('v190 MVP:', e); }
     }
     setTimeout(migrarMvpV190, 1500);
+    // ── v192 · RECALCULAR LOS TIROS DEL RIVAL DE LOS PARTIDOS YA JUGADOS (una sola vez) ──
+    // Antes: a puerta −0,15 y fuera −0,05 sin tope. Ahora: a puerta −0,10, fuera 0, como mucho −0,75 por 70'.
+    // Desde la v135 la app guarda cuántos tiros del rival hubo con cada niño en el campo (sin separar a puerta / fuera:
+    // se reparte con la proporción del partido). En los partidos anteriores se estima por sus minutos.
+    // Al portero no le restaban sus paradas (v115) y sigue igual.
+    function datosTirosV192(t, p) {
+        const out = [];
+        if (!p || p.reglaTiros >= 192 || p.tirosRivalesPuerta == null) return out; // cargados a mano: sin tiros
+        const gR = Number(p.golesRival) || 0;
+        const pM = Math.max(0, (Number(p.tirosRivalesPuerta) || 0) - (p.tiroGolRival === true ? gR : 0)); // a puerta sin gol
+        const fM = Math.max(0, Number(p.tirosRivalesFuera) || 0);
+        if (pM + fM <= 0) return out;
+        let D = duracionMinPartido(p);
+        const jug = [];
+        Object.values(t.jugadores || {}).forEach(j => {
+            const k = (j.historial || []).findIndex(h => h.fecha === p.fecha && h.rival === p.rival);
+            if (k < 0) return;
+            const h = j.historial[k];
+            if (h.tr192 || !((h.mins || 0) > 0)) return;
+            jug.push({ j, k, h }); D = Math.max(D, h.mins);
+        });
+        const tope = topeTirosRival70();
+        jug.forEach(x => {
+            const h = x.h, mins = h.mins;
+            let P, F, estimado = false;
+            if (h.tcCampo != null) {
+                const n = Math.max(0, (Number(h.tcCampo) || 0) - (Number(h.gcCampo) || 0));
+                P = n * pM / (pM + fM); F = n * fM / (pM + fM);
+            } else { P = pM * mins / D; F = fM * mins / D; estimado = true; }
+            const esPor = (h.trp || 0) > 0 || (h.acc && h.acc.par) || (h.golesRecibidos || 0) > 0;
+            if (esPor) P = Math.max(0, P - ((h.acc && h.acc.par) || 0)); // sus paradas no le restaban
+            const viejo = 0.15 * P + 0.05 * F;
+            const nuevo = Math.min(Math.abs(REGLAS_IMPACTO.equipo.tiroRivalPuerta) * P + Math.abs(REGLAS_IMPACTO.equipo.tiroRivalFuera || 0) * F, tope * mins / 70);
+            out.push(Object.assign(x, { mins, delta: viejo - nuevo, estimado }));
+        });
+        return out;
+    }
+    function aplicarDeltaHistorialV192(j, k, delta) {
+        const h = j.historial[k], r2 = (n) => Math.round(n * 100) / 100;
+        const antes = h.imp !== undefined ? Number(h.imp) || 0 : (Number(h.impPond) || 0) * (h.mins || 0) / 70;
+        if (Math.abs(delta) >= 1e-9) {
+            const g = lineasGuardadasDePartido(j, k);
+            const totL = Object.values(g.lineas || {}).reduce((a, v) => a + v, 0) || 1;
+            if (!j.impactoPorPosicion) j.impactoPorPosicion = {};
+            Object.keys(g.lineas || {}).forEach(l => { j.impactoPorPosicion[l] = (j.impactoPorPosicion[l] || 0) + delta * g.lineas[l] / totL; });
+            if (h.impLineas) { const tl = Object.values(h.lineas || {}).reduce((a, v) => a + v, 0) || 1; Object.keys(h.impLineas).forEach(l => { h.impLineas[l] = r2((h.impLineas[l] || 0) + delta * ((h.lineas || {})[l] || 0) / tl); }); }
+            if (h.puestos && Object.keys(h.puestos).length) {
+                const totP = Object.values(h.puestos).reduce((a, v) => a + v, 0) || 1;
+                if (!j.impactoPorPuesto) j.impactoPorPuesto = {};
+                if (!h.impPuestos) h.impPuestos = {};
+                Object.keys(h.puestos).forEach(pu => { const parte = delta * h.puestos[pu] / totP; j.impactoPorPuesto[pu] = (j.impactoPorPuesto[pu] || 0) + parte; h.impPuestos[pu] = r2((h.impPuestos[pu] || 0) + parte); });
+            }
+            j.impactoAcum = (j.impactoAcum || 0) + delta;
+            h.imp = r2(antes + delta);
+            h.impPond = h.mins > 0 ? r2((antes + delta) / h.mins * 70) : 0;
+        }
+        h.tr192 = true;
+    }
+    function migrarTirosV192() {
+        try {
+            const t = getTemporada();
+            if (!t || t.tirosRegla === 192) return;
+            const resumen = [];
+            (t.partidos || []).forEach((p, i) => {
+                const filas = datosTirosV192(t, p);
+                if (filas.length) {
+                    const suma = filas.reduce((a, f) => a + f.delta, 0), media70 = filas.reduce((a, f) => a + f.delta / Math.max(f.mins, 1) * 70, 0) / filas.length;
+                    filas.forEach(f => aplicarDeltaHistorialV192(f.j, f.k, f.delta));
+                    if (Math.abs(suma) >= 0.01) resumen.push(`J${i + 1} vs ${p.rival} (${p.golesLocal}-${p.golesRival}): +${media70.toFixed(2).replace('.', ',')} por 70'${filas.some(f => f.estimado) ? ' (≈)' : ''}`);
+                }
+                if (p.tirosRivalesPuerta != null) p.reglaTiros = 192;
+            });
+            const mvp = recalcularMvpTemporada(t);
+            t.tirosRegla = 192;
+            saveTemporada(t);
+            if (!resumen.length && !mvp.length) return;
+            setTimeout(() => { try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} }, 4000);
+            try { renderPartidos(); renderRanking(); } catch (e) {}
+            alert(`🛡️ Tiros del rival recalculados (v192): a puerta −0,10, fuera 0, como mucho −0,75 por 70'.\n\nLo que gana de media cada niño en cada partido:\n${resumen.join('\n')}${resumen.some(r => r.includes('≈')) ? "\n\n≈ partidos antiguos (antes de la v135): se reparte por los minutos de cada uno." : ''}${mvp.length ? `\n\nCambia el MVP:\n${mvp.join('\n')}` : '\n\nNo cambia ningún MVP.'}\n\nSe envía al visor en unos segundos; si no aparece, usa "Sincronizar temporada con el visor".`);
+        } catch (e) { console.error('v192 tiros:', e); }
+    }
+    setTimeout(migrarTirosV192, 2200);
+    // ── v194 · TIROS FUERA DE MÁS: desde el 4.º tiro fuera / sin peligro del mismo partido, −0,05 cada uno ──
+    // Los 3 primeros siguen sumando +0,10. Da igual que el niño acabe marcando: cuenta cada tiro fuera de más.
+    // Recalcula una sola vez los partidos ya jugados con el detalle de acciones (desde la v104): por cada tiro fuera
+    // a partir del 4.º, pasa de +0,10 a −0,05 (−0,15 de diferencia). Los cargados a mano no tienen tiros y no cambian.
+    function valorTiroFueraV194(n) { // n = cuántos tiros fuera lleva en el partido, contando este
+        const A = REGLAS_IMPACTO.acciones;
+        return n > (A.disparoFueraUmbral || 3) ? (A.disparoFueraExceso || -0.05) : A.disparoFuera;
+    }
+    function migrarTirosFueraV194() {
+        try {
+            const t = getTemporada();
+            if (!t || t.tirosFueraRegla === 194) return;
+            const A = REGLAS_IMPACTO.acciones, U = A.disparoFueraUmbral || 3, dif = (A.disparoFueraExceso || -0.05) - A.disparoFuera;
+            const resumen = [];
+            (t.partidos || []).forEach((p, i) => {
+                if (p.reglaTirosFuera >= 194) return;
+                const nombres = [];
+                Object.values(t.jugadores || {}).forEach(j => {
+                    const k = (j.historial || []).findIndex(h => h.fecha === p.fecha && h.rival === p.rival);
+                    if (k < 0) return;
+                    const h = j.historial[k];
+                    if (h.tf194) return;
+                    const df = Number((h.acc || {}).df) || 0;
+                    if (df > U) {
+                        aplicarDeltaHistorialV192(j, k, (df - U) * dif);
+                        nombres.push(`${(j.name || '').split(' ')[0]} (${df} fuera: ${String(((df - U) * dif).toFixed(2)).replace('.', ',')})`);
+                    }
+                    h.tf194 = true;
+                });
+                p.reglaTirosFuera = 194;
+                if (nombres.length) resumen.push(`J${i + 1} vs ${p.rival}: ${nombres.join(', ')}`);
+            });
+            const mvp = recalcularMvpTemporada(t);
+            t.tirosFueraRegla = 194;
+            saveTemporada(t);
+            if (!resumen.length && !mvp.length) return;
+            setTimeout(() => { try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} }, 4500);
+            try { renderPartidos(); renderRanking(); } catch (e) {}
+            alert(`💨 Tiros fuera recalculados (v194): desde el 4.º tiro fuera de un partido, −0,05 cada uno.\n\n${resumen.length ? 'Lo que cambia:\n' + resumen.join('\n') : 'Ningún niño pasó de 3 tiros fuera en un partido.'}${mvp.length ? '\n\nCambia el MVP:\n' + mvp.join('\n') : ''}`);
+        } catch (e) { console.error('v194 tiros fuera:', e); }
+    }
+    setTimeout(migrarTirosFueraV194, 3400);
     // ── v160 · 📊 MEDIAS POR PARTIDO (misma función en la app y en el visor) ──
     // Cómo es un partido medio del Hergar, con filtro Temporada / Últimos 5 / Casa / Fuera.
     // Cada dato sale solo de los partidos que lo tienen: los cargados a mano solo tienen goles,
@@ -5980,7 +6104,7 @@
             csFila('Pase clave', a.paseClave),
             csFila('Pase al área', a.paseArea),
             csFila('Disparo a puerta', a.disparoPuerta),
-            csFila('Disparo fuera / sin peligro', a.disparoFuera),
+            csFila('Disparo fuera / sin peligro', a.disparoFuera, `Los ${a.disparoFueraUmbral || 3} primeros de cada partido. Desde el ${(a.disparoFueraUmbral || 3) + 1}.º, ${fmtPts(a.disparoFueraExceso || -0.05)} cada uno, marque o no.`), // v194
             csFila('Regate / jugada individual', a.regate, 'Supera a un rival o gana metros con el balón y no acaba en tiro, pase clave ni pase al área.'),
             csFila('Acción defensiva', a.defensa),
             csFila('Acción defensiva clave', a.defensaClave, 'Ejemplos: despeje bajo palos, entrada de último hombre, bloqueo de un tiro que iba a gol.'),
@@ -5994,7 +6118,8 @@
             csFila('Gol a favor', e.golFavor),
             csFila('Gol en contra', e.golContra),
             csFila('Tiro rival a puerta', e.tiroRivalPuerta, 'También cuando el portero la para (a él no le resta).'),
-            csFila('Tiro rival fuera', e.tiroRivalFuera)
+            csFila('Tiro rival fuera', e.tiroRivalFuera, 'No resta.'),
+            csFila('Tope de los tiros rivales', -(e.topeTirosRival70 != null ? e.topeTirosRival70 : 0.75), "Entre todos los tiros del rival, como mucho esto por cada 70' jugados (el que juega 35' pierde como mucho la mitad). Los goles en contra restan aparte, sin tope.")
         ].join('');
         const pcp = R.porteriaCeroPuesto || {}; // v190: por puesto
         const porteria = [
@@ -7193,6 +7318,7 @@
                     return gs.map(g => { const o = { min: g.min, equipo: g.equipo, nombre: g.nombre || '' }; if (g.penalti) o.penalti = true; if (g.equipo === 'hergar' && !g.penalti && g.pos && g.pos.x != null && g.pos.y != null) o.pos = { x: Math.round(g.pos.x * 10) / 10, y: Math.round(g.pos.y * 10) / 10 }; return o; });
                 } catch (e) { return []; }
             })(),
+            narracion: (() => { try { return narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); return []; } })(), // v193
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
             faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, // v117
             analisisIA: analisisIACompleto, resumenIA: resumenIACompleto, notasIA: MOSTRAR_NOTAS_IA ? notasIAPartido : {}
@@ -7307,6 +7433,51 @@
         const antes = pl.impacto || 0;
         pl.impacto = nuevo;
         pl.equipoImp = (pl.equipoImp || 0) + (nuevo - antes);
+    }
+    // ── v192 · TIROS DEL RIVAL CON TOPE ──
+    // Cada tiro del rival resta a los que están en el campo (a puerta −0,10, fuera 0), pero entre todos como mucho
+    // −0,75 por cada 70' jugados. En directo el tope es −0,75; al acabar se ajusta a sus minutos reales.
+    function topeTirosRival70() { const v = REGLAS_IMPACTO.equipo.topeTirosRival70; return v != null ? v : 0.75; }
+    function penTiroRivalV192(q, valor) {
+        if (!q) return;
+        const v = Math.abs(Number(valor) || 0);
+        q.tirRivBruto = (q.tirRivBruto || 0) + v;
+        const ap = Math.max(0, Math.min(v, topeTirosRival70() - (q.tirRivPen || 0)));
+        if (ap <= 0) return;
+        q.tirRivPen = (q.tirRivPen || 0) + ap;
+        impEquipoV145(q, Math.max((q.impacto || 0) - ap, -5));
+    }
+    function ajustarTopeTirosRivalV192() { // al acabar: tope = 0,75 × sus minutos ÷ 70 (se puede llamar varias veces)
+        try { volcarImpactoTodos(); } catch (e) {}
+        const tope = topeTirosRival70();
+        const cambios = {};
+        Object.values(playersData).forEach(p => {
+            if (!p || !p.convocado || !(p.tirRivBruto > 0)) return;
+            const mins = Math.floor((p.minutosAcumulados || 0) / 60);
+            const objetivo = Math.min(p.tirRivBruto, tope * mins / 70);
+            const d = (p.tirRivPen || 0) - objetivo; // > 0: se le devuelve
+            if (Math.abs(d) < 1e-9) return;
+            impEquipoV145(p, (p.impacto || 0) + d);
+            p.tirRivPen = objetivo;
+            const repartir = (segs, dest) => {
+                const tot = Object.values(segs || {}).reduce((a, v) => a + v, 0);
+                if (tot <= 0) return;
+                if (!p[dest]) p[dest] = {};
+                Object.keys(segs).forEach(k => { if (segs[k] > 0) p[dest][k] = (p[dest][k] || 0) + d * segs[k] / tot; });
+            };
+            repartir(p.segsPorLinea, 'impPorLinea');
+            repartir(p.segsPorPuesto, 'impPorPuesto');
+            p._impUlt = parseFloat(p.impacto) || 0;
+            cambios[p.id] = d;
+        });
+        // las parejas (sinergias): según el tiempo que estuvieron juntas, como el bonus de portería a cero
+        try {
+            Object.entries(sinergias).forEach(([clave, sg]) => {
+                let extra = 0;
+                clave.split('_').map(Number).forEach(id => { const pl = playersData[id]; if (pl && cambios[id] && (pl.minutosAcumulados || 0) > 0) extra += cambios[id] * ((sg.segs || 0) / pl.minutosAcumulados); });
+                if (extra) sg.impN = (sg.impN || 0) + extra;
+            });
+        } catch (e) {}
     }
     function registrarMinutoV145(sumarSegundo) {
         try {
@@ -8941,7 +9112,7 @@
                 break;
             case 'DISPARO_FUERA':
                 p.disparosFuera = (p.disparosFuera || 0) + 1;
-                p.impacto += 0.10;
+                p.impacto = Math.max(p.impacto + valorTiroFueraV194(p.disparosFuera), -5); // v194: desde el 4.º, −0,05
                 tirosNuestrosFuera++; tirosEnCampoV135('n');
                 break;
             case 'DEFENSA':
@@ -9039,7 +9210,7 @@
                 if (onFieldIds[0] && playersData[onFieldIds[0]]) playersData[onFieldIds[0]].tirosPuertaEnPorteria = (playersData[onFieldIds[0]].tirosPuertaEnPorteria || 0) + 1; // v114
                 onFieldIds.forEach(id => {
                     if (playersData[id]) {
-                        impEquipoV145(playersData[id], Math.max((playersData[id].impacto || 0) - 0.15, -5)); // v145
+                        penTiroRivalV192(playersData[id], REGLAS_IMPACTO.equipo.tiroRivalPuerta); // v192 (antes −0,15 sin tope)
                     }
                 });
                 substitutionTimeline.push(`[${minActual}'] 🥅 Tiro rival a puerta`);
@@ -9049,7 +9220,7 @@
                 tirosRivalesFuera++; tirosEnCampoV135('r');
                 onFieldIds.forEach(id => {
                     if (playersData[id]) {
-                        impEquipoV145(playersData[id], Math.max((playersData[id].impacto || 0) - 0.05, -5)); // v145
+                        penTiroRivalV192(playersData[id], REGLAS_IMPACTO.equipo.tiroRivalFuera); // v192 (antes −0,05)
                     }
                 });
                 substitutionTimeline.push(`[${minActual}'] 💨 Tiro rival fuera`);
@@ -9181,7 +9352,7 @@
         onFieldIds.forEach(id => {
             const q = playersData[id];
             if (!q || q === p) return;
-            impEquipoV145(q, Math.max((q.impacto || 0) + REGLAS_IMPACTO.equipo.tiroRivalPuerta, -5)); // v145
+            penTiroRivalV192(q, REGLAS_IMPACTO.equipo.tiroRivalPuerta); // v192: con tope
         });
         const min = Math.floor(getElapsedSeconds() / 60);
         substitutionTimeline.push(`[${min}'] 🧤 ${label} #${p.dorsal} ${p.name.split(' ')[0]} +${impacto}`);
@@ -9474,6 +9645,7 @@
         if (!finalizadoEn) finalizadoEn = Date.now(); // v107
         try { dlgAdoptarCodigo(); } catch (e) {} // v157: partido del delegado → se publica en su mismo código
         aplicarBonusPorteriaCero(); // v67: bonus de portería a cero (antes del MVP y de guardar)
+        ajustarTopeTirosRivalV192(); // v192: tope de los tiros rivales según sus minutos
         document.getElementById("startPauseBtn").disabled = true;
         document.getElementById("halfTimeBtn").disabled = true;
         document.getElementById("endMatchBtn").disabled = true;
@@ -10921,6 +11093,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         dlgReproducir({ ev: evs.map(e => Object.assign({}, e)), fin1: D.fin1, fin2: D.fin2, parte: hay2 ? 2 : 1, acum: D.fin2, horaInicio: D.horaInicio });
         matchFinished = true;
         aplicarBonusPorteriaCero();
+        ajustarTopeTirosRivalV192(); // v192
         const partido = transferirPartidoATemporada(sim);
         return { partido, payload: payloadPartidoActual() };
     }
@@ -11475,7 +11648,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             minuto: parseInt(P.duracion) || 70, parte: 2,
             matchRunning: false, matchFinished: true, finalizadoEn: fin || Date.now(), previa: false,
             formacion: P.formacion || '', onFieldIds: [], benchIds: [], benchSittingTime: {}, jugadores,
-            eventos: [], momentumData: [], golesMin: goles,
+            eventos: [], momentumData: [], golesMin: goles, narracion: Array.isArray(P.narracion) ? P.narracion : [], // v193
             tirosNuestrosPuerta: num(P.tirosNuestrosPuerta), tirosNuestrosFuera: num(P.tirosNuestrosFuera),
             tirosRivalesPuerta: num(P.tirosRivalesPuerta), tirosRivalesFuera: num(P.tirosRivalesFuera),
             faltasFavor: num(P.faltasFavor), faltasContra: num(P.faltasContra), cornersFavor: num(P.cornersFavor), cornersContra: num(P.cornersContra),
@@ -13289,6 +13462,240 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         });
         return goles.map(g => { const r = Object.assign({}, g); delete r.idx; return r; });
     }
+    // ── v193 · 🎙️ MINUTO A MINUTO (narración del partido) ─────────────────────────────
+    // Se escribe solo, con plantillas (sin IA: funciona sin cobertura y no cuesta nada), a partir de la
+    // cronología del partido. Como sale de la cronología, deshacer una acción también quita su frase.
+    // Se narran: goles (con cómo llegó y desde dónde), paradas difíciles y penaltis parados, cambios, tarjetas,
+    // descanso y final. Nunca los fallos, los fueras de juego ni los tiros.
+    // Cada frase se elige de un banco amplio según la situación del marcador, sin repetir la misma forma
+    // hasta agotar las de su tipo. La elección depende del minuto y del orden, así que la misma acción
+    // siempre da la misma frase (no cambia cada vez que se publica).
+    const NARR = {
+        abre: ['¡{J} abre el marcador!', '¡{J} rompe el cero!', '¡Primer gol del Hergar, obra de {J}!', '¡{J} estrena el marcador!', '¡Gol de {J} y el Hergar se pone por delante!', '¡{J} inaugura el marcador!', '¡Se adelanta el Hergar! Marca {J}'],
+        adelanta: ['¡{J} rompe el empate!', '¡{J} desequilibra el partido!', '¡{J} vuelve a poner por delante al Hergar!', '¡Gol de {J} para deshacer la igualada!', '¡{J} desatasca el partido!', '¡{J} pone al Hergar otra vez por delante!'],
+        remonta: ['¡{J} completa la remontada!', '¡{J} le da la vuelta al marcador!', '¡Remontada! {J} pone al Hergar por delante', '¡{J} culmina la remontada!', '¡De perder a ganar! Lo firma {J}'],
+        empata: ['¡{J} empata el partido!', '¡{J} iguala el marcador!', '¡Gol de {J} y todo vuelve a empezar!', '¡Empate! Lo firma {J}', '¡{J} pone las tablas!', '¡{J} devuelve la igualdad!', '¡El Hergar empata con gol de {J}!'],
+        amplia: ['¡{J} amplía la ventaja!', '¡{J} pone tierra de por medio!', '¡Otro más! {J} estira la ventaja', '¡{J} hace el {H}-{R}!', '¡{J} da aire al Hergar!', '¡{J} agranda la diferencia!'],
+        goleada: ['¡{J} se suma a la fiesta!', '¡Y van {H}! Marca {J}', '¡{J} no perdona y el Hergar sigue sumando!', '¡Otro gol del Hergar, esta vez de {J}!', '¡{J} se apunta a la goleada!', '¡El Hergar no para! Gol de {J}', '¡{J} hace el {H}-{R}!', '¡Más madera! Marca {J}'],
+        recorta: ['¡{J} recorta distancias!', '¡{J} mete al Hergar en el partido!', '¡Gol de {J} y hay partido!', '¡{J} acorta la diferencia!', '¡{J} da esperanza al Hergar!', '¡{J} reduce la desventaja!'],
+        origen: {
+            jugada: ['Remata una buena jugada colectiva', 'Culmina una jugada bien trenzada', 'Define al final de una gran jugada', 'Firma una jugada de todo el equipo', 'Pone el broche a una buena combinación'],
+            robo: ['Roba el balón y no perdona', 'Llega tras una recuperación y define', 'Aprovecha un robo para plantarse y marcar', 'Contragolpe rápido y gol', 'Recuperación, carrera y gol'],
+            rechace: ['Caza un rechace', 'Está atento al rechace', 'Aprovecha el balón suelto', 'Llega el primero al rechace', 'No desperdicia el rechace'],
+            corner: ['Remata un córner', 'Aparece en el córner', 'Saca partido de un saque de esquina', 'Gol a balón parado tras un córner', 'Se anticipa en el córner'],
+            falta: ['Marca de falta directa', 'Lanza la falta y adentro', 'Golazo de falta', 'Ejecuta la falta a la perfección', 'Clava la falta'],
+            error: ['Aprovecha un error de la defensa rival', 'No perdona un fallo en la salida rival', 'Se aprovecha de una pérdida del rival', 'Castiga un despiste del rival'],
+            penalti: ['Transforma el penalti', 'No falla desde los once metros', 'Penalti y gol', 'Engaña al portero desde el punto de penalti', 'Lanza el penalti con seguridad'],
+            nada: ['Define con acierto', 'Bate al portero', 'La manda a la red', 'Marca', 'No perdona']
+        },
+        zona: { peq: ['en el área pequeña', 'a bocajarro', 'casi bajo los palos'], area: ['dentro del área', 'desde dentro del área', 'en el área'], fuera: ['desde fuera del área', 'con un disparo lejano', 'desde lejos'] },
+        asist: [', con pase de {A}', ' a pase de {A}', ' tras un gran pase de {A}', '. La asistencia es de {A}', '. Pase de {A}', '. Lo sirve {A}'],
+        marcador: ['{H}-{R}.', 'Marcador: {H}-{R}.', '{H}-{R} en el marcador.', 'Ya es {H}-{R}.'],
+        doblete: ['Doblete de {J}.', '{J} ya lleva dos.', 'Segundo gol de {J} hoy.', '{J} repite.'],
+        triplete: ['¡Hat-trick de {J}!', '¡Tres goles de {J}!', '¡{J} firma el triplete!'],
+        poker: ['¡{J} ya lleva {N}!', '¡{N} goles de {J}!'],
+        pronto: ['Nada más empezar.', '¡No se llevaban ni tres minutos!', 'Tempranero.'],
+        vuelta: ['Nada más volver del descanso.', 'Recién empezada la segunda parte.'],
+        tarde: ['En el tramo final.', 'A falta de {Q} minutos.', 'Cuando más falta hacía.', 'En el momento clave.'],
+        provoco: ['El penalti lo provocó {P}.', 'Penalti provocado por {P}.', '{P} fue quien forzó el penalti.'],
+        rival: {
+            adelanta: ['El rival se adelanta', 'Gol del {RIV}, que se pone por delante', 'Golpe del rival, que manda en el marcador', 'Se adelanta el {RIV}'],
+            empata: ['El rival empata', 'El {RIV} iguala el partido', 'Empate del rival', 'El {RIV} consigue igualar'],
+            amplia: ['El rival amplía su ventaja', 'Nuevo gol del {RIV}', 'El {RIV} marca otra vez', 'Otro gol del rival'],
+            recorta: ['El rival recorta', 'Gol del {RIV}, que acorta distancias', 'El {RIV} marca', 'El rival hace su gol'],
+            origen: { corner: ['a la salida de un córner', 'en un córner'], falta: ['de falta', 'a balón parado'], penalti: ['de penalti', 'desde el punto de penalti'], rechace: ['en un rechace', 'tras un balón suelto'], robo: ['a la contra', 'tras recuperar el balón'], perdida: ['a la contra', 'tras recuperar el balón'], jugada: ['tras una jugada', 'después de una buena jugada'], error: ['', ''], nada: ['', ''] },
+            animo: ['Toca reaccionar.', 'Queda partido.', '¡Arriba, Hergar!', 'Hay tiempo para darle la vuelta.', 'A levantarse.'],
+            sigue: ['El Hergar sigue por delante.', 'Sigue mandando el Hergar.', 'La ventaja se mantiene.']
+        },
+        parada: ['¡Paradón de {J}!', '¡Qué parada de {J}!', '{J} saca una mano salvadora', '{J} vuela para evitar el gol', 'Intervención de mérito de {J}', '¡{J} dice que no!', '¡Seguridad de {J} bajo palos!'],
+        paradaCtx: { cero: ['y el marcador sigue a cero.', 'y todo sigue igual.'], ventaja: ['y mantiene la ventaja.', 'para que el Hergar siga por delante.', 'y protege el resultado.'], empate: ['y sostiene el empate.', 'y mantiene la igualdad.'], detras: ['y mantiene vivo al equipo.', 'para que siga habiendo partido.'] },
+        penParado: ['¡{J} para un penalti!', '¡Penalti detenido por {J}!', '¡{J} adivina la intención y para el penalti!', '¡{J} se hace gigante y para el penalti!'],
+        penFuera: ['¡Se salva el Hergar! El penalti del rival se va fuera.', 'El rival falla el penalti.', 'El penalti del rival no entra.'],
+        cambio: ['Entra {E} por {S}.', 'Cambio en el Hergar: {E} sustituye a {S}.', '{S} deja su sitio a {E}.', 'Turno para {E}, que entra por {S}.', 'Movimiento en el banquillo: sale {S} y entra {E}.', '{E} salta al campo en lugar de {S}.'],
+        cambioDoble: ['Cambios en el Hergar: entran {E} por {S}.', 'Varios cambios: entran {E}; se retiran {S}.', 'Movimiento en el banquillo: {E} por {S}.'],
+        amarilla: ['Amarilla para {J}.', '{J} ve la amarilla.', 'Tarjeta amarilla a {J}.', 'El árbitro amonesta a {J}.'],
+        dobleAmarilla: ['Segunda amarilla para {J}: expulsado.', '{J} ve la segunda amarilla y se va a la calle.'],
+        roja: ['Roja directa a {J}.', '{J} es expulsado con roja directa.'],
+        descanso: {
+            cero: ['Descanso sin goles.', '0-0 al descanso. Todo por decidir.', 'Al vestuario con el marcador a cero.'],
+            ventaja: ['Descanso con ventaja: {H}-{R}.', 'Al vestuario por delante, {H}-{R}.', 'Buen primer tiempo: {H}-{R} al descanso.', '{H}-{R} al descanso. Media parte, media faena.'],
+            empate: ['Descanso con empate a {H}.', '{H}-{R} al descanso; todo por decidir.', 'Igualdad al descanso: {H}-{R}.'],
+            detras: ['Descanso, {H}-{R}. Toca remontar.', 'Al vestuario por detrás, {H}-{R}. Queda una parte entera.', '{H}-{R} al descanso. Hay tiempo para darle la vuelta.']
+        },
+        final: {
+            victoria: ['¡Final! Victoria del Hergar, {H}-{R}.', '¡Se acabó! El Hergar gana {H}-{R}.', '¡Tres puntos! {H}-{R} final.', '¡Pitido final y victoria, {H}-{R}!'],
+            goleada: ['¡Final! Goleada del Hergar, {H}-{R}.', '¡Exhibición! {H}-{R} final.', '¡Se acabó! Goleada, {H}-{R}.'],
+            empate: ['Final: empate a {H}.', 'Reparto de puntos: {H}-{R}.', 'Se acaba con tablas, {H}-{R}.', 'Final del partido: {H}-{R}.'],
+            derrota: ['Final: {H}-{R}. Esta vez no pudo ser.', 'Final del partido, {H}-{R}. A por el siguiente.', 'Se acaba con derrota, {H}-{R}. Toca levantarse.', 'Final: {H}-{R}. El próximo, a por todas.'],
+            remontada: ['¡Y con remontada!', 'Remontada completada.', 'Le dio la vuelta al partido.'],
+            ceroFinal: ['Y portería a cero.', 'Sin encajar ni un gol.', 'El rival no marcó.']
+        }
+    };
+    function narrHash(s) { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+    // Elige una forma de la lista sin repetir hasta agotarlas (por tipo), de forma estable
+    function narrElige(ctx, cat, lista, clave) {
+        if (!lista || !lista.length) return '';
+        const usadas = ctx.usadas[cat] = ctx.usadas[cat] || [];
+        if (usadas.length >= lista.length) usadas.length = 0;
+        let i = narrHash(cat + '|' + clave) % lista.length;
+        for (let k = 0; k < lista.length && usadas.includes(i); k++) i = (i + 1) % lista.length;
+        usadas.push(i);
+        return lista[i];
+    }
+    function narrRellena(txt, v) { return String(txt).replace(/\{(\w+)\}/g, (m, k) => v[k] != null ? v[k] : ''); }
+    function narrRivalBonito(r) {
+        const s = String(r || '').trim();
+        if (!s || /^rival$/i.test(s)) return 'rival';
+        return s.toLowerCase().replace(/(^|[\s.\-])([a-záéíóúñü])/g, (m, a, b) => a + b.toUpperCase());
+    }
+    function narrZona(g) {
+        if (!g || g.penalti || !g.pos || g.pos.y == null) return null;
+        const b = Math.abs(g.pos.x - 34);
+        return g.pos.y <= 5.5 && b <= 9.16 ? 'peq' : (g.pos.y <= 16.5 && b <= 20.16 ? 'area' : 'fuera');
+    }
+    // Lee la cronología (líneas «[min'] …») y devuelve los hechos que se narran, en orden
+    function narrHechos(lineas, goles) {
+        const out = [];
+        let gi = 0;
+        const golesH = (goles || []).slice();
+        lineas.forEach((linea, idx) => {
+            const m = /^\[(\d+)'\]\s*(.*)$/.exec(String(linea));
+            if (!m) return;
+            const min = parseInt(m[1], 10), t = m[2];
+            let g;
+            if (/^⚽ Gol/.test(t) || /^🥅 Gol rival/.test(t)) {
+                const gol = golesH[gi++] || null;
+                const prov = /provocado por #\S+ (\S+?)\)/.exec(t);
+                out.push({ tipo: 'gol', min, idx, gol, eq: /^🥅/.test(t) ? 'rival' : 'hergar', prov: prov ? prov[1] : null });
+            }
+            else if ((g = /^🧤 Parada difícil #\S+ (\S+)/.exec(t))) out.push({ tipo: 'parada', min, idx, j: g[1] });
+            else if ((g = /^🧤 Penalti parado #\S+ (\S+)/.exec(t))) out.push({ tipo: 'penParado', min, idx, j: g[1] });
+            else if (/^🧤 Penalti rival parado/.test(t)) out.push({ tipo: 'penParado', min, idx, j: 'el portero' });
+            else if (/^💨 Penalti rival fallado/.test(t)) out.push({ tipo: 'penFuera', min, idx });
+            else if ((g = /^🔄 Sale #\S+ (\S+) ➡️ Entra #\S+ (\S+)/.exec(t))) out.push({ tipo: 'cambio', min, idx, sale: g[1], entra: g[2] });
+            else if ((g = /^🟨 Amarilla #\S+ (\S+)(.*)$/.exec(t))) out.push({ tipo: /DOBLE AMARILLA/.test(g[2]) ? 'dobleAmarilla' : 'amarilla', min, idx, j: g[1] });
+            else if ((g = /^🟥 Roja directa #\S+ (\S+)/.exec(t))) out.push({ tipo: 'roja', min, idx, j: g[1] });
+        });
+        return out;
+    }
+    // hechos + estado del partido → frases { m: minuto, ic, k: tipo, h: titular en negrita, x: resto }
+    function narrConstruir(hechos, opc) {
+        const ctx = { usadas: {} };
+        const RIV = narrRivalBonito(opc.rival);
+        const DUR = opc.duracion || 70, MITAD = DUR / 2;
+        const res = [];
+        let H = 0, R = 0, fueDetras = false, descansoPuesto = false;
+        const golesDe = {};
+        const ponDescanso = () => {
+            if (descansoPuesto) return;
+            descansoPuesto = true;
+            const s = H === 0 && R === 0 ? 'cero' : H > R ? 'ventaja' : H === R ? 'empate' : 'detras';
+            res.push({ m: MITAD, ic: '⏸️', k: 'desc', h: narrRellena(narrElige(ctx, 'desc', NARR.descanso[s], 'd'), { H, R }), x: '' });
+        };
+        // Cambios del mismo minuto, juntos en una frase
+        const agrupados = [];
+        hechos.forEach(h => {
+            const ult = agrupados[agrupados.length - 1];
+            if (h.tipo === 'cambio' && ult && ult.tipo === 'cambio' && ult.min === h.min) { ult.lista.push(h); return; }
+            agrupados.push(h.tipo === 'cambio' ? Object.assign({}, h, { lista: [h] }) : h);
+        });
+        agrupados.forEach((h, n) => {
+            if (opc.descanso && h.min >= MITAD && !descansoPuesto) ponDescanso();
+            const clave = `${h.min}|${n}`;
+            if (h.tipo === 'gol') {
+                const antes = { H, R };
+                if (h.eq === 'hergar') H++; else R++;
+                const g = h.gol || {};
+                if (h.eq === 'hergar') {
+                    const J = g.nombre || 'el Hergar';
+                    golesDe[J] = (golesDe[J] || 0) + 1;
+                    let sit;
+                    if (antes.H === 0 && antes.R === 0) sit = 'abre';
+                    else if (H === R) sit = 'empata';
+                    else if (antes.H === antes.R) sit = fueDetras ? 'remonta' : 'adelanta';
+                    else if (H > R) sit = H - R >= 3 ? 'goleada' : 'amplia';
+                    else sit = 'recorta';
+                    const v = { J, H, R, A: g.asistente || '', P: h.prov || '', N: golesDe[J], Q: Math.max(1, DUR - h.min) };
+                    const tit = narrRellena(narrElige(ctx, 'tit_' + sit, NARR[sit], clave), v);
+                    const og = g.penalti ? 'penalti' : (g.origen && NARR.origen[g.origen] ? g.origen : 'nada');
+                    let cuerpo = narrElige(ctx, 'or_' + og, NARR.origen[og], clave);
+                    const z = og === 'penalti' ? null : narrZona(g);
+                    if (z) cuerpo += ' ' + narrElige(ctx, 'zona_' + z, NARR.zona[z], clave);
+                    if (g.asistente && !g.penalti) cuerpo += narrRellena(narrElige(ctx, 'asist', NARR.asist, clave), v);
+                    cuerpo += '. ';
+                    if (h.prov && g.penalti) cuerpo += narrRellena(narrElige(ctx, 'prov', NARR.provoco, clave), v) + ' ';
+                    const extra = [];
+                    if (golesDe[J] === 2) extra.push(narrElige(ctx, 'doblete', NARR.doblete, clave));
+                    else if (golesDe[J] === 3) extra.push(narrElige(ctx, 'triplete', NARR.triplete, clave));
+                    else if (golesDe[J] >= 4) extra.push(narrElige(ctx, 'poker', NARR.poker, clave));
+                    if (h.min <= 3) extra.push(narrElige(ctx, 'pronto', NARR.pronto, clave));
+                    else if (h.min >= MITAD && h.min <= MITAD + 2 && opc.descanso) extra.push(narrElige(ctx, 'vuelta', NARR.vuelta, clave));
+                    else if (h.min >= DUR - 10 && Math.abs(H - R) <= 1 && sit !== 'recorta') extra.push(narrElige(ctx, 'tarde', NARR.tarde, clave));
+                    cuerpo += extra.map(e => narrRellena(e, v)).join(' ') + (extra.length ? ' ' : '');
+                    cuerpo += narrRellena(narrElige(ctx, 'marc', NARR.marcador, clave), v);
+                    res.push({ m: h.min, ic: '⚽', k: 'gol', h: /[!.?]$/.test(tit) ? tit : tit + '.', x: cuerpo.replace(/\s+/g, ' ').trim() });
+                } else {
+                    if (H < R) fueDetras = true;
+                    let sit;
+                    if (antes.H === antes.R) sit = 'adelanta';
+                    else if (H === R) sit = 'empata';
+                    else if (R > H) sit = 'amplia';
+                    else sit = 'recorta';
+                    const og = g.penalti ? 'penalti' : (g.origen && NARR.rival.origen[g.origen] ? g.origen : 'nada');
+                    const coletilla = narrElige(ctx, 'ror_' + og, NARR.rival.origen[og], clave);
+                    let txt = narrRellena(narrElige(ctx, 'riv_' + sit, NARR.rival[sit], clave), { RIV }) + (coletilla ? ' ' + coletilla : '') + `. ${H}-${R}.`;
+                    if (H > R) txt += ' ' + narrElige(ctx, 'sigue', NARR.rival.sigue, clave);
+                    else if (h.min < DUR - 5) txt += ' ' + narrElige(ctx, 'animo', NARR.rival.animo, clave);
+                    res.push({ m: h.min, ic: '🥅', k: 'golr', h: '', x: txt });
+                }
+            } else if (h.tipo === 'parada') {
+                const s = H === 0 && R === 0 ? 'cero' : H > R ? 'ventaja' : H === R ? 'empate' : 'detras';
+                const base = narrRellena(narrElige(ctx, 'parada', NARR.parada, clave), { J: h.j });
+                const resto = narrElige(ctx, 'pctx_' + s, NARR.paradaCtx[s], clave);
+                res.push({ m: h.min, ic: '🧤', k: 'parada', h: base.replace(/[!¡]/g, '').trim(), x: resto });
+            } else if (h.tipo === 'penParado') {
+                res.push({ m: h.min, ic: '🧤', k: 'parada', h: narrRellena(narrElige(ctx, 'penParado', NARR.penParado, clave), { J: h.j }), x: '' });
+            } else if (h.tipo === 'penFuera') {
+                res.push({ m: h.min, ic: '😮‍💨', k: 'otro', h: '', x: narrElige(ctx, 'penFuera', NARR.penFuera, clave) });
+            } else if (h.tipo === 'cambio') {
+                const L = h.lista || [h];
+                const y = (arr) => arr.length > 1 ? arr.slice(0, -1).join(', ') + ' y ' + arr[arr.length - 1] : arr[0];
+                const v = { E: y(L.map(c => c.entra)), S: y(L.map(c => c.sale)) };
+                res.push({ m: h.min, ic: '🔄', k: 'cambio', h: '', x: narrRellena(narrElige(ctx, L.length > 1 ? 'cambioD' : 'cambio', L.length > 1 ? NARR.cambioDoble : NARR.cambio, clave), v) });
+            } else if (h.tipo === 'amarilla' || h.tipo === 'dobleAmarilla' || h.tipo === 'roja') {
+                res.push({ m: h.min, ic: h.tipo === 'amarilla' ? '🟨' : '🟥', k: 'tarjeta', h: '', x: narrRellena(narrElige(ctx, h.tipo, NARR[h.tipo], clave), { J: h.j }) });
+            }
+        });
+        if (opc.descanso && !descansoPuesto) ponDescanso();
+        if (opc.final) {
+            const s = H > R ? (H - R >= 4 ? 'goleada' : 'victoria') : H === R ? 'empate' : 'derrota';
+            const extra = [];
+            if (H > R && fueDetras) extra.push(narrElige(ctx, 'remF', NARR.final.remontada, 'f'));
+            const top = Object.entries(golesDe).sort((a, b) => b[1] - a[1])[0];
+            if (top && top[1] >= 3) extra.push(narrRellena(narrElige(ctx, 'trip', NARR.triplete, 'f'), { J: top[0] }));
+            else if (top && top[1] === 2 && H > R) extra.push(narrRellena(narrElige(ctx, 'dob', NARR.doblete, 'f'), { J: top[0] }));
+            if (R === 0 && H > 0) extra.push(narrElige(ctx, 'cero', NARR.final.ceroFinal, 'f'));
+            res.push({ m: DUR, ic: '🏁', k: 'final', h: narrRellena(narrElige(ctx, 'fin_' + s, NARR.final[s], 'f'), { H, R }), x: extra.join(' ') });
+        }
+        return res;
+    }
+    // Narración del partido en pantalla (la que se publica en el visor y se guarda con el partido)
+    function narracionPartido(rivalName) {
+        const lineas = (substitutionTimeline || []).slice();
+        if (!lineas.length && partidoYaTransferido) {
+            const tp = getTemporada().partidos, ult = tp[tp.length - 1];
+            return (ult && Array.isArray(ult.narracion)) ? ult.narracion : [];
+        }
+        const goles = golesDesdeCronologia();
+        const hechos = narrHechos(lineas, goles);
+        return narrConstruir(hechos, {
+            rival: rivalName || (document.getElementById('rivalNameInput') || {}).value || 'RIVAL',
+            duracion: 70,
+            descanso: partNumber === 2 || matchFinished,
+            final: !!matchFinished
+        });
+    }
+
     // ── v171 · Origen y lado de los goles para el informe IA ──
     const ORIGEN_IA = { jugada: 'jugada', robo: 'robo/contraataque', rechace: 'rechace', corner: 'córner', falta: 'falta', penalti: 'penalti', error: 'error del rival', perdida: 'pérdida nuestra' };
     // Lado desde el que se marca: tercios del ancho del campo. Los goles del rival, vistos desde nuestra portería.
@@ -13350,6 +13757,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const fechaHoy = sim ? sim.fecha : (dlgFechaPartido() || new Date().toLocaleDateString('es-ES')); // v157: el día que lo apuntó el delegado
         const diff = goalsLocal - goalsRival;
         const resultado = diff>0?'V':diff<0?'D':'E';
+        try { ajustarTopeTirosRivalV192(); } catch (e) {} // v192 (no hace nada si ya se ajustó)
         let mvpNombre='-', mvpId = null, mvpStats = null;
         const mvp = mvpEnDirecto(); // v161
         if (mvp) {
@@ -13371,9 +13779,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         partido.formacion = formacionInicialPartido || document.getElementById('formationSelector').value; // v96: formación con la que empezó
         if (horaInicioPartido) partido.horaInicio = horaInicioPartido; // v99: para el tiempo y el contexto
         try { partido.goles = golesDesdeCronologia(); } catch (e) { console.error('Goles con minuto:', e); } // v84
+        if (!sim) { try { partido.narracion = narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); } } // v193
         try { partido.acta = actaDesdePartidoEnCurso(rivalName); } catch (e) { console.error('Acta:', e); } // v139
         if (analisisIACompleto) { partido.analisisIA = analisisIACompleto; partido.resumenIA = resumenIACompleto || ''; } // v71: el informe IA se queda con el partido
         partido.reglaImpacto = 105; // v105: ya calculado con el reparto en goleadas
+        partido.reglaTiros = 192; // v192: tiros del rival con tope
+        partido.reglaTirosFuera = 194; // v194: tiros fuera de más ya con la regla nueva
         try { const mm = codificarMinutoV145(); if (mm) partido.minutos = mm; } catch (e) { console.error('Minuto a minuto:', e); } // v145
         if (!sim) { try { const dp = dlgPendiente(); if (dp && dp.st && dp.code) { partido.dlg = dp.st; partido.dlgCode = dp.code; } } catch (e) {} } // v190: los apuntes del delegado se quedan con el partido (para revisarlos después)
         t.partidos.push(partido);
@@ -13410,7 +13821,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             // v104: impacto total del partido, si fue titular y el detalle de sus acciones (para "Actuación de cada jugador")
             const accH = { dp: p.disparosPuerta||0, df: p.disparosFuera||0, pc: p.pasesClave||0, pa: p.pasesArea||0, reg: p.regates||0, fj: p.fuerasJuego||0, def: p.accionesDef||0, defC: p.accionesDefClave||0, par: p.paradas||0, parD: p.paradasDificiles||0, am: p.tarjetasAmarillas||0, ro: p.tarjetaRoja?1:0 };
             Object.keys(accH).forEach(k => { if (!accH[k]) delete accH[k]; });
-            j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), acc: accH, gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
+            j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), acc: accH, gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, tr192: true, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
             // Acumular nota IA si existe
             const notaPartido = notasIAPartido[p.id];
             if (notaPartido && notaPartido.nota) {
@@ -15706,7 +16117,7 @@ ${separador}`;
             p.accionesDef = 0;
             p.accionesDefClave = 0; p.regates = 0; // v67
             p.fuerasJuego = 0; // v117
-            p.segsPorLinea = {}; p.golesContraEnCampo = 0; p.tirosFavorEnCampo = 0; p.tirosContraEnCampo = 0; p.bonusPorteriaCero = 0; p.golesFavorEnCampo = 0; p.bonusGolEquipo = 0; p.equipoImp = 0; // v67: portería a cero · v145: parte de equipo
+            p.segsPorLinea = {}; p.golesContraEnCampo = 0; p.tirosFavorEnCampo = 0; p.tirosContraEnCampo = 0; p.bonusPorteriaCero = 0; p.golesFavorEnCampo = 0; p.bonusGolEquipo = 0; p.equipoImp = 0; p.tirRivBruto = 0; p.tirRivPen = 0; // v192 · v67: portería a cero · v145: parte de equipo
             p.impPorLinea = {}; p._impUlt = 0; // v94
             p.segsPorPuesto = {}; p.impPorPuesto = {}; // v95
             p.disparosPuerta = 0;
@@ -18702,6 +19113,7 @@ ${separador}`;
             <div id="ligaProxTiempo" style="margin:-2px 0 12px;"></div>
             <button onclick="publicarProximoPartido()" style="width:100%; background:linear-gradient(135deg,#2ed573,#27ae60); color:#0a0e14; border:none; border-radius:10px; padding:11px; font-weight:800; font-size:13px; margin-bottom:8px;">📣 Publicar próximo partido</button>
             <button onclick="ocultarProximoPartido(false)" style="width:100%; background:rgba(255,255,255,0.06); color:#94a3b8; border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:10px; font-weight:700; font-size:12px;">Ocultar tarjeta del visor</button>
+            ${previaBloqueHTML(liga, p)}
             <div id="ligaProxStatus" style="font-size:11px; color:#8da499; margin-top:8px; min-height:14px;">${estado}</div>
         </div>`;
         try { // v97: tiempo del partido y campo
@@ -18746,6 +19158,7 @@ ${separador}`;
         if (previaConvocados) liga.proximoPublicado.convocados = previaConvocados;
         localStorage.setItem(LIGA_STORAGE_KEY, JSON.stringify(liga));
         renderLigaProximo();
+        if (!p.previaIA && getApiKey()) setTimeout(() => { if (confirm('Tarjeta publicada. ¿Quieres crear ahora la previa IA del partido? (opcional, unos 3 céntimos)')) abrirPreviaIA(p.id); }, 300); // v195
         publicarLigaFirebase(liga).then(res => {
             const st = document.getElementById('ligaProxStatus');
             if (st && !(res && res.ok)) { st.style.color = '#ff4757'; st.innerText = '⚠️ No se pudo publicar en el visor: ' + ((res && res.error) ? res.error : 'error desconocido') + '. Pulsa "🔄 Visor" arriba para reintentar.'; }
@@ -18773,6 +19186,395 @@ ${separador}`;
         const eq = liga.equipos.find(x => x.id === (p.local === h ? p.visitante : p.local));
         if (!eq) return;
         document.getElementById('rivalNameInput').value = (eq.abrev || abreviarNombreEquipoLiga(eq.nombre)).slice(0, 12);
+    }
+
+    // ── v195 · 🤖 PREVIA IA DEL PRÓXIMO PARTIDO ──────────────────────────────────────────
+    // Texto corto estilo periódico local que sale arriba en la tarjeta del próximo partido del visor.
+    // Se guarda en el partido de la Liga (p.previaIA) y viaja con la Liga: se ve en el visor y queda
+    // con el partido en Temporada → Partidos. Datos que se le pasan a la IA (y nada más): clasificación,
+    // Elo, pronóstico y lo que está en juego (los mismos números que la tarjeta), resultados de los dos
+    // en la Liga con contra quién (puesto y Elo de cada rival), enfrentamientos entre ellos, rivales en común,
+    // racha y, si se sube, la captura del último partido del rival (solo marcador y minutos de los goles).
+    // Nunca nombres de niños.
+    let previaIA = null; // { pid, paso, captura, img, res, errores }
+    function previaModal() {
+        let m = document.getElementById('previaIAModal');
+        if (!m) {
+            document.body.insertAdjacentHTML('beforeend', `<div id="previaIAModal" class="modal"><div class="player-actions-modal" style="max-width:460px; text-align:left; overscroll-behavior-y:contain; border-color:rgba(168,85,247,0.35);">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;"><h3 style="margin:0; color:#c084fc; font-size:15px; font-family:'Montserrat',sans-serif;">🤖 PREVIA IA</h3>
+                <button onclick="previaCerrar()" aria-label="Cerrar" style="width:36px; height:36px; border-radius:10px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#e2e8f0; font-size:16px; cursor:pointer;">✕</button></div>
+                <input type="file" id="previaFile" accept="image/*" style="display:none;" onchange="previaLeerCaptura(this)">
+                <div id="previaCuerpo"></div></div></div>`);
+            m = document.getElementById('previaIAModal');
+        }
+        return m;
+    }
+    function previaPartido() {
+        const liga = getLiga();
+        const p = previaIA ? liga.partidos.find(x => x.id === previaIA.pid) : null;
+        const h = ligaHergarId(liga);
+        if (!p || !h) return null;
+        const esCasa = p.local === h;
+        return { liga, p, esCasa, rivalId: esCasa ? p.visitante : p.local };
+    }
+    function abrirPreviaIA(pid) {
+        if (!getApiKey()) { alert('Falta la clave de la IA (la misma del análisis del partido). Está en Convocatoria → Editar plantilla y configuración.'); return; }
+        previaIA = { pid: pid != null ? pid : ligaProximoSel, paso: 'inicio', captura: null, res: null };
+        const d = previaPartido();
+        if (!d) { previaIA = null; alert('No encuentro ese partido en la Liga.'); return; }
+        if (d.p.previaIA && d.p.previaIA.captura) previaIA.captura = JSON.parse(JSON.stringify(d.p.previaIA.captura));
+        previaModal().style.display = 'flex';
+        previaPintar();
+    }
+    function previaCerrar() { const m = document.getElementById('previaIAModal'); if (m) m.style.display = 'none'; previaIA = null; }
+    window.abrirPreviaIA = abrirPreviaIA; window.previaCerrar = previaCerrar;
+
+    const PV_BTN = "min-height:46px; border-radius:12px; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; cursor:pointer;";
+    function previaPintar() {
+        const c = document.getElementById('previaCuerpo');
+        const d = previaPartido();
+        if (!c || !d || !previaIA) return;
+        const rival = nombreEquipoLiga(d.liga, d.rivalId);
+        const cab = `<div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:9px 11px; font-size:12px; color:#cbd5e1; margin-bottom:12px;">J${ligaNumJornadaGlobal(d.liga, d.p)} · ${escHtmlIA(nombreEquipoLiga(d.liga, d.p.local))} – ${escHtmlIA(nombreEquipoLiga(d.liga, d.p.visitante))}${d.p.fechaPartido ? ` · ${escHtmlIA(d.p.fechaPartido)}` : ''}${d.p.hora ? ` · ${escHtmlIA(d.p.hora)}` : ''}</div>`;
+        const P = previaIA.paso;
+        if (P === 'inicio') {
+            const cap = previaIA.captura;
+            c.innerHTML = cab + `
+                <div style="font-size:12px; color:#94a3b8; line-height:1.5; margin-bottom:10px;">Opcional: sube la pantalla de <b style="color:#e2e8f0">Goles</b> del último partido de ${escHtmlIA(rival)} en la app de la federación. Solo se leen el marcador y los minutos de los goles (nada de nombres).</div>
+                ${cap ? `<div style="background:rgba(46,213,115,0.06); border:1px solid rgba(46,213,115,0.3); border-radius:12px; padding:10px 12px; margin-bottom:10px;">
+                    <div style="font-size:10px; font-weight:800; letter-spacing:1px; color:#2ed573; margin-bottom:4px;">✅ CAPTURA YA LEÍDA</div>
+                    <div style="font-size:12.5px; color:#e2e8f0;">${escHtmlIA(previaCapturaTxt(d.liga, cap))}</div>
+                    <div style="display:flex; gap:8px; margin-top:8px;"><button onclick="previaIA.paso='confirmar'; previaPintar();" style="flex:1; min-height:38px; border-radius:9px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#e2e8f0; font-weight:700; font-size:12px;">Revisar</button><button onclick="previaIA.captura=null; previaPintar();" style="flex:1; min-height:38px; border-radius:9px; border:1px solid rgba(255,107,122,0.4); background:rgba(255,107,122,0.08); color:#ff9da4; font-weight:700; font-size:12px;">Quitar</button></div>
+                </div>` : ''}
+                <label for="previaFile" style="display:flex; align-items:center; justify-content:center; gap:8px; ${PV_BTN} width:100%; box-sizing:border-box; border:1.5px dashed rgba(168,85,247,0.55); background:rgba(168,85,247,0.08); color:#c084fc;">📷 ${cap ? 'Cambiar la captura' : 'Añadir captura de su último partido'}</label>
+                <button onclick="previaGenerar()" style="${PV_BTN} width:100%; margin-top:10px; border:none; background:linear-gradient(135deg,#8e44ad,#a855f7); color:#fff;">🤖 ${cap ? 'Generar la previa' : 'Generar sin captura (solo datos de la Liga)'}</button>
+                ${d.p.previaIA ? `<button onclick="previaIA.res=JSON.parse(JSON.stringify(getLiga().partidos.find(x=>x.id===previaIA.pid).previaIA)); previaIA.paso='resultado'; previaPintar();" style="${PV_BTN} width:100%; margin-top:8px; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#e2e8f0;">Ver la previa guardada</button>` : ''}`;
+        } else if (P === 'leyendo' || P === 'generando') {
+            c.innerHTML = cab + `<div style="text-align:center; padding:30px 0 22px;">
+                <div style="width:38px; height:38px; border-radius:50%; border:3px solid rgba(168,85,247,.2); border-top-color:#a855f7; margin:0 auto 14px; animation:ligaImpGira 1s linear infinite;"></div>
+                <div style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:13.5px; color:#e2e8f0;">${P === 'leyendo' ? 'Leyendo la captura…' : 'Escribiendo la previa…'}</div>
+                <div style="font-size:11px; color:#64748b; margin-top:6px;">${P === 'leyendo' ? 'Marcador y minutos de los goles' : 'Con los datos de la Liga' + (previaIA.captura ? ' y la captura' : '')}</div></div>`;
+        } else if (P === 'confirmar') {
+            const cap = previaIA.captura;
+            const eqOpts = (sel) => d.liga.equipos.map(e => `<option value="${escHtmlIA(e.id)}" ${String(e.id) === String(sel) ? 'selected' : ''}>${escHtmlIA(e.nombre)}</option>`).join('');
+            const inp = 'background:#0f172a; border:1px solid rgba(255,255,255,0.12); color:#e2e8f0; border-radius:8px; min-height:40px; padding:0 8px; font-size:13px; box-sizing:border-box;';
+            const filas = cap.goles.map((g, i) => `<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                <input type="number" inputmode="numeric" min="0" max="80" value="${g.min == null ? '' : g.min}" onchange="previaGolSet(${i},'min',this.value)" style="${inp} width:64px; text-align:center;">
+                <span style="color:#94a3b8; font-size:12px;">'</span>
+                <select onchange="previaGolSet(${i},'eq',this.value)" style="${inp} flex:1; min-width:0;"><option value="L" ${g.eq === 'L' ? 'selected' : ''}>⚽ ${escHtmlIA(nombreEquipoLiga(d.liga, cap.localId) || 'Local')}</option><option value="V" ${g.eq === 'V' ? 'selected' : ''}>⚽ ${escHtmlIA(nombreEquipoLiga(d.liga, cap.visitanteId) || 'Visitante')}</option></select>
+                <button onclick="previaGolQuitar(${i})" aria-label="Quitar gol" style="width:40px; height:40px; border-radius:9px; border:1px solid rgba(255,107,122,0.4); background:rgba(255,107,122,0.08); color:#ff9da4; font-weight:900;">✕</button></div>`).join('');
+            const chk = previaComprobarCaptura(d);
+            c.innerHTML = cab + `
+                <div style="font-size:10px; font-weight:800; letter-spacing:1px; color:#2ed573; margin-bottom:8px;">✅ ESTO ES LO QUE HE LEÍDO · corrige lo que no cuadre</div>
+                <div style="display:grid; grid-template-columns:1fr 54px 14px 54px; gap:6px; align-items:center; margin-bottom:6px;">
+                    <select onchange="previaCapSet('localId',this.value)" style="${inp} min-width:0;">${eqOpts(cap.localId)}</select>
+                    <input type="number" inputmode="numeric" min="0" value="${cap.golesLocal == null ? '' : cap.golesLocal}" onchange="previaCapSet('golesLocal',this.value)" style="${inp} text-align:center; font-weight:900;">
+                    <span style="text-align:center; color:#64748b;">-</span>
+                    <input type="number" inputmode="numeric" min="0" value="${cap.golesVisitante == null ? '' : cap.golesVisitante}" onchange="previaCapSet('golesVisitante',this.value)" style="${inp} text-align:center; font-weight:900;">
+                </div>
+                <select onchange="previaCapSet('visitanteId',this.value)" style="${inp} width:100%; margin-bottom:10px;">${eqOpts(cap.visitanteId)}</select>
+                <div style="font-size:10px; font-weight:800; letter-spacing:.5px; color:#64748b; margin:4px 0 6px;">GOLES (MINUTO Y EQUIPO)</div>
+                ${filas || '<div style="font-size:12px; color:#94a3b8; margin-bottom:6px;">Sin goles.</div>'}
+                <button onclick="previaGolAnadir()" style="width:100%; min-height:38px; border-radius:9px; border:1px dashed rgba(46,213,115,0.45); background:rgba(46,213,115,0.06); color:#2ed573; font-weight:800; font-size:12px;">+ Añadir gol</button>
+                ${chk.avisos.map(a => `<div style="font-size:11.5px; line-height:1.45; color:${a.grave ? '#ff9da4' : '#f5c97a'}; background:${a.grave ? 'rgba(255,107,122,0.08)' : 'rgba(245,166,35,0.08)'}; border:1px solid ${a.grave ? 'rgba(255,107,122,0.35)' : 'rgba(245,166,35,0.3)'}; border-radius:10px; padding:8px 10px; margin-top:8px;">${a.txt}</div>`).join('')}
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button onclick="previaIA.captura=null; previaIA.paso='inicio'; previaPintar();" style="${PV_BTN} flex:1; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#e2e8f0;">Sin captura</button>
+                    <button onclick="previaGenerar()" style="${PV_BTN} flex:1.4; border:none; background:linear-gradient(135deg,#8e44ad,#a855f7); color:#fff;">🤖 Generar la previa</button>
+                </div>`;
+        } else if (P === 'resultado') {
+            const r = previaIA.res;
+            c.innerHTML = cab + `
+                <div style="background:linear-gradient(145deg,rgba(168,85,247,.12),rgba(168,85,247,.04)); border:1px solid rgba(168,85,247,.35); border-radius:14px; padding:12px 13px;">
+                    <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:11px; letter-spacing:.8px; color:#c084fc; margin-bottom:6px;">🤖 PREVIA</div>
+                    <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; line-height:1.3; margin-bottom:6px; color:#fff;">${escHtmlIA(r.titulo)}</div>
+                    ${(r.parrafos || []).map(x => `<p style="margin:0 0 8px; font-size:13px; line-height:1.6; color:#e2e8f0;">${escHtmlIA(x)}</p>`).join('')}
+                    <details style="margin-top:6px; border-top:1px dashed rgba(168,85,247,.35); padding-top:8px;"><summary style="font-size:11px; font-weight:700; color:#94a3b8; cursor:pointer;">📋 Datos que ha usado la IA</summary>
+                        <div style="font-size:10.5px; line-height:1.5; color:#94a3b8; white-space:pre-wrap; margin-top:6px; max-height:40vh; overflow-y:auto;">${escHtmlIA(r.datos || '')}</div></details>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button onclick="previaGenerar()" style="${PV_BTN} flex:1; border:1px solid rgba(255,255,255,0.15); background:transparent; color:#e2e8f0;">🔄 Otra versión</button>
+                    <button onclick="previaGuardar()" style="${PV_BTN} flex:1.4; border:none; background:#b41438; color:#fff;">📣 ${previaPublicada(d) ? 'Publicar en el visor' : 'Guardar previa'}</button>
+                </div>
+                ${previaPublicada(d) ? '' : '<div style="font-size:11px; color:#94a3b8; line-height:1.45; margin-top:8px;">La tarjeta de este partido aún no está publicada: la previa saldrá en el visor cuando la publiques.</div>'}
+                <button onclick="previaIA.paso='inicio'; previaPintar();" style="width:100%; min-height:40px; margin-top:8px; border-radius:10px; border:none; background:rgba(30,41,59,0.6); color:#94a3b8; font-weight:700;">‹ Volver</button>`;
+        } else if (P === 'error') {
+            c.innerHTML = cab + `<div style="font-size:12.5px; color:#ff6b7a; line-height:1.5; background:rgba(255,71,87,.08); border:1px solid rgba(255,71,87,.3); border-radius:12px; padding:12px; margin-bottom:12px;">❌ ${escHtmlIA(previaIA.error || 'No se pudo.')}</div>
+                <button onclick="previaIA.paso='inicio'; previaPintar();" style="${PV_BTN} width:100%; border:none; background:#a855f7; color:#fff;">VOLVER</button>`;
+        }
+    }
+    function previaPublicada(d) { const pub = d.liga.proximoPublicado; return !!(pub && pub.id === d.p.id); }
+    function previaCapturaTxt(liga, cap) {
+        const goles = (cap.goles || []).slice().sort((a, b) => (a.min ?? 999) - (b.min ?? 999)).map(g => `${g.min == null ? '?' : g.min}'`).join(', ');
+        return `${nombreEquipoLiga(liga, cap.localId) || '¿?'} ${cap.golesLocal ?? '?'}-${cap.golesVisitante ?? '?'} ${nombreEquipoLiga(liga, cap.visitanteId) || '¿?'}${goles ? ' · goles: ' + goles : ''}`;
+    }
+    function previaCapSet(k, v) {
+        const c = previaIA && previaIA.captura; if (!c) return;
+        if (k === 'golesLocal' || k === 'golesVisitante') c[k] = v === '' ? null : Math.max(0, parseInt(v, 10) || 0);
+        else { const e = getLiga().equipos.find(x => String(x.id) === String(v)); c[k] = e ? e.id : null; }
+        previaPintar();
+    }
+    function previaGolSet(i, k, v) {
+        const c = previaIA && previaIA.captura; if (!c || !c.goles[i]) return;
+        if (k === 'min') c.goles[i].min = v === '' ? null : Math.max(0, Math.min(80, parseInt(v, 10) || 0));
+        else c.goles[i].eq = v === 'V' ? 'V' : 'L';
+        c.goles.sort((a, b) => (a.min ?? 999) - (b.min ?? 999));
+        previaPintar();
+    }
+    function previaGolQuitar(i) { const c = previaIA && previaIA.captura; if (!c) return; c.goles.splice(i, 1); previaPintar(); }
+    function previaGolAnadir() { const c = previaIA && previaIA.captura; if (!c) return; c.goles.push({ min: null, eq: 'L' }); previaPintar(); }
+    window.previaCapSet = previaCapSet; window.previaGolSet = previaGolSet; window.previaGolQuitar = previaGolQuitar; window.previaGolAnadir = previaGolAnadir;
+    // Avisos de la captura: ¿es del rival?, ¿cuadran los goles?, ¿está el resultado en la Liga?
+    function previaComprobarCaptura(d) {
+        const cap = previaIA.captura, avisos = [];
+        const rivalNom = escHtmlIA(nombreEquipoLiga(d.liga, d.rivalId));
+        if (String(cap.localId) !== String(d.rivalId) && String(cap.visitanteId) !== String(d.rivalId))
+            avisos.push({ grave: true, txt: `⚠️ En esta captura no juega ${rivalNom}. Revisa los equipos o sube otra.` });
+        const nL = cap.goles.filter(g => g.eq === 'L').length, nV = cap.goles.filter(g => g.eq === 'V').length;
+        if (cap.golesLocal != null && cap.golesVisitante != null && (nL !== cap.golesLocal || nV !== cap.golesVisitante))
+            avisos.push({ grave: true, txt: `⚠️ Los goles con minuto (${nL}-${nV}) no cuadran con el marcador (${cap.golesLocal}-${cap.golesVisitante}).` });
+        if (cap.goles.some(g => g.min == null)) avisos.push({ grave: false, txt: 'Hay algún gol sin minuto: ponlo o quítalo.' });
+        cap.ligaPid = null;
+        if (cap.localId && cap.visitanteId && cap.localId !== cap.visitanteId && cap.golesLocal != null && cap.golesVisitante != null) {
+            const lp = ligaImpCasar(d.liga, cap.localId, cap.visitanteId, { jornada: cap.jornada || null, fecha: cap.fecha || null, golesLocal: cap.golesLocal, golesVisitante: cap.golesVisitante });
+            if (lp) {
+                cap.ligaPid = lp.id;
+                const jn = ligaNumJornadaGlobal(d.liga, lp);
+                if (!ligaPartidoJugado(lp)) avisos.push({ grave: false, txt: `⚠️ Este resultado (J${jn}: ${escHtmlIA(previaCapturaTxt(d.liga, Object.assign({}, cap, { goles: [] })))}) aún no está en tu Liga. Apúntalo en Liga → Partidos para que cuente en la clasificación y en la previa.` });
+                else if (lp.golesLocal !== cap.golesLocal || lp.golesVisitante !== cap.golesVisitante) avisos.push({ grave: true, txt: `⚠️ En tu Liga ese partido (J${jn}) está como ${lp.golesLocal}-${lp.golesVisitante} y la captura dice ${cap.golesLocal}-${cap.golesVisitante}. Revisa cuál es el bueno.` });
+            } else avisos.push({ grave: false, txt: 'No encuentro este partido en el calendario de tu Liga: se usará igual, pero revisa los equipos.' });
+        }
+        return { avisos, graves: avisos.filter(a => a.grave).length };
+    }
+    async function previaLlamarIA(content, maxTokens) {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": getApiKey(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+            body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: maxTokens, messages: [{ role: "user", content }] })
+        });
+        if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.error?.message || `Error ${response.status}`); }
+        const data = await response.json();
+        const raw = data.content?.find(b => b.type === 'text')?.text || '';
+        const limpio = raw.replace(/```json|```/g, '').trim();
+        const ini = limpio.indexOf('{'), fin = limpio.lastIndexOf('}');
+        try { return JSON.parse(ini >= 0 && fin > ini ? limpio.slice(ini, fin + 1) : limpio); }
+        catch (e) { throw new Error('La IA no devolvió una respuesta válida. Inténtalo de nuevo.'); }
+    }
+    async function previaLeerCaptura(input) {
+        const file = input && input.files && input.files[0];
+        if (input) input.value = '';
+        if (!file || !previaIA) return;
+        previaIA.paso = 'leyendo'; previaPintar();
+        try {
+            const im = await ligaImpReducirImagen(file);
+            const liga = getLiga();
+            const equiposTxt = liga.equipos.map(e => `- id "${e.id}": ${e.nombre}`).join('\n');
+            const aliasTxt = Object.entries(liga.aliasFederacion || {}).map(([k, v]) => `- "${k}" es el id "${v}"`).join('\n');
+            const prompt = `Es una captura de la app de la Real Federación de Castilla y León de Fútbol con la ficha de UN partido ya jugado (pestaña de goles). Liga: Infantil Primera - Salamanca Grupo 1, temporada 2026-27.
+
+EQUIPOS DE LA LIGA (usa estos ids):
+${equiposTxt}
+${aliasTxt ? `\nNOMBRES QUE YA HEMOS VISTO EN LA FEDERACIÓN:\n${aliasTxt}\n` : ''}
+Devuelve SOLO:
+- "localId" y "visitanteId": el id del equipo local (el de la izquierda) y del visitante (el de la derecha), o null si no estás seguro (la letra del filial cuenta)
+- "golesLocal" y "golesVisitante": el marcador
+- "fecha": "dd/mm/aaaa" si se ve; "jornada": número si se ve
+- "goles": cada gol con su minuto y de qué equipo es: "L" si está en el lado del local (izquierda), "V" si está en el lado del visitante (derecha). Un gol en propia puerta cuenta para el equipo que lo recibe a favor, según el lado en que aparezca.
+NO devuelvas nombres de jugadores. No inventes: si algo no se ve, null.
+Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":null,"golesVisitante":null,"fecha":null,"jornada":null,"goles":[{"min":0,"eq":"L"}]}`;
+            const r = await previaLlamarIA([{ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }, { type: 'text', text: prompt }], 800);
+            const idOk = (x) => { const e = liga.equipos.find(q => String(q.id) === String(x)); return e ? e.id : null; };
+            const n = (x) => (x === null || x === undefined || x === '' || isNaN(Number(x))) ? null : Math.max(0, Math.round(Number(x)));
+            previaIA.captura = {
+                localId: idOk(r.localId), visitanteId: idOk(r.visitanteId), golesLocal: n(r.golesLocal), golesVisitante: n(r.golesVisitante),
+                fecha: /^\d{2}\/\d{2}\/\d{4}$/.test(r.fecha || '') ? r.fecha : null, jornada: n(r.jornada),
+                goles: (Array.isArray(r.goles) ? r.goles : []).map(g => ({ min: n(g && g.min), eq: g && g.eq === 'V' ? 'V' : 'L' })).sort((a, b) => (a.min ?? 999) - (b.min ?? 999))
+            };
+            previaIA.paso = 'confirmar'; previaPintar();
+        } catch (e) { console.error('Previa IA (captura):', e); if (previaIA) { previaIA.paso = 'error'; previaIA.error = e.message || String(e); previaPintar(); } }
+    }
+    window.previaLeerCaptura = previaLeerCaptura;
+
+    // v196 · Datos individuales del Hergar para la previa: solo cosas positivas, por nombre de pila
+    function previaDatosHergarTexto() {
+        const t = getTemporada();
+        const ps = (t && t.partidos) || [];
+        const js = Object.values((t && t.jugadores) || {}).filter(j => (j.partidos || 0) > 0 || (j.minutos || 0) > 0);
+        if (!ps.length || !js.length) return '';
+        const nom = j => String(j.name || '').split(' ')[0];
+        const hist = (j, p) => (j.historial || []).find(h => h.fecha === p.fecha && h.rival === p.rival) || null;
+        const L = [];
+        // Rachas: marcó / asistió en sus k últimos partidos jugados (k >= 2)
+        const racha = (j, k) => { let n = 0; for (let i = ps.length - 1; i >= 0; i--) { const h = hist(j, ps[i]); if (!h || !((h.mins || 0) > 0 || h.goles || h.asistencias)) continue; if ((h[k] || 0) > 0) n++; else break; } return n; };
+        const rg = js.map(j => ({ j, n: racha(j, 'goles') })).filter(x => x.n >= 2).sort((a, b) => b.n - a.n).slice(0, 2);
+        rg.forEach(x => L.push(`- ${nom(x.j)} ha marcado en sus ${x.n} últimos partidos jugados.`));
+        const ra = js.map(j => ({ j, n: racha(j, 'asistencias') })).filter(x => x.n >= 2).sort((a, b) => b.n - a.n).slice(0, 1);
+        ra.forEach(x => L.push(`- ${nom(x.j)} ha dado asistencia en sus ${x.n} últimos partidos jugados.`));
+        // Máximos de la temporada
+        const maxDe = k => js.slice().sort((a, b) => (Number(b[k]) || 0) - (Number(a[k]) || 0))[0];
+        const mg = maxDe('goles'), ma = maxDe('asistencias');
+        if (mg && mg.goles) L.push(`- Máximo goleador de la temporada: ${nom(mg)}, con ${mg.goles} ${mg.goles === 1 ? 'gol' : 'goles'}.`);
+        if (ma && ma.asistencias) L.push(`- Máximo asistente de la temporada: ${nom(ma)}, con ${ma.asistencias} ${ma.asistencias === 1 ? 'asistencia' : 'asistencias'}.`);
+        // Hitos: alcanzados en el último partido y a punto de alcanzarse (1 o 2)
+        const HITOS = [5, 10, 15, 20, 25, 30, 40, 50], ult = ps[ps.length - 1];
+        const hitos = [];
+        js.forEach(j => [['goles', 'gol', 'goles'], ['asistencias', 'asistencia', 'asistencias']].forEach(([k, s, pl]) => {
+            const v = Number(j[k]) || 0, h = hist(j, ult), antes = v - ((h && h[k]) || 0);
+            const logrado = HITOS.find(x => antes < x && v >= x);
+            if (logrado) hitos.push(`- En el último partido, ${nom(j)} llegó a ${logrado} ${pl} esta temporada.`);
+            const prox = HITOS.find(x => x > v);
+            if (v > 0 && prox && prox - v <= 2) hitos.push(`- A ${nom(j)} le ${prox - v === 1 ? 'falta 1 ' + s : 'faltan ' + (prox - v) + ' ' + pl} para llegar a ${prox} ${pl}.`);
+        }));
+        hitos.slice(0, 3).forEach(x => L.push(x));
+        // MVP
+        if (ult && ult.mvp && ult.mvp !== '-') L.push(`- MVP del último partido: ${String(ult.mvp).replace(/^#\S+\s+/, '')}.`);
+        const cMvp = {}; ps.forEach(p => { if (p.mvpId != null) cMvp[p.mvpId] = (cMvp[p.mvpId] || 0) + 1; });
+        const topMvp = Object.entries(cMvp).sort((a, b) => b[1] - a[1])[0];
+        if (topMvp && topMvp[1] >= 2) { const j = (t.jugadores || {})[topMvp[0]]; if (j) L.push(`- ${nom(j)} es quien más veces ha sido MVP: ${topMvp[1]}.`); }
+        // Buenos números: los 2 primeros del ranking de impacto (mínimo de minutos del ranking)
+        const minM = (REGLAS_IMPACTO && REGLAS_IMPACTO.minMinutosRanking) || 35;
+        const imp = js.filter(j => (j.minutos || 0) >= minM).map(j => ({ j, v: (j.impactoAcum || 0) / j.minutos * 70 })).sort((a, b) => b.v - a.v).slice(0, 2);
+        if (imp.length) L.push(`- Encabezan el ranking de impacto de la temporada (lo que aporta cada uno por 70 minutos): ${imp.map(x => nom(x.j)).join(' y ')}.`);
+        // Portero imbatido
+        js.forEach(j => { const s = j.porteroStats; let esPor = false; try { esPor = pesoEsPortero(j); } catch (e) {} if (esPor && s && s.rachaActual >= 70) L.push(`- El portero ${nom(j)} lleva ${s.rachaActual} minutos seguidos sin encajar${s.rachaRecord > 0 && s.rachaRecord === s.rachaActual ? ' (su récord de la temporada)' : ''}.`); });
+        // Rachas del equipo
+        let v = 0, sp = 0, mc = 0;
+        for (let i = ps.length - 1; i >= 0 && ps[i].resultado === 'V'; i--) v++;
+        for (let i = ps.length - 1; i >= 0 && ps[i].resultado !== 'D'; i--) sp++;
+        for (let i = ps.length - 1; i >= 0 && (Number(ps[i].golesLocal) || 0) > 0; i--) mc++;
+        let maxV = 0, cur = 0; ps.forEach(p => { if (p.resultado === 'V') { cur++; maxV = Math.max(maxV, cur); } else cur = 0; });
+        if (v >= 2) L.push(`- El equipo lleva ${v} victorias seguidas${v === maxV ? ' (su mejor racha de la temporada)' : ''}.`);
+        else if (sp >= 3) L.push(`- El equipo lleva ${sp} partidos seguidos sin perder.`);
+        if (mc >= 3) L.push(`- El equipo ha marcado en sus ${mc} últimos partidos.`);
+        return L.length ? `\nDATOS INDIVIDUALES Y RACHAS DEL HERGAR (de su temporada, todos los partidos, no solo la Liga):\n${L.join('\n')}` : '';
+    }
+    // Todo lo que sabe la IA, en texto. Los porcentajes salen del mismo cálculo que la tarjeta del visor.
+    function previaDatosTexto(d) {
+        const { liga, p, esCasa } = d;
+        const D = pronPreparar(liga), { H, NT } = D;
+        const IDX = {}; liga.equipos.forEach((e, i) => IDX[e.id] = i);
+        const nom = i => (liga.equipos[i] && liga.equipos[i].nombre) || '¿?';
+        const riv = esCasa ? IDX[p.visitante] : IDX[p.local];
+        const jug = D.P.filter(q => q.jugado);
+        const L = [];
+        const pct = x => (x == null ? '—' : pronPct(x) + ' %');
+        L.push(`PARTIDO: jornada ${ligaNumJornadaGlobal(liga, p)}, ${nom(IDX[p.local])} (local) contra ${nom(IDX[p.visitante])} (visitante). El Hergar juega ${esCasa ? 'en casa' : 'fuera'}.${p.fechaPartido ? ' Fecha: ' + p.fechaPartido + '.' : ''}${p.hora ? ' Hora: ' + p.hora + '.' : ''}${campoElegidoTxt(liga, p) ? ' Campo: ' + campoElegidoTxt(liga, p) + '.' : ''}`);
+        L.push(`Liga: Infantil Primera Salamanca Grupo 1, ${NT} equipos, 3 vueltas. Solo sube a Segunda el campeón; no hay descensos.`);
+        if (!jug.length || H < 0 || riv == null) { L.push('Todavía no hay resultados en la Liga.'); return L.join('\n'); }
+        const J = Math.max(...jug.map(q => q.jg));
+        const S = pronSimular(D, J, PRON_N, 77 + J);
+        const ord = [...Array(NT).keys()].sort((x, y) => S.bp[y] - S.bp[x] || (S.bg[y] - S.bc[y]) - (S.bg[x] - S.bc[x]) || S.bg[y] - S.bg[x]);
+        const pj = i => jug.filter(q => q.l === i || q.v === i).length;
+        let elo = {}; try { const E = eloLiga(liga); if (E) E.equipos.forEach(x => { elo[x.i] = Math.round(x.elo); }); } catch (e) {}
+        L.push(`\nCLASIFICACIÓN ACTUAL (tras la jornada ${J}; puesto · equipo · puntos · partidos jugados · goles a favor-en contra · Elo):`);
+        ord.forEach((i, k) => L.push(`${k + 1}. ${nom(i)} · ${S.bp[i]} pts · ${pj(i)} PJ · ${S.bg[i]}-${S.bc[i]}${elo[i] != null ? ' · Elo ' + elo[i] : ''}`));
+        L.push('(El Elo mide el nivel según los resultados: base 1000; más alto, mejor.)');
+        const jgP = ((p.vuelta || 1) - 1) * Math.max(1, ...liga.partidos.filter(q => q && q.vuelta === 1).map(q => q.jornada || 1)) + (p.jornada || 1);
+        const m = S.rest.findIndex(q => q.jg === jgP && q.l === IDX[p.local] && q.v === IDX[p.visitante]);
+        if (m >= 0) {
+            const lamH = esCasa ? S.lam[m][0] : S.lam[m][1], lamR = esCasa ? S.lam[m][1] : S.lam[m][0];
+            const [w, dr] = pronGanaEmpata(lamH, lamR), l = Math.max(0, 1 - w - dr);
+            L.push(`\nPRONÓSTICO DE ESTE PARTIDO (modelo de la app): gana el Hergar ${pct(w)}, empate ${pct(dr)}, gana ${nom(riv)} ${pct(l)}.`);
+            const ki = S.keyMatches.indexOf(S.rest[m]);
+            if (S.rest[m] === S.nextH && ki >= 0) {
+                const champ = S.pos[H][0] / S.N, c = S.cond[ki], fr = x => x[1] ? x[0] / x[1] : null;
+                const mio = esCasa ? { G: c.L, E: c.E, P: c.V } : { G: c.V, E: c.E, P: c.L };
+                L.push(`LO QUE ESTÁ EN JUEGO para el Hergar (opciones de ser campeón y subir): ahora ${pct(champ)}; si gana ${pct(fr(mio.G))}, si empata ${pct(fr(mio.E))}, si pierde ${pct(fr(mio.P))}.`);
+            }
+        }
+        const resDe = (i) => jug.filter(q => q.l === i || q.v === i).sort((a, b) => a.jg - b.jg).map(q => {
+            const casa = q.l === i, o = casa ? q.v : q.l, gf = casa ? q.gl : q.gv, gc = casa ? q.gv : q.gl;
+            return `J${q.jg} · ${casa ? 'en casa' : 'fuera'} contra ${nom(o)} (ahora ${ord.indexOf(o) + 1}.º${elo[o] != null ? ', Elo ' + elo[o] : ''}): ${gf}-${gc} ${gf > gc ? '(ganó)' : gf < gc ? '(perdió)' : '(empató)'}`;
+        });
+        L.push(`\nRESULTADOS DE ${nom(riv).toUpperCase()} EN LA LIGA (del más antiguo al más reciente; primero sus goles):`);
+        resDe(riv).forEach(x => L.push('- ' + x));
+        L.push(`\nRESULTADOS DEL HERGAR EN LA LIGA (del más antiguo al más reciente; primero sus goles):`);
+        resDe(H).forEach(x => L.push('- ' + x));
+        const entre = jug.filter(q => (q.l === H && q.v === riv) || (q.l === riv && q.v === H)).sort((a, b) => a.jg - b.jg);
+        L.push(`\nENFRENTAMIENTOS ENTRE LOS DOS ESTA TEMPORADA: ${entre.length ? entre.map(q => `J${q.jg}: ${nom(q.l)} ${q.gl}-${q.gv} ${nom(q.v)}`).join('; ') : 'ninguno todavía (primer enfrentamiento).'}`);
+        try {
+            const R = rcCalcular(liga, H, riv, RC_MAX_RIVALES);
+            if (R.comunes.length) {
+                const n1 = x => String(Math.round(x * 10) / 10).replace('.', ',');
+                L.push(`\nRIVALES EN COMÚN (${R.comunes.length}${R.recortado ? ', los de más Elo' : ''}): el Hergar ${R.regA.V}V ${R.regA.E}E ${R.regA.D}D; ${nom(riv)} ${R.regB.V}V ${R.regB.E}E ${R.regB.D}D. Diferencia de goles media por rival: Hergar ${n1(R.dgA / R.comunes.length)}, ${nom(riv)} ${n1(R.dgB / R.comunes.length)}.`);
+                R.comunes.forEach(cc => L.push(`- contra ${nom(cc.x)}: Hergar ${cc.A.rs.map(r => r.gf + '-' + r.gc).join(', ')}; ${nom(riv)} ${cc.B.rs.map(r => r.gf + '-' + r.gc).join(', ')}`));
+            }
+        } catch (e) {}
+        try { const hx = previaDatosHergarTexto(); if (hx) L.push(hx); } catch (e) { console.error('Previa IA (datos del Hergar):', e); } // v196
+        const cap = previaIA && previaIA.captura;
+        if (cap && cap.localId && cap.visitanteId && cap.golesLocal != null && cap.golesVisitante != null) {
+            const iL = IDX[cap.localId], iV = IDX[cap.visitanteId];
+            let h = 0, a = 0;
+            const secuencia = cap.goles.filter(g => g.min != null).slice().sort((x, y) => x.min - y.min).map(g => { if (g.eq === 'L') h++; else a++; return `${g.min}': gol de ${nom(g.eq === 'L' ? iL : iV)} (${h}-${a})`; });
+            L.push(`\nÚLTIMO PARTIDO DE ${nom(riv).toUpperCase()} (captura de la federación${cap.fecha ? ', ' + cap.fecha : ''}): ${nom(iL)} ${cap.golesLocal}-${cap.golesVisitante} ${nom(iV)}. ${nom(iL)} jugaba en casa. Su rival en ese partido va ahora ${ord.indexOf(iL === riv ? iV : iL) + 1}.º${elo[iL === riv ? iV : iL] != null ? ' (Elo ' + elo[iL === riv ? iV : iL] + ')' : ''}.`);
+            if (secuencia.length) L.push('Goles por orden: ' + secuencia.join('; ') + '. Los partidos duran 70 minutos.');
+        }
+        return L.join('\n');
+    }
+    async function previaGenerar() {
+        const d = previaPartido();
+        if (!d) return;
+        if (previaIA.paso === 'confirmar' && previaIA.captura) {
+            const chk = previaComprobarCaptura(d);
+            if (chk.graves && !confirm('Hay avisos en la captura (en rojo). ¿Generar la previa igualmente?')) return;
+        }
+        previaIA.paso = 'generando'; previaPintar();
+        try {
+            const datos = previaDatosTexto(d);
+            const prompt = `Eres el periodista de un periódico local de Salamanca que escribe la previa de un partido de fútbol de niños de 12-13 años (categoría infantil) para las familias del C.D. Hergar B.
+
+DATOS (son los ÚNICOS que puedes usar):
+${datos}
+
+REGLAS:
+- Usa SOLO estos datos. Si algo no está, no lo menciones ni lo deduzcas (nada de lesiones, bajas, estilos de juego, entrenadores, tiempo o ambiente).
+- Del rival no nombres a ningún niño.
+- Del Hergar puedes nombrar a 2 o 3 niños como mucho, solo por su nombre de pila y solo con lo que venga en DATOS INDIVIDUALES Y RACHAS DEL HERGAR. Siempre en positivo: nunca compares a un niño para mal ni menciones a nadie por algo negativo.
+- Los números (puntos, puestos, Elo, porcentajes, marcadores, minutos) se copian tal cual.
+- Los minutos de los goles solo existen para el último partido del rival que viene en la captura; de los demás partidos solo hay resultados.
+- Busca lo más jugoso cruzando los datos: contra quién sacó cada resultado (su puesto y su Elo), rachas que se vean en los resultados, lo que está en juego, la ida si la hubo. Si dices que algo es "una racha" o "un patrón", tiene que verse claramente en los datos.
+- No inventes predicciones: si hablas de quién es favorito, usa el pronóstico.
+- Tono cercano y positivo, sin lemas ni frases de ánimo al final, sin exclamaciones de más. Español de España.
+- Formato: un titular de 6 a 12 palabras y 2 o 3 párrafos cortos (máximo 130 palabras en total).
+
+Responde SOLO con este JSON: {"titulo":"","parrafos":["",""]}`;
+            const r = await previaLlamarIA([{ type: 'text', text: prompt }], 900);
+            const parrafos = (Array.isArray(r.parrafos) ? r.parrafos : []).map(x => String(x || '').trim()).filter(Boolean).slice(0, 4);
+            if (!r.titulo || !parrafos.length) throw new Error('La IA no devolvió la previa. Inténtalo de nuevo.');
+            previaIA.res = { titulo: String(r.titulo).trim(), parrafos, datos, ts: Date.now(), conCaptura: !!previaIA.captura };
+            if (previaIA.captura) previaIA.res.captura = JSON.parse(JSON.stringify(previaIA.captura));
+            previaIA.paso = 'resultado'; previaPintar();
+        } catch (e) { console.error('Previa IA:', e); if (previaIA) { previaIA.paso = 'error'; previaIA.error = e.message || String(e); previaPintar(); } }
+    }
+    window.previaGenerar = previaGenerar;
+    function previaGuardar() {
+        const liga = getLiga();
+        const p = previaIA && liga.partidos.find(x => x.id === previaIA.pid);
+        if (!p || !previaIA.res) return;
+        const r = previaIA.res;
+        p.previaIA = { titulo: r.titulo, parrafos: r.parrafos, ts: r.ts, conCaptura: !!r.conCaptura };
+        if (r.captura) p.previaIA.captura = r.captura; // solo marcador y minutos, sin nombres
+        saveLiga(liga); // guarda y publica la Liga: el visor la enseña en la tarjeta del próximo partido
+        previaCerrar();
+        renderLigaProximo();
+        alert(liga.proximoPublicado && liga.proximoPublicado.id === p.id ? '✅ Previa publicada en el visor.' : '✅ Previa guardada. Saldrá en el visor cuando publiques la tarjeta de este partido.');
+    }
+    window.previaGuardar = previaGuardar;
+    function previaQuitar(pid) {
+        const liga = getLiga(), p = liga.partidos.find(x => x.id === pid);
+        if (!p || !p.previaIA || !confirm('¿Quitar la previa de este partido? Deja de verse en el visor.')) return;
+        delete p.previaIA;
+        saveLiga(liga);
+        renderLigaProximo();
+    }
+    window.previaQuitar = previaQuitar;
+    // Bloque dentro de Liga → Partidos → Próximo partido
+    function previaBloqueHTML(liga, p) {
+        const caja = 'margin-top:10px; padding:10px 12px; border-radius:12px; background:rgba(168,85,247,0.07); border:1px solid rgba(168,85,247,0.3);';
+        if (p.previaIA) return `<div style="${caja}">
+            <div style="font-size:10px; font-weight:800; letter-spacing:1px; color:#c084fc; margin-bottom:4px;">🤖 PREVIA IA${p.previaIA.conCaptura ? ' · con captura' : ''}</div>
+            <div style="font-size:12.5px; font-weight:700; color:#e2e8f0; line-height:1.35;">${escHtmlIA(p.previaIA.titulo)}</div>
+            <div style="display:flex; gap:8px; margin-top:8px;"><button onclick="abrirPreviaIA(${p.id})" style="flex:1; min-height:38px; border-radius:9px; border:none; background:#a855f7; color:#fff; font-weight:800; font-size:12px;">Ver o rehacer</button><button onclick="previaQuitar(${p.id})" style="flex:1; min-height:38px; border-radius:9px; border:1px solid rgba(255,107,122,0.4); background:rgba(255,107,122,0.08); color:#ff9da4; font-weight:700; font-size:12px;">Quitar</button></div></div>`;
+        return `<button onclick="abrirPreviaIA(${p.id})" style="width:100%; margin-top:10px; min-height:44px; border-radius:10px; border:1.5px dashed rgba(168,85,247,0.55); background:rgba(168,85,247,0.08); color:#c084fc; font-weight:800; font-size:12.5px;">🤖 Crear previa IA (opcional)</button>`;
     }
 
     function renderLigaJornada() {
