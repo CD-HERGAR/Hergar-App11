@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    205                                            ║
+  ║  Versión:    206                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -21,6 +21,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Control Táctico Hergar Ultimate - F11 (70 Min)</title>
+    <script>
+    // v206 · Si el móvil no deja guardar (memoria de la app llena u otro fallo), sale un aviso rojo que no se va solo.
+    // Se envuelve setItem: el error se sigue lanzando igual que antes, así que nada cambia en cómo responde la app.
+    (function () {
+        try {
+            const orig = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                try { return orig.call(this, k, v); }
+                catch (e) {
+                    try { window.__hergarFalloGuardado = { k: String(k), t: Date.now(), lleno: /quota/i.test(String(e && (e.name || e.message))), n: ((window.__hergarFalloGuardado || {}).n || 0) + 1 }; } catch (e2) {}
+                    try { setTimeout(() => window.v206AvisoGuardado && window.v206AvisoGuardado(), 0); } catch (e3) {}
+                    throw e;
+                }
+            };
+        } catch (e) {}
+    })();
+    </script>
     <!-- v138 · PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0a0e14">
@@ -1790,7 +1807,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v205</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v206</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -11551,7 +11568,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (firmaG(rv.D.ev) !== firmaG(evsNuevos) && Array.isArray(yP.goles)) {
             golesCambian = true;
             const viejos = (Array.isArray(Pn.goles) ? Pn.goles : []).map(g => Object.assign({ usado: false }, g));
-            const BASE = new Set(['min', 'equipo', 'jugadorId', 'nombre', 'asistenteId', 'asistente', 'penalti', 'propia', 'usado']);
+            const BASE = new Set(['min', 'equipo', 'jugadorId', 'nombre', 'asistenteId', 'asistente', 'penalti', 'propia', 'previas', 'usado']);
             Pn.goles = yP.goles.map(g => {
                 const n = Object.assign({}, g);
                 const cand = viejos.filter(v => !v.usado && v.equipo === g.equipo && (g.equipo === 'rival' || (String(v.jugadorId) === String(g.jugadorId) && !!v.propia === !!g.propia)))
@@ -13781,6 +13798,27 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             if (e.origen) g.origen = e.origen;
             if (e.pos) g.pos = { x: e.pos.x, y: e.pos.y };
         });
+        // v206 · CADENAS DE GOL: acciones de compañeros del mismo minuto o del anterior, después del gol anterior
+        try {
+            const ACC = [[/^🔑 Pase clave #(\S+) (\S+)/, 'pc'], [/^📯 Pase al área #(\S+) (\S+)/, 'pa'], [/^🌀 Regate[^#]*#(\S+) (\S+)/, 'reg'],
+                [/^🛡️⭐ Acción defensiva clave #(\S+) (\S+)/, 'defC'], [/^🛡️ Acción defensiva #(\S+) (\S+)/, 'def'], [/^🎯 Disparo a puerta #(\S+) (\S+)/, 'tp'],
+                [/^💨 Disparo fuera[^#]*#(\S+) (\S+)/, 'tf'], [/^🟡 Falta a favor · recibe #(\S+) (\S+)/, 'fr']];
+            const acciones = [];
+            substitutionTimeline.forEach((linea, idx) => {
+                const m = /^\[(\d+)'\]\s*(.*)$/.exec(String(linea)); if (!m) return;
+                for (const [re, k] of ACC) { const g = re.exec(m[2]); if (g) { const p = buscar(g[1], g[2]); if (p) acciones.push({ idx, min: parseInt(m[1]), id: p.id, k }); break; } }
+            });
+            goles.forEach(g => {
+                if (g.equipo !== 'hergar') return;
+                const antes = goles.filter(x => x.idx < g.idx).reduce((mx, x) => Math.max(mx, x.idx), -1);
+                const fuera = new Set([String(g.jugadorId), String(g.asistenteId)]);
+                const porJug = {};
+                acciones.filter(a => a.idx < g.idx && a.idx > antes && a.min >= g.min - 1 && a.min <= g.min && !fuera.has(String(a.id))).forEach(a => { porJug[a.id] = a; });
+                const prov = /provocado por #(\S+) (\S+?)\)/.exec(String(substitutionTimeline[g.idx] || ''));
+                if (prov) { const p = buscar(prov[1], prov[2]); if (p && !fuera.has(String(p.id))) porJug[p.id] = { idx: g.idx, min: g.min, id: p.id, k: 'prov' }; }
+                g.previas = Object.values(porJug).sort((a, b) => a.idx - b.idx).slice(-3).map(a => ({ min: a.min, id: a.id, k: a.k }));
+            });
+        } catch (e) { console.error('Cadenas de gol:', e); }
         return goles.map(g => { const r = Object.assign({}, g); delete r.idx; return r; });
     }
     // ── v193 · 🎙️ MINUTO A MINUTO (narración del partido) ─────────────────────────────
@@ -21145,9 +21183,52 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 accion: 'Limpiar', fn: () => pendAbrirAjustes('ghHuerfanosBox') });
         } catch (e) { console.warn('Pendientes (mantenimiento):', e); }
 
+        // v206 · espacio de guardado casi lleno
+        try {
+            const E = espacioApp();
+            if (E.pct >= 80) items.push({ key: `espacio|${Math.floor(E.pct / 5)}`, g: 'mant', imp: E.pct >= 90, titulo: `Memoria de la app al ${E.pct} %`,
+                det: 'Si se llena, la app deja de guardar lo que apuntas. Lo que más ocupa: ' + E.top.slice(0, 2).map(x => `${x.n} (${fmtEsp(x.b)})`).join(', ') + '.',
+                donde: 'Pendientes → Espacio de la app', accion: 'Ver', fn: () => { const el = document.getElementById('pendEspacio'); if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
+        } catch (e) { console.warn('Pendientes (espacio):', e); }
+
         const D = leerDesc();
         items.forEach(it => { it.descartado = !it.subs && !!D[it.key]; });
         return { items, t };
+    }
+
+    // ── v206 · ESPACIO DE GUARDADO DE LA APP ──
+    // El navegador deja unos 5 millones de caracteres por web. Se cuentan las claves y los valores guardados (2 bytes cada carácter).
+    const ESPACIO_TOPE = 5 * 1024 * 1024;
+    const ESPACIO_NOMBRES = { hergar_F11_temporada: 'Temporada', hergar_F11_temporadas_archivadas: 'Temporadas anteriores', hergar_F11_playersData: 'Plantilla y partido en curso',
+        hergar_F11_fotos: 'Fotos de los niños', hergar_F11_escudos: 'Escudos de la Liga', hergar_F11_state: 'Partido en curso', hergar_F11_liga: 'Liga' };
+    function fmtEsp(b) { return b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+    function espacioApp() {
+        const lista = [];
+        let total = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i), v = localStorage.getItem(k) || '';
+            const b = (k.length + v.length) * 2;
+            total += b; lista.push({ k, b });
+        }
+        const grupos = {};
+        lista.forEach(x => { const n = ESPACIO_NOMBRES[x.k] || (/liga/i.test(x.k) ? 'Liga' : 'Otros ajustes'); grupos[n] = (grupos[n] || 0) + x.b; });
+        const top = Object.keys(grupos).map(n => ({ n, b: grupos[n] })).sort((a, b) => b.b - a.b);
+        const tope = ESPACIO_TOPE * 2;
+        return { total, tope, pct: Math.min(100, Math.round(total / tope * 100)), top };
+    }
+    window.espacioApp = espacioApp;
+    function espacioHTML() {
+        let E; try { E = espacioApp(); } catch (e) { return ''; }
+        const col = E.pct >= 90 ? '#ff4757' : E.pct >= 80 ? '#f5a623' : '#2ed573';
+        const fallo = window.__hergarFalloGuardado;
+        return `<div id="pendEspacio" style="background:#111827; border:1px solid ${E.pct >= 80 || fallo ? col + '88' : 'rgba(255,255,255,0.08)'}; border-radius:16px; padding:14px; display:flex; flex-direction:column; gap:8px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;"><span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; letter-spacing:1px; color:#e2e8f0;">💾 ESPACIO DE LA APP</span><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:${col};">${E.pct} %</span></div>
+            <div style="height:10px; border-radius:5px; background:rgba(255,255,255,0.08); overflow:hidden;"><div style="height:100%; width:${Math.max(2, E.pct)}%; background:${col}; border-radius:5px;"></div></div>
+            <div style="font-size:11.5px; color:#cbd5e1;">${fmtEsp(E.total)} de unos ${fmtEsp(E.tope)} que deja el móvil.</div>
+            <div style="display:flex; flex-direction:column; gap:3px;">${E.top.slice(0, 5).map(x => `<div style="display:flex; justify-content:space-between; font-size:11.5px; color:#94a3b8;"><span>${esc(x.n)}</span><span>${fmtEsp(x.b)}</span></div>`).join('')}</div>
+            ${fallo ? `<div style="font-size:11.5px; line-height:1.45; color:#ff9da4;">⚠️ Hoy ha fallado algún guardado (${fallo.n} ${fallo.n === 1 ? 'vez' : 'veces'}, la última a las ${new Date(fallo.t).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}).</div>` : ''}
+            <div style="font-size:10.5px; line-height:1.45; color:#64748b;">Si se acerca al 90 %: sube la copia a la nube, haz una copia completa y archiva temporadas antiguas. Las fotos de los niños y las temporadas anteriores son lo que más suele ocupar.</div>
+        </div>`;
     }
 
     // ── Acciones ──
@@ -21242,6 +21323,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                     : `<div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px; color:#2ed573;">✓ Todo al día</div>`}
                 <div style="font-size:11.5px; line-height:1.45; color:#94a3b8;">La lista se hace sola mirando lo que hay en la app. Si algo no se va a hacer, márcalo y deja de contar: sale abajo, en Descartados.</div>
             </div>`;
+        const espacioBloque = espacioHTML(); // v206: al final de la lista
         const ult = (t.partidos || [])[(t.partidos || []).length - 1];
         GRUPOS.forEach(([g, tit]) => {
             const lista = vivos.filter(x => x.g === g);
@@ -21266,7 +21348,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                     + '<div style="font-size:11px; line-height:1.45; color:#94a3b8; padding:0 2px;">Un gol marcado «No se grabó» queda igual que con «Sin vídeo» en Editar partido: el visor no espera su vídeo.</div>' : ''}
             </div>`;
         }
-        cont.innerHTML = html;
+        cont.innerHTML = html + espacioBloque;
         pintarIndicadores(vivos, imps);
     }
     window.pendAccion = (id) => { const f = pendAcciones[id]; if (f) f(); };
@@ -21313,6 +21395,23 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         pendRender();
     }
     window.abrirPendientes = abrirPendientes;
+
+    // v206 · aviso rojo si falla un guardado (lo dispara el envoltorio de setItem del principio)
+    window.v206AvisoGuardado = function () {
+        const f = window.__hergarFalloGuardado; if (!f) return;
+        let av = document.getElementById('v206AvisoGuardado');
+        if (!av) {
+            av = document.createElement('div'); av.id = 'v206AvisoGuardado';
+            av.style.cssText = 'position:fixed; left:10px; right:10px; top:calc(8px + env(safe-area-inset-top)); z-index:12000; background:#c0392b; color:#fff; border-radius:14px; padding:12px 14px; box-shadow:0 10px 30px rgba(0,0,0,.6); font-size:13px; line-height:1.45; display:flex; flex-direction:column; gap:8px;';
+            document.body.appendChild(av);
+        }
+        av.innerHTML = `<div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px;">⚠️ NO SE HA PODIDO GUARDAR</div>
+            <div>${f.lleno ? 'La memoria de la app está llena.' : 'El móvil no ha dejado guardar.'} Lo que apuntes ahora puede perderse si se cierra la app. ${f.n > 1 ? `(${f.n} fallos)` : ''}</div>
+            <div style="display:flex; gap:8px;"><button type="button" onclick="document.getElementById('v206AvisoGuardado').remove(); abrirPendientes(); setTimeout(() => { const e = document.getElementById('pendEspacio'); if (e) e.scrollIntoView({ block: 'center' }); }, 200);" style="flex:1; min-height:42px; border-radius:10px; border:none; background:#fff; color:#c0392b; font-weight:900;">Ver espacio</button>
+            <button type="button" onclick="document.getElementById('v206AvisoGuardado').remove()" style="min-height:42px; padding:0 14px; border-radius:10px; border:1px solid rgba(255,255,255,.6); background:transparent; color:#fff; font-weight:800;">Entendido</button></div>`;
+        try { if (navigator.vibrate) navigator.vibrate([300, 120, 300]); } catch (e) {}
+    };
+    if (window.__hergarFalloGuardado) window.v206AvisoGuardado();
 
     // Entrada en Ajustes, número en la pestaña y aviso bajo el marcador
     const tabMas = document.getElementById('tabMasBtn');
