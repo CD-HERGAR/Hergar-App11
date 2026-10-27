@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    206                                            ║
+  ║  Versión:    207                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1807,7 +1807,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v206</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v207</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2585,8 +2585,8 @@
             </div>
             <button class="btn-modal-goal" style="background:linear-gradient(135deg,#d63384,#e84393);" id="actionDribbleBtn">🌀 REGATE / JUGADA INDIVIDUAL (+0.10)</button>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                <button class="btn-modal-defense" style="font-size:12px; padding-left:10px;" id="actionDefenseBtn">🛡️ DEF. (+0.30)</button>
-                <button class="btn-modal-defense" style="font-size:12px; padding-left:10px; border:2px solid rgba(255,210,168,0.75);" id="actionDefenseKeyBtn">🛡️⭐ CLAVE (+1.00)</button>
+                <button class="btn-modal-defense" style="font-size:12px; padding-left:10px;" id="actionDefenseBtn">🛡️ DEF. (+0.30 · DEF +0.45)</button>
+                <button class="btn-modal-defense" style="font-size:12px; padding-left:10px; border:2px solid rgba(255,210,168,0.75);" id="actionDefenseKeyBtn">🛡️⭐ CLAVE (+1.00 · DEF +1.30)</button>
             </div>
             <button class="btn-modal-yellow" id="actionYellowBtn">🟨 TARJETA AMARILLA</button>
             <button class="btn-modal-red" id="actionRedBtn">🟥 TARJETA ROJA — EXPULSIÓN</button>
@@ -2997,6 +2997,9 @@
             regate: 0.10,          // (*) v102 (antes 0.05)
             defensa: 0.30,         // (*) v67 (antes 0.20)
             defensaClave: 1.00,    // (*) v67
+            // v207 · la defensa vale más si la hace un defensa (LI · DFC · LD) o el pivote (MCD); el resto, igual
+            defensaPuesto: { LI: 0.45, DFC: 0.45, LD: 0.45, MCD: 0.35 },
+            defensaClavePuesto: { LI: 1.30, DFC: 1.30, LD: 1.30, MCD: 1.10 },
             parada: 0.30, paradaDificil: 1.00,
             fallo: -0.20, falloImportante: -0.50,
             fueraJuego: -0.05      // (*) v117
@@ -4186,6 +4189,94 @@
         } catch (e) { console.error('v194 tiros fuera:', e); }
     }
     setTimeout(migrarTirosFueraV194, 3400);
+    // ── v207 · LA DEFENSA DE LOS DEFENSAS VALE MÁS ──
+    // Acción defensiva: defensas (LI · DFC · LD) +0,45 · pivote (MCD) +0,35 · resto +0,30.
+    // Defensa clave: defensas +1,30 · pivote +1,10 · resto +1,00. El portero, como el resto (sus puntos son las paradas).
+    function valorDefensaV207(clave, puesto, linea) {
+        const A = REGLAS_IMPACTO.acciones, tabla = (clave ? A.defensaClavePuesto : A.defensaPuesto) || {};
+        const base = clave ? A.defensaClave : A.defensa;
+        if (puesto && tabla[puesto] != null) return tabla[puesto];
+        if (!puesto && linea === 'defensa' && tabla.DFC != null) return tabla.DFC;
+        return base;
+    }
+    // Lo que ganaría un niño en un partido ya jugado: sus defensas por el extra del puesto donde jugó.
+    // Si jugó en varios puestos, el extra se reparte según los minutos en cada uno (no se sabe dónde hizo cada defensa).
+    function extraDefensaPartidoV207(j, k) {
+        const h = j.historial[k], a = h.acc || {};
+        const defC = Number(a.defC) || 0, def = Math.max(0, (Number(a.def) || 0) - defC);
+        if (!def && !defC) return null;
+        const A = REGLAS_IMPACTO.acciones;
+        let reparto = null, estimado = false;
+        if (h.puestos && Object.keys(h.puestos).length) reparto = Object.assign({}, h.puestos);
+        else {
+            const g = lineasGuardadasDePartido(j, k);
+            estimado = !g.exacto;
+            reparto = {};
+            Object.keys(g.lineas || {}).forEach(l => { reparto[{ portero: 'POR', defensa: 'DFC', centrocampista: 'MC', delantero: 'DC' }[l] || l] = g.lineas[l]; });
+        }
+        const tot = Object.values(reparto).reduce((s, v) => s + (Number(v) || 0), 0);
+        if (!tot) return null;
+        const porPuesto = {};
+        let total = 0;
+        Object.keys(reparto).forEach(pu => {
+            const f = (Number(reparto[pu]) || 0) / tot;
+            const x = f * (def * (valorDefensaV207(false, pu) - A.defensa) + defC * (valorDefensaV207(true, pu) - A.defensaClave));
+            if (Math.abs(x) > 1e-9) { porPuesto[pu] = x; total += x; }
+        });
+        return total > 1e-9 ? { total, porPuesto, estimado, def, defC } : null;
+    }
+    function aplicarExtraDefensaV207(j, k, ex) {
+        const h = j.historial[k], r2 = (n) => Math.round(n * 100) / 100;
+        const antes = h.imp !== undefined ? Number(h.imp) || 0 : (Number(h.impPond) || 0) * (h.mins || 0) / 70;
+        const porLinea = {};
+        Object.keys(ex.porPuesto).forEach(pu => { const l = PUESTO_LINEA[pu] || 'centrocampista'; porLinea[l] = (porLinea[l] || 0) + ex.porPuesto[pu]; });
+        if (!j.impactoPorPosicion) j.impactoPorPosicion = {};
+        Object.keys(porLinea).forEach(l => { j.impactoPorPosicion[l] = (j.impactoPorPosicion[l] || 0) + porLinea[l]; });
+        if (h.impLineas) Object.keys(porLinea).forEach(l => { h.impLineas[l] = r2((h.impLineas[l] || 0) + porLinea[l]); });
+        if (h.puestos && Object.keys(h.puestos).length) {
+            if (!j.impactoPorPuesto) j.impactoPorPuesto = {};
+            if (!h.impPuestos) h.impPuestos = {};
+            Object.keys(ex.porPuesto).forEach(pu => { j.impactoPorPuesto[pu] = (j.impactoPorPuesto[pu] || 0) + ex.porPuesto[pu]; h.impPuestos[pu] = r2((h.impPuestos[pu] || 0) + ex.porPuesto[pu]); });
+        }
+        j.impactoAcum = (j.impactoAcum || 0) + ex.total;
+        h.imp = r2(antes + ex.total);
+        h.impPond = h.mins > 0 ? r2((antes + ex.total) / h.mins * 70) : 0;
+    }
+    function migrarDefensaV207() {
+        try {
+            const t = getTemporada();
+            if (!t || t.defensaRegla === 207) return;
+            const porNino = {};
+            let hayEstimado = false;
+            (t.partidos || []).forEach(p => {
+                if (p.reglaDefensa >= 207) return;
+                Object.values(t.jugadores || {}).forEach(j => {
+                    const k = (j.historial || []).findIndex(h => h.fecha === p.fecha && h.rival === p.rival);
+                    if (k < 0) return;
+                    const h = j.historial[k];
+                    if (h.def207) return;
+                    const ex = extraDefensaPartidoV207(j, k);
+                    if (ex) {
+                        aplicarExtraDefensaV207(j, k, ex);
+                        const r = porNino[j.id] || (porNino[j.id] = { j, extra: 0, n: 0, est: false });
+                        r.extra += ex.total; r.n++; if (ex.estimado) { r.est = true; hayEstimado = true; }
+                    }
+                    h.def207 = true;
+                });
+                p.reglaDefensa = 207;
+            });
+            const mvp = recalcularMvpTemporada(t);
+            t.defensaRegla = 207;
+            saveTemporada(t);
+            const filas = Object.values(porNino).sort((a, b) => b.extra - a.extra);
+            if (!filas.length && !mvp.length) return;
+            setTimeout(() => { try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} }, 5000);
+            try { renderPartidos(); renderRanking(); } catch (e) {}
+            const f2 = (n) => n.toFixed(2).replace('.', ',');
+            alert(`🛡️ Partidos recalculados (v207): la defensa de los defensas vale más.\n\nAcción defensiva: defensas +0,45 · pivote +0,35 · resto +0,30.\nDefensa clave: defensas +1,30 · pivote +1,10 · resto +1,00.\n\n${filas.length ? 'Lo que gana cada niño en toda la temporada:\n' + filas.map(r => `#${r.j.dorsal} ${(r.j.name || '').split(' ')[0]}: +${f2(r.extra)}${r.est ? ' ≈' : ''}`).join('\n') : 'Ningún defensa tenía acciones defensivas apuntadas.'}${hayEstimado ? '\n\n≈ partido sin el detalle de puestos: se usa la línea donde más jugó.' : ''}${mvp.length ? '\n\nCambia el MVP:\n' + mvp.join('\n') : '\n\nNo cambia ningún MVP.'}\n\nSe envía al visor en unos segundos; si no aparece, usa "Sincronizar temporada con el visor".`);
+        } catch (e) { console.error('v207 defensa:', e); }
+    }
+    setTimeout(migrarDefensaV207, 4600);
     // ── v160 · 📊 MEDIAS POR PARTIDO (misma función en la app y en el visor) ──
     // Cómo es un partido medio del Hergar, con filtro Temporada / Últimos 5 / Casa / Fuera.
     // Cada dato sale solo de los partidos que lo tienen: los cargados a mano solo tienen goles,
@@ -6213,8 +6304,8 @@
             csFila('Al palo / larguero', a.disparoPuerta, 'Cuenta como un disparo a puerta. Al palo del rival le pasa lo mismo: resta como un tiro a puerta, pero no cuenta en las paradas del portero.'),
             csFila('Disparo fuera / sin peligro', a.disparoFuera, `Los ${a.disparoFueraUmbral || 3} primeros de cada partido. Desde el ${(a.disparoFueraUmbral || 3) + 1}.º, ${fmtPts(a.disparoFueraExceso || -0.05)} cada uno, marque o no.`), // v194
             csFila('Regate / jugada individual', a.regate, 'Supera a un rival o gana metros con el balón y no acaba en tiro, pase clave ni pase al área.'),
-            csFila('Acción defensiva', a.defensa),
-            csFila('Acción defensiva clave', a.defensaClave, 'Ejemplos: despeje bajo palos, entrada de último hombre, bloqueo de un tiro que iba a gol.'),
+            csFila('Acción defensiva', a.defensa, `Defensa (LI · DFC · LD) ${fmtPts((a.defensaPuesto || {}).DFC ?? a.defensa)} · pivote (MCD) ${fmtPts((a.defensaPuesto || {}).MCD ?? a.defensa)}. Defender es su trabajo principal y es casi lo único que se les puede apuntar.`),
+            csFila('Acción defensiva clave', a.defensaClave, `Defensa ${fmtPts((a.defensaClavePuesto || {}).DFC ?? a.defensaClave)} · pivote ${fmtPts((a.defensaClavePuesto || {}).MCD ?? a.defensaClave)}. Ejemplos: despeje bajo palos, entrada de último hombre, bloqueo de un tiro que iba a gol.`),
             csFila('Parada (portero)', a.parada, 'Cuenta también como tiro a puerta del rival, pero al portero no le resta.'),
             csFila('Parada difícil (portero)', a.paradaDificil),
             csFila('Fuera de juego', a.fueraJuego, 'Resta poco a propósito: un desmarque que sale por poco no debe castigarse como un fallo. El del rival no suma a nadie.'),
@@ -9265,12 +9356,12 @@
                 break;
             case 'DEFENSA':
                 p.accionesDef = (p.accionesDef || 0) + 1;
-                p.impacto += REGLAS_IMPACTO.acciones.defensa;
+                p.impacto += valorDefensaV207(false, puestoPorPosicion(formacionActiva, indiceEnCampo), lineaActual); // v207: según el puesto
                 break;
             case 'DEFENSA_CLAVE': // v67
                 p.accionesDef = (p.accionesDef || 0) + 1; // cuenta también como acción defensiva
                 p.accionesDefClave = (p.accionesDefClave || 0) + 1;
-                p.impacto += REGLAS_IMPACTO.acciones.defensaClave;
+                p.impacto += valorDefensaV207(true, puestoPorPosicion(formacionActiva, indiceEnCampo), lineaActual); // v207
                 break;
             case 'REGATE': // v67
                 p.regates = (p.regates || 0) + 1;
@@ -14160,6 +14251,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         partido.reglaImpacto = 105; // v105: ya calculado con el reparto en goleadas
         partido.reglaTiros = 192; // v192: tiros del rival con tope
         partido.reglaTirosFuera = 194; // v194: tiros fuera de más ya con la regla nueva
+        partido.reglaDefensa = 207; // v207: defensa según el puesto ya aplicada en directo
         try { const mm = codificarMinutoV145(); if (mm) partido.minutos = mm; } catch (e) { console.error('Minuto a minuto:', e); } // v145
         if (!sim) { try { const dp = dlgPendiente(); if (dp && dp.st && dp.code) { partido.dlg = dp.st; partido.dlgCode = dp.code; } } catch (e) {} } // v190: los apuntes del delegado se quedan con el partido (para revisarlos después)
         t.partidos.push(partido);
@@ -14196,7 +14288,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             // v104: impacto total del partido, si fue titular y el detalle de sus acciones (para "Actuación de cada jugador")
             const accH = { dp: p.disparosPuerta||0, df: p.disparosFuera||0, pc: p.pasesClave||0, pa: p.pasesArea||0, reg: p.regates||0, fj: p.fuerasJuego||0, pal: p.palos||0, fr: p.faltasRecibidas||0, def: p.accionesDef||0, defC: p.accionesDefClave||0, par: p.paradas||0, parD: p.paradasDificiles||0, am: p.tarjetasAmarillas||0, ro: p.tarjetaRoja?1:0 };
             Object.keys(accH).forEach(k => { if (!accH[k]) delete accH[k]; });
-            j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), acc: accH, gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, tr192: true, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
+            j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), acc: accH, gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, tr192: true, def207: true, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
             // Acumular nota IA si existe
             const notaPartido = notasIAPartido[p.id];
             if (notaPartido && notaPartido.nota) {
