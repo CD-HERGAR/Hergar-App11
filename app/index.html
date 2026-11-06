@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    212                                            ║
+  ║  Versión:    213                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1807,7 +1807,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v212</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v213</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -14463,7 +14463,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             // v104: impacto total del partido, si fue titular y el detalle de sus acciones (para "Actuación de cada jugador")
             const accH = { dp: p.disparosPuerta||0, df: p.disparosFuera||0, pc: p.pasesClave||0, pa: p.pasesArea||0, reg: p.regates||0, fj: p.fuerasJuego||0, pal: p.palos||0, fr: p.faltasRecibidas||0, def: p.accionesDef||0, defC: p.accionesDefClave||0, par: p.paradas||0, parD: p.paradasDificiles||0, am: p.tarjetasAmarillas||0, ro: p.tarjetaRoja?1:0 };
             Object.keys(accH).forEach(k => { if (!accH[k]) delete accH[k]; });
-            j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), acc: accH, gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, tr192: true, def207: true, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
+            j.historial.push({ fecha: fechaHoy, rival: rivalName, mins, impPond: impPondPartido, imp: parseFloat((parseFloat(p.impacto)||0).toFixed(2)), accImp: parseFloat(((parseFloat(p.impacto)||0) - (parseFloat(p.equipoImp)||0)).toFixed(2)), acc: accH, /* v213: «Sus acciones» (impacto sin la parte de equipo; los fallos restan) */ gfCampo: p.golesFavorEnCampo || 0, gcCampo: p.golesContraEnCampo || 0, tfCampo: p.tirosFavorEnCampo || 0, tcCampo: p.tirosContraEnCampo || 0, regla: 105, tr192: true, def207: true, goles: p.goles||0, asistencias: p.asistencias||0, golesRecibidos: p.golesRecibidos||0, trp: p.tirosPuertaEnPorteria||0 });
             // Acumular nota IA si existe
             const notaPartido = notasIAPartido[p.id];
             if (notaPartido && notaPartido.nota) {
