@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    207                                            ║
+  ║  Versión:    212                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1807,7 +1807,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v207</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v212</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -3719,6 +3719,179 @@
         return { jugadores: res, sinOrden, conLiga: !!R };
     }
     // Elo y tabla de la suerte de toda la Liga
+    // ── 🏠 VENTAJA DE CASA MEDIDA y 🧭 DIFICULTAD DEL CALENDARIO (app v208 + visor v210 · misma función en los dos) ──
+    // Casa: se busca la ventaja (en puntos de Elo, de −100 a 300) con la que el Elo acierta mejor los resultados ya
+    //  jugados en la Liga. Con pocos partidos baila, así que se mezcla con los 100 de partida: con CASA_PESO partidos
+    //  pesan igual. El Elo usa esa mezcla; el Pronóstico ya medía su propia ventaja con los goles (se enseña también).
+    // Dificultad: Elo medio de HOY de los rivales ya jugados y de los que quedan. «Con calendario medio»: sus puntos
+    //  quitando lo que se esperaba de sus rivales reales y poniendo lo esperado contra un rival de Elo medio.
+    const CASA_PRIOR = 100, CASA_PESO = 30;
+    let casaCacheLiga = { k: null, v: null };
+    function casaLiga(liga) {
+        if (!liga || !liga.equipos || !liga.partidos || typeof pronPreparar !== 'function') return null;
+        const D = pronPreparar(liga);
+        const jug = D.P.filter(p => p.jugado).sort((a, b) => a.jg - b.jg);
+        const k = D.NT + '#' + jug.map(p => `${p.l}-${p.v}:${p.gl}-${p.gv}@${p.jg}`).join('|');
+        if (casaCacheLiga.k === k) return casaCacheLiga.v;
+        const N = jug.length;
+        const errorCon = (casa) => {
+            const e = Array(D.NT).fill(ELO_BASE); let err = 0;
+            jug.forEach(p => {
+                const we = 1 / (1 + Math.pow(10, -(e[p.l] + casa - e[p.v]) / 400));
+                const w = p.gl > p.gv ? 1 : p.gl === p.gv ? 0.5 : 0;
+                err += (w - we) * (w - we);
+                const gd = Math.abs(p.gl - p.gv), G = gd <= 1 ? 1 : gd === 2 ? 1.5 : (11 + gd) / 8;
+                const d = ELO_K * G * (w - we); e[p.l] += d; e[p.v] -= d;
+            });
+            return err;
+        };
+        let medida = null;
+        if (N) { let mejor = Infinity; for (let c = -100; c <= 300; c += 5) { const x = errorCon(c); if (x < mejor - 1e-12 || (Math.abs(x - mejor) <= 1e-12 && Math.abs(c - CASA_PRIOR) < Math.abs(medida - CASA_PRIOR))) { mejor = x; medida = c; } } }
+        const usada = N ? Math.round((CASA_PRIOR * CASA_PESO + medida * N) / (CASA_PESO + N)) : CASA_PRIOR;
+        let V = 0, Em = 0, Dr = 0, gl = 0, gv = 0;
+        const eq = liga.equipos.map((e, i) => ({ e, i, pc: 0, nc: 0, pf: 0, nf: 0 }));
+        jug.forEach(p => {
+            if (p.gl > p.gv) V++; else if (p.gl === p.gv) Em++; else Dr++;
+            gl += p.gl; gv += p.gv;
+            eq[p.l].nc++; eq[p.l].pc += p.gl > p.gv ? 3 : p.gl === p.gv ? 1 : 0;
+            eq[p.v].nf++; eq[p.v].pf += p.gv > p.gl ? 3 : p.gl === p.gv ? 1 : 0;
+        });
+        let hGoles = null;
+        try { if (N) hGoles = pronNiveles(D.NT, jug.map(p => Object.assign({}, p)), Math.max(...jug.map(p => p.jg))).h; } catch (e) { hGoles = null; }
+        const v = { N, medida, usada, V, E: Em, D: Dr, gl, gv, eq, hGoles, H: D.H };
+        casaCacheLiga = { k, v };
+        return v;
+    }
+    function eloCasaUsada(liga) { try { const c = casaLiga(liga); return c ? c.usada : ELO_CASA; } catch (e) { return ELO_CASA; } }
+    function dificultadLiga(liga) {
+        const E = eloLiga(liga);
+        if (!E || !E.jugados) return null;
+        const D = pronPreparar(liga), casa = E.casa == null ? ELO_CASA : E.casa;
+        const elo = []; E.equipos.forEach(x => { elo[x.i] = x.elo; });
+        const media = elo.reduce((a, b) => a + b, 0) / elo.length;
+        const jug = D.P.filter(p => p.jugado), rest = D.P.filter(p => !p.jugado);
+        const emp = (jug.filter(p => p.gl === p.gv).length + 0.25 * 10) / (jug.length + 10); // % de empates de la Liga (con 10 partidos «de partida» al 25 %)
+        const esp = (ea, eb, enCasa) => {
+            const we = 1 / (1 + Math.pow(10, -(ea + (enCasa ? casa : -casa) - eb) / 400));
+            const pd = Math.min(emp, 2 * we, 2 * (1 - we)), pw = Math.max(0, we - pd / 2);
+            return 3 * pw + pd;
+        };
+        const T = liga.equipos.map((e, i) => ({ e, i, pts: 0, pj: 0, rj: [], rq: [], espReal: 0 }));
+        jug.forEach(p => {
+            const L = T[p.l], Vv = T[p.v];
+            L.pj++; Vv.pj++; L.rj.push(p.v); Vv.rj.push(p.l);
+            L.pts += p.gl > p.gv ? 3 : p.gl === p.gv ? 1 : 0; Vv.pts += p.gv > p.gl ? 3 : p.gl === p.gv ? 1 : 0;
+            L.espReal += esp(elo[p.l], elo[p.v], true); Vv.espReal += esp(elo[p.v], elo[p.l], false);
+        });
+        rest.forEach(p => { T[p.l].rq.push(p.v); T[p.v].rq.push(p.l); });
+        const med = a => a.length ? a.reduce((s, x) => s + elo[x], 0) / a.length : null;
+        T.forEach(x => {
+            x.dJ = med(x.rj); x.dQ = med(x.rq);
+            const espMedio = x.pj * (esp(elo[x.i], media, true) + esp(elo[x.i], media, false)) / 2;
+            x.ajust = x.pj ? x.pts - x.espReal + espMedio : null;
+        });
+        return { T, media, H: D.H, jugados: E.jugados };
+    }
+    function difFmt1(v) { return v == null ? '—' : v.toFixed(1).replace('.', ','); }
+    function dificultadFilasHTML(Dd, k) {
+        const esc = momEsc;
+        const lista = Dd.T.filter(x => (k === 'jug' ? x.dJ : x.dQ) != null).sort((a, b) => (k === 'jug' ? b.dJ - a.dJ : b.dQ - a.dQ));
+        if (!lista.length) return `<div style="font-size:12px; color:#94a3b8; padding:6px 0;">${k === 'jug' ? 'Aún no hay partidos jugados.' : 'Ya no quedan partidos por jugar.'}</div>`;
+        const vals = lista.map(x => (k === 'jug' ? x.dJ : x.dQ) - Dd.media);
+        const escala = Math.max(1, ...vals.map(Math.abs));
+        return lista.map((x, n) => {
+            const d = k === 'jug' ? x.dJ : x.dQ, dif = d - Dd.media, me = !!x.e.esHergar;
+            const w = Math.min(50, Math.abs(dif) / escala * 50), col = dif >= 0 ? '#ff6b7a' : '#2ed573';
+            const barra = dif >= 0 ? `left:50%; width:${w}%;` : `left:${50 - w}%; width:${w}%;`;
+            const sub = k === 'jug' ? `${x.pts} ${x.pts === 1 ? 'pt' : 'pts'} · ${difFmt1(x.ajust)} con calendario medio` : `${x.rq.length} ${x.rq.length === 1 ? 'partido' : 'partidos'} por jugar`;
+            return `<div style="display:grid; grid-template-columns:20px 1fr 84px 42px; gap:8px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:${n ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12.5px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}">
+                <span style="font-family:'Montserrat',sans-serif; font-weight:800; color:#94a3b8; text-align:center;">${n + 1}</span>
+                <span style="min-width:0; color:${me ? '#ff8fa3' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}<div style="font-size:10.5px; color:#94a3b8; font-weight:400;">${sub}</div></span>
+                <div style="position:relative; height:8px; background:rgba(255,255,255,.06); border-radius:4px;"><span style="position:absolute; left:50%; top:-3px; width:1px; height:14px; background:#64748b;"></span><i style="position:absolute; top:0; bottom:0; ${barra} background:${col}; border-radius:4px;"></i></div>
+                <span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px; text-align:right; color:${col};">${Math.round(d)}</span>
+            </div>`;
+        }).join('');
+    }
+    function dificultadVer(btn, k) {
+        const box = btn.closest('.dif-box'); if (!box) return;
+        box.querySelectorAll('[data-dif-btn]').forEach(b => { const on = b.getAttribute('data-dif-btn') === k; b.style.borderColor = on ? b.dataset.ac : 'rgba(255,255,255,.1)'; b.style.color = on ? b.dataset.ac : '#94a3b8'; b.style.background = on ? 'rgba(245,166,35,.12)' : 'rgba(255,255,255,.03)'; });
+        box.querySelectorAll('[data-dif-vista]').forEach(el => { el.style.display = el.getAttribute('data-dif-vista') === k ? '' : 'none'; });
+    }
+    if (typeof window !== 'undefined') window.dificultadVer = dificultadVer;
+    function dificultadHTML(liga, acento) {
+        acento = acento || '#f5a623';
+        let Dd = null; try { Dd = dificultadLiga(liga); } catch (e) { Dd = null; }
+        if (!Dd) return '';
+        const h = Dd.H >= 0 ? Dd.T[Dd.H] : null;
+        let cab = '';
+        if (h && h.dJ != null) {
+            const ordJ = Dd.T.filter(x => x.dJ != null).sort((a, b) => b.dJ - a.dJ), pJ = ordJ.indexOf(h) + 1;
+            const ordQ = Dd.T.filter(x => x.dQ != null).sort((a, b) => b.dQ - a.dQ), pQ = ordQ.indexOf(h) + 1;
+            const caja = (v, c, txt) => `<div style="background:rgba(255,255,255,.05); border-radius:10px; padding:9px 10px;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:21px; color:${c};">${v}</div><div style="font-size:10.5px; line-height:1.35; color:#94a3b8; margin-top:2px;">${txt}</div></div>`;
+            cab = `<div style="background:rgba(180,20,56,.14); border:1px solid rgba(255,85,119,.4); border-radius:12px; padding:11px 12px; margin-bottom:12px;">
+                <div style="font-size:12.5px; line-height:1.55; color:#e2e8f0;">El Hergar ha tenido el <b style="color:#ff8fa3;">${pJ}.º calendario más duro</b> de los ${ordJ.length} hasta ahora. Con un calendario medio llevaría <b style="color:#ff8fa3;">${difFmt1(h.ajust)} puntos</b> en vez de ${h.pts}.</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+                    ${caja(Math.round(h.dJ), h.dJ >= Dd.media ? '#ff6b7a' : '#2ed573', `Elo medio de los rivales ya jugados (Liga: ${Math.round(Dd.media)})`)}
+                    ${h.dQ != null ? caja(Math.round(h.dQ), h.dQ >= Dd.media ? '#ff6b7a' : '#2ed573', `Elo medio de lo que queda · ${pQ}.º más duro`) : caja('—', '#64748b', 'Ya no quedan partidos')}
+                </div></div>`;
+        }
+        const btn = (k, txt, on) => `<button type="button" data-dif-btn="${k}" data-ac="${acento}" onclick="dificultadVer(this,'${k}')" style="flex:1; min-height:38px; border-radius:9px; border:1px solid ${on ? acento : 'rgba(255,255,255,.1)'}; background:${on ? 'rgba(245,166,35,.12)' : 'rgba(255,255,255,.03)'}; color:${on ? acento : '#94a3b8'}; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11.5px; cursor:pointer;">${txt}</button>`;
+        return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">🧭 Dificultad del calendario</summary>
+            <div class="dif-box">
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0 10px;">Elo medio de los rivales a los que ya se ha enfrentado cada equipo, con el Elo que tienen hoy. Cuanto más alto, más duro ha sido su camino.${Dd.jugados < 20 ? ' Con pocas jornadas aún cambia mucho.' : ''}</div>
+            ${cab}
+            <div style="display:flex; gap:6px; margin:4px 0 8px;">${btn('jug', 'Lo jugado', true)}${btn('que', 'Lo que queda', false)}</div>
+            <div style="display:grid; grid-template-columns:20px 1fr 84px 42px; gap:8px; font-size:9.5px; font-weight:800; color:#64748b; padding-bottom:4px;"><span></span><span>EQUIPO</span><span style="text-align:center;">FÁCIL ← → DURO</span><span style="text-align:right;">ELO RIV.</span></div>
+            <div data-dif-vista="jug">${dificultadFilasHTML(Dd, 'jug')}</div>
+            <div data-dif-vista="que" style="display:none;">${dificultadFilasHTML(Dd, 'que')}</div>
+            <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:8px;">La barra parte del Elo medio de la Liga: en rojo, rivales más fuertes que la media; en verde, más flojos. «Con calendario medio»: los puntos que llevaría si sus rivales hubieran sido de nivel medio.</div>
+            </div></details>`;
+    }
+    function casaHTML(liga, acento) {
+        acento = acento || '#f5a623';
+        let C = null; try { C = casaLiga(liga); } catch (e) { C = null; }
+        if (!C || !C.N) return '';
+        const esc = momEsc, N = C.N, pct = x => Math.round(x / N * 100);
+        const seg = (v, c) => v ? `<div style="width:${v / N * 100}%; background:${c}; display:flex; align-items:center; justify-content:center; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; color:#0b0f14;">${v / N > .1 ? pct(v) + '%' : ''}</div>` : '';
+        const caja = (v, c, txt) => `<div style="background:rgba(255,255,255,.05); border-radius:10px; padding:9px 10px;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:20px; color:${c};">${v}</div><div style="font-size:10.5px; line-height:1.35; color:#94a3b8; margin-top:2px;">${txt}</div></div>`;
+        const H = C.H >= 0 ? C.eq[C.H] : null;
+        const hc = H && H.nc ? H.pc / H.nc : null, hf = H && H.nf ? H.pf / H.nf : null;
+        const maxV = Math.max(150, C.medida, C.usada);
+        const barraV = (txt, v, c, fuerte) => `<div style="display:grid; grid-template-columns:96px 1fr 40px; gap:8px; align-items:center; padding:4px 0; font-size:11.5px;"><span style="color:${fuerte ? acento : '#cbd5e1'}; font-weight:${fuerte ? 800 : 500};">${txt}</span><div style="height:10px; border-radius:5px; background:rgba(255,255,255,.06); overflow:hidden;"><div style="width:${Math.max(0, v) / maxV * 100}%; height:100%; background:${c}; border-radius:5px;"></div></div><b style="text-align:right; font-family:'Montserrat',sans-serif; color:${fuerte ? acento : '#e2e8f0'};">${v}</b></div>`;
+        const p100 = Math.round(100 / (1 + Math.pow(10, -CASA_PRIOR / 400))), pUs = Math.round(100 / (1 + Math.pow(10, -C.usada / 400)));
+        const filas = C.eq.filter(x => x.nc || x.nf).map(x => ({ x, c: x.nc ? x.pc / x.nc : null, f: x.nf ? x.pf / x.nf : null }))
+            .sort((a, b) => ((b.c ?? 0) - (b.f ?? 0)) - ((a.c ?? 0) - (a.f ?? 0)))
+            .map(({ x, c, f }, n) => {
+                const me = !!x.e.esHergar, d = (c != null && f != null) ? c - f : null;
+                const col = d == null ? '#64748b' : d > 0.05 ? '#2ed573' : d < -0.05 ? '#ff6b7a' : '#f5a623';
+                const num = v => v == null ? '—' : difFmt1(v);
+                return `<div style="display:grid; grid-template-columns:1fr 50px 50px 44px; gap:6px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:${n ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><span style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:${me ? '#ff8fa3' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(c)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(f)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:900; color:${col};">${d == null ? '—' : Math.abs(d) < 0.05 ? '0,0' : (d > 0 ? '+' : '−') + difFmt1(Math.abs(d))}</span></div>`;
+            }).join('');
+        return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">🏠 Lo que vale jugar en casa</summary>
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0 10px;">Cómo les va a los locales en esta Liga y cuánto pesa eso en el Elo.</div>
+            <div style="font-size:12px; font-weight:700; color:#e2e8f0;">${N} ${N === 1 ? 'partido jugado' : 'partidos jugados'}: así acaban para el local</div>
+            <div style="display:flex; height:26px; border-radius:8px; overflow:hidden; margin-top:6px;">${seg(C.V, '#2ed573')}${seg(C.E, '#94a3b8')}${seg(C.D, '#ff6b7a')}</div>
+            <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:10.5px; color:#94a3b8; margin-top:6px;"><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#2ed573; margin-right:4px;"></i>Gana el local ${C.V}</span><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#94a3b8; margin-right:4px;"></i>Empate ${C.E}</span><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#ff6b7a; margin-right:4px;"></i>Gana el visitante ${C.D}</span></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+                ${caja(`${difFmt1(C.gl / N)} <span style="color:#64748b; font-size:15px;">–</span> ${difFmt1(C.gv / N)}`, '#e2e8f0', 'goles por partido del local y del visitante')}
+                ${caja(`${hc == null ? '—' : difFmt1(hc)} / ${hf == null ? '—' : difFmt1(hf)}`, '#ff8fa3', 'puntos por partido del Hergar en casa / fuera')}
+            </div>
+            <div style="margin-top:12px; background:rgba(255,255,255,.04); border-radius:12px; padding:12px;">
+                <div style="font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Ventaja de casa en el Elo</div>
+                ${barraV('Antes', CASA_PRIOR, '#64748b')}${barraV('Medida', C.medida, '#ff5577')}${barraV('Se usa', C.usada, acento, true)}
+                <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:8px;">Con estos ${N} partidos, la ventaja que mejor explica los resultados es de <b style="color:#e2e8f0;">${C.medida} puntos</b>.${N < 135 ? ` Como aún ${N < CASA_PESO ? 'son pocos' : 'no ha acabado la Liga'}, se mezcla con los ${CASA_PRIOR} de partida y el Elo usa <b style="color:${acento};">${C.usada}</b>.` : ''} Contra un rival de su nivel, el Elo da al local un ${pUs} % (antes, un ${p100} %), contando el empate como medio.${C.hGoles != null ? ` En el Pronóstico, que mide la ventaja con los goles, el local marca un ${Math.round((C.hGoles * C.hGoles - 1) * 100)} % más que el visitante.` : ''}</div>
+            </div>
+            <div style="font-size:11px; font-weight:800; color:#cbd5e1; margin:14px 0 4px;">Puntos por partido, en casa y fuera</div>
+            <div style="display:grid; grid-template-columns:1fr 50px 50px 44px; gap:6px; font-size:9.5px; font-weight:800; color:#64748b; padding-bottom:4px;"><span>EQUIPO</span><span style="text-align:right;">CASA</span><span style="text-align:right;">FUERA</span><span style="text-align:right;">DIF.</span></div>
+            ${filas}
+            <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:8px;">«Casa» es el campo que pone el calendario de la Liga. El Hergar juega casi siempre en La Aldehuela por las obras, y cuenta como en casa.</div>
+            <details style="margin-top:8px;"><summary style="font-size:11.5px; font-weight:700; color:${acento}; cursor:pointer;">ℹ️ Cómo se calcula</summary>
+                <div style="font-size:12px; line-height:1.55; color:#e2e8f0; padding-top:6px;">
+                <p style="margin:0 0 6px;">Se busca qué ventaja de casa hace que el Elo acierte mejor los resultados ya jugados en la Liga: esa es la ventaja medida.</p>
+                <p style="margin:0 0 6px;">Con pocos partidos la cifra baila, así que se mezcla con los ${CASA_PRIOR} puntos de partida: con ${CASA_PESO} partidos jugados pesan igual lo medido y los ${CASA_PRIOR}; a final de temporada lo medido pesa más de cuatro veces más.</p>
+                <p style="margin:0;">El Elo usa la ventaja que sale de esa mezcla. El Pronóstico ya medía la suya con los goles de los locales y los visitantes.</p></div></details>
+        </details>`;
+    }
     function eloLiga(liga) {
         if (!liga || !liga.equipos || !liga.partidos || typeof pronPreparar !== 'function') return null;
         const D = pronPreparar(liga);
@@ -3726,9 +3899,10 @@
         const elo = Array(D.NT).fill(ELO_BASE);
         const ult = Array(D.NT).fill(0);
         const maxJ = jug.length ? jug[jug.length - 1].jg : 0;
+        const casa = eloCasaUsada(liga);
         const histH = [{ jg: 0, elo: ELO_BASE }];
         jug.forEach(p => {
-            const dr = elo[p.l] + ELO_CASA - elo[p.v];
+            const dr = elo[p.l] + casa - elo[p.v];
             const we = 1 / (1 + Math.pow(10, -dr / 400));
             const w = p.gl > p.gv ? 1 : p.gl === p.gv ? 0.5 : 0;
             const gd = Math.abs(p.gl - p.gv), G = gd <= 1 ? 1 : gd === 2 ? 1.5 : (11 + gd) / 8;
@@ -3737,7 +3911,7 @@
             if (p.jg === maxJ) { ult[p.l] += d; ult[p.v] -= d; }
             if (p.l === D.H || p.v === D.H) histH.push({ jg: p.jg, elo: elo[D.H] });
         });
-        return { equipos: liga.equipos.map((e, i) => ({ e, i, elo: elo[i], ult: ult[i] })).sort((a, b) => b.elo - a.elo), histH, jugados: jug.length };
+        return { equipos: liga.equipos.map((e, i) => ({ e, i, elo: elo[i], ult: ult[i] })).sort((a, b) => b.elo - a.elo), histH, jugados: jug.length, casa };
     }
     function suerteLiga(liga) {
         if (!liga || !liga.equipos || !liga.partidos || typeof pronPreparar !== 'function') return null;
@@ -3785,7 +3959,7 @@
                 <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Puntos que "debería" tener cada equipo por sus goles a favor y en contra, frente a los que tiene. Verde: le ha faltado suerte; rojo: le ha sobrado.${S.maxPj < PITA_FIABLE_PJ ? ` <b style="color:#f5a623;">Aún van pocas jornadas: tómalo como una pista.</b>` : ''}</div>${sf}</details>`;
         }
         return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">📊 Ranking Elo</summary>
-            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Todos empiezan con ${ELO_BASE}, como en el ranking FIFA. Cada partido suben o bajan según lo esperado: ganar al de arriba da mucho y ganar al de abajo, poco. Las goleadas cuentan algo más y se tiene en cuenta jugar en casa.${E.jugados < 20 ? ' Las primeras jornadas se mueve mucho.' : ''}</div>${eloFilas}${graf}</details>${suerte}`;
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Todos empiezan con ${ELO_BASE}, como en el ranking FIFA. Cada partido suben o bajan según lo esperado: ganar al de arriba da mucho y ganar al de abajo, poco. Las goleadas cuentan algo más y se tiene en cuenta jugar en casa (con la ventaja medida en esta Liga: ${E.casa} puntos).${E.jugados < 20 ? ' Las primeras jornadas se mueve mucho.' : ''}</div>${eloFilas}${graf}</details>${suerte}${dificultadHTML(liga, acento)}${casaHTML(liga, acento)}`;
     }
     // ── v153 · 🍀 SUERTE Y NIVEL (misma función en la app y en el visor) ──
     //  · Termómetro de la suerte (PDO del hockey): % de tiros a puerta del Hergar que son gol + % de tiros a puerta del
@@ -4189,6 +4363,7 @@
         } catch (e) { console.error('v194 tiros fuera:', e); }
     }
     setTimeout(migrarTirosFueraV194, 3400);
+    // v208 (app + visor v210) · Liga: 🧭 Dificultad del calendario y 🏠 Lo que vale jugar en casa (junto al Elo y la suerte). El Elo usa la ventaja de casa medida en la Liga.
     // ── v207 · LA DEFENSA DE LOS DEFENSAS VALE MÁS ──
     // Acción defensiva: defensas (LI · DFC · LD) +0,45 · pivote (MCD) +0,35 · resto +0,30.
     // Defensa clave: defensas +1,30 · pivote +1,10 · resto +1,00. El portero, como el resto (sus puntos son las paradas).
@@ -4536,7 +4711,7 @@
             <p style="margin:0 0 8px;"><strong>Tiempo por marcador:</strong> minutos que se pasan ganando, empatando y perdiendo. Sale del minuto de cada gol.</p>
             <p style="margin:0 0 8px;"><strong>Cuota de tiros:</strong> tiros del Hergar entre los tiros de los dos equipos. Con los córners, aproxima cuánto se juega en el campo rival. <strong>Con cada niño en el campo:</strong> lo mismo, contando solo los tiros mientras él juega (desde la v135).</p>
             <p style="margin:0 0 8px;"><strong>Victorias añadidas:</strong> cuánto subió cada gol la probabilidad de ganar en ese momento, con el mismo cálculo que el directo del visor. +1,00 es una victoria entera. La asistencia se lleva la mitad.</p>
-            <p style="margin:0 0 8px;"><strong>Elo:</strong> todos empiezan con ${ELO_BASE}. Tras cada partido se compara lo esperado con lo que pasó: ganar al de arriba sube mucho, perder con el de abajo baja mucho. Las goleadas cuentan algo más y jugar en casa se tiene en cuenta.</p>
+            <p style="margin:0 0 8px;"><strong>Elo:</strong> todos empiezan con ${ELO_BASE}. Tras cada partido se compara lo esperado con lo que pasó: ganar al de arriba sube mucho, perder con el de abajo baja mucho. Las goleadas cuentan algo más y jugar en casa se tiene en cuenta, con la ventaja que se mide en la propia Liga.</p>
             <p style="margin:0;"><strong>Tabla de la suerte:</strong> con los goles a favor (GF) y en contra (GC), la parte de los puntos que "tocaría" es GF<sup>1,2</sup> ÷ (GF<sup>1,2</sup> + GC<sup>1,2</sup>). Se compara con los puntos reales. Es poco fiable las primeras ${PITA_FIABLE_PJ} jornadas.</p>
         </div>`;
     }
@@ -21542,6 +21717,719 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     if (typeof ejecutarNuevoPartido === 'function') { const _np = ejecutarNuevoPartido; ejecutarNuevoPartido = function () { const r = _np.apply(this, arguments); pendRefrescar(); return r; }; }
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pendRefrescar(); });
     setTimeout(pendRefrescar, 1500);
+})();
+</script>
+
+<!-- ── v212 · CONTROL POR VOZ ─────────────────────────────────────────────
+     Un toque en el botón de los cascos → se dice la acción → se apunta con las MISMAS funciones que los botones
+     (minuto, impacto, momentum, visor) y se confirma al oído. Lo táctil sigue igual; voz y toques se mezclan.
+     Goles por voz: el origen y la posición quedan pendientes (📍 en la tira y en Pendientes). Reloj siempre a mano.
+     Apodos en playersData[id].apodos. Modo prueba de cascos que no apunta nada. -->
+<style>
+    #vozBtn { background: rgba(180,20,56,.12); color: #ff5577; border: 1.5px dashed rgba(255,85,119,.6); border-radius: 12px; }
+    #vozBtn.on { background: rgb(180,20,56); color: #fff; border: 1.5px solid rgb(180,20,56); animation: vozLat 1.6s ease-in-out infinite; }
+    @keyframes vozLat { 0%,100% { box-shadow: 0 0 0 0 rgba(255,85,119,.5); } 50% { box-shadow: 0 0 0 7px rgba(255,85,119,0); } }
+    #vozTira { display: none; border-radius: 12px; background: rgba(180,20,56,.07); border: 1px solid rgba(255,85,119,.28); padding: 8px 10px; position: relative; z-index: 1; }
+    #vozTira.on { display: block; }
+    #vozTira .cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 800; color: #ff8fa3; letter-spacing: .3px; }
+    #vozTira .cab button { background: #000; color: #94a3b8; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; height: 30px; padding: 0 10px; font-size: 10.5px; font-weight: 800; flex-shrink: 0; }
+    .voz-ev { display: flex; align-items: center; gap: 7px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.05); font-size: 12px; }
+    .voz-ev .m { font-family: 'Montserrat', monospace; font-weight: 800; font-size: 10.5px; color: #64748b; width: 26px; flex-shrink: 0; }
+    .voz-ev .v { width: 16px; flex-shrink: 0; text-align: center; font-size: 11px; }
+    .voz-ev .t { flex: 1; min-width: 0; font-weight: 600; color: #e2e8f0; line-height: 1.3; }
+    .voz-ev .t small { display: block; font-weight: 500; color: #64748b; font-size: 10.5px; }
+    .voz-ev.err .t { color: #f5c26b; }
+    .voz-ev .pend { height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid rgba(245,166,35,.5); background: rgba(245,166,35,.14); color: #f5a623; font-size: 10.5px; font-weight: 800; white-space: nowrap; flex-shrink: 0; }
+    .voz-ev .x { width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,71,87,.3); background: rgba(255,71,87,.1); color: #ff6b7a; font-size: 12px; flex-shrink: 0; padding: 0; }
+    .voz-vacio { font-size: 11.5px; color: #64748b; padding: 6px 0 2px; }
+    #vozHoja { position: fixed; inset: 0; z-index: 10570; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.72); }
+    #vozHoja.on { display: flex; }
+    #vozHoja .caja { width: 100%; max-width: 480px; background: #111827; border-radius: 20px 20px 0 0; border-top: 2px solid #ff5577; padding: 14px 12px calc(14px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
+    #vozHoja .tit { text-align: center; font-family: 'Montserrat', sans-serif; font-weight: 900; color: #fff; font-size: 15px; }
+    #vozHoja .sub { text-align: center; font-size: 11.5px; color: #94a3b8; line-height: 1.45; }
+    #vozHoja button { min-height: 52px; border-radius: 12px; border: none; font-weight: 800; font-size: 14px; }
+    #vozBolsillo { position: fixed; inset: 0; z-index: 10900; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+    #vozBolsillo.on { display: flex; }
+    #vozBolsillo .mar { font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 900; color: #1e293b; }
+    #vozBolsillo .rel { font-family: 'Montserrat', monospace; font-size: 54px; font-weight: 700; color: #3a2a10; }
+    #vozBolsillo .ult { font-size: 13px; color: #334155; min-height: 18px; text-align: center; padding: 0 24px; }
+    #vozBolsillo .cand { width: 92px; height: 92px; border-radius: 50%; border: 2px solid #1e293b; color: #334155; font-size: 32px; display: flex; align-items: center; justify-content: center; }
+    #vozBolsillo .cand.carga { border-color: #64748b; color: #94a3b8; }
+    #vozBolsillo .ay { font-size: 11px; color: #1e293b; }
+    #vozPrueba { position: fixed; inset: 0; z-index: 10580; display: none; background: #0a0e14; overflow-y: auto; overscroll-behavior: contain; }
+    #vozPrueba.on { display: block; }
+    #vozPrueba .wrap { max-width: 480px; margin: 0 auto; padding: 14px 14px 40px; display: flex; flex-direction: column; gap: 12px; }
+    .vp-card { background: #111827; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px; }
+    .vp-paso { display: flex; align-items: center; gap: 10px; }
+    .vp-num { width: 30px; height: 30px; flex-shrink: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 13px; background: rgba(148,163,184,.14); color: #94a3b8; }
+    .vp-num.ok { background: rgba(46,213,115,.2); color: #2ed573; }
+    .vp-num.mal { background: rgba(255,71,87,.18); color: #ff6b7a; }
+    .vp-tt { font-weight: 800; font-size: 13.5px; color: #e2e8f0; }
+    .vp-tx { font-size: 11.5px; color: #94a3b8; line-height: 1.45; margin-top: 2px; }
+    .vp-bot { display: flex; gap: 8px; margin-top: 10px; }
+    .vp-bot button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: rgba(30,41,59,.7); color: #e2e8f0; font-weight: 800; font-size: 12.5px; }
+    .vp-bot button.pri { background: rgb(180,20,56); border-color: rgb(180,20,56); color: #fff; }
+    .vp-res { margin-top: 8px; padding: 9px 11px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); font-size: 12.5px; min-height: 38px; line-height: 1.4; }
+    .vp-res.ok { border-color: rgba(46,213,115,.45); background: rgba(46,213,115,.08); color: #8fe0a8; }
+    .vp-res.mal { border-color: rgba(245,166,35,.45); background: rgba(245,166,35,.08); color: #f5c26b; }
+    .vp-res small { display: block; color: #64748b; font-size: 11px; margin-top: 2px; }
+    .voz-apodo { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.05); font-size: 12.5px; }
+    .voz-apodo:first-child { border-top: none; }
+    .voz-apodo b { color: #f5a623; width: 24px; font-family: 'Montserrat', sans-serif; flex-shrink: 0; }
+    .voz-apodo .n { width: 96px; flex-shrink: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e2e8f0; }
+    .voz-apodo input { flex: 1; min-width: 0; height: 38px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: #0f172a; color: #e2e8f0; padding: 0 10px; font-size: 13px; user-select: text; -webkit-user-select: text; }
+    .voz-dic { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 6px; }
+    .voz-dic td { padding: 6px 3px; border-top: 1px solid rgba(255,255,255,.05); vertical-align: top; line-height: 1.4; text-align: left; }
+    .voz-dic td:first-child { width: 40%; font-weight: 700; color: #e2e8f0; }
+    .voz-dic td:last-child { color: #94a3b8; font-style: italic; }
+</style>
+<div id="vozHoja" role="dialog" aria-modal="true" aria-label="Control por voz"><div class="caja">
+    <div class="tit">🎙️ Control por voz</div>
+    <div class="sub">Toca el botón de los cascos y di la acción. Los botones siguen funcionando igual. El reloj, siempre a mano.</div>
+    <button type="button" id="vozHojaActivar" style="background:rgb(180,20,56); color:#fff;">🎧 Activar voz</button>
+    <button type="button" id="vozHojaProbar" style="background:#1e293b; color:#e2e8f0; border:1px solid rgba(255,255,255,.12);">🧪 Probar voz y cascos</button>
+    <button type="button" id="vozHojaCerrar" style="background:transparent; color:#94a3b8; min-height:44px;">Cancelar</button>
+</div></div>
+<div id="vozBolsillo">
+    <div class="mar" id="vozBolMar">0 — 0</div>
+    <div class="rel" id="vozBolRel">00:00</div>
+    <div class="ult" id="vozBolUlt"></div>
+    <div class="cand" id="vozBolCand">🔒</div>
+    <div class="ay">Mantén pulsado el candado para salir</div>
+</div>
+<div id="vozPrueba" role="dialog" aria-label="Probar voz y cascos"><div class="wrap">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px; letter-spacing:1px; color:#ff5577;">🧪 PROBAR VOZ Y CASCOS</span>
+        <button type="button" id="vpCerrar" style="min-height:38px; padding:0 14px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(30,41,59,.7); color:#e2e8f0; font-weight:800;">✕ Cerrar</button>
+    </div>
+    <div style="font-size:11.5px; color:#94a3b8; line-height:1.45;">Ponte los cascos. Nada de lo que digas aquí se apunta en el partido.</div>
+    <div class="vp-card">
+        <div class="vp-paso"><div class="vp-num" id="vpN1">1</div><div><div class="vp-tt">Botón de los cascos</div><div class="vp-tx">Toca una vez el botón de los cascos (el de pausa / play).</div></div></div>
+        <div class="vp-res" id="vpR1">Esperando el toque…</div>
+    </div>
+    <div class="vp-card">
+        <div class="vp-paso"><div class="vp-num" id="vpN2">2</div><div><div class="vp-tt">¿Me oyes por los cascos?</div><div class="vp-tx">Pulsa «Escuchar»: oirás una frase de prueba.</div></div></div>
+        <div class="vp-bot"><button type="button" id="vpOirBtn">🔊 Escuchar</button><button type="button" id="vpOirSi">✓ Lo he oído</button><button type="button" id="vpOirNo">✗ No</button></div>
+    </div>
+    <div class="vp-card">
+        <div class="vp-paso"><div class="vp-num" id="vpN3">3</div><div><div class="vp-tt">Micro</div><div class="vp-tx">Toca el botón de los cascos (o «Hablar») y di: <b style="color:#e2e8f0;">pase clave del 9</b>.</div></div></div>
+        <div class="vp-bot"><button type="button" id="vpHablar" class="pri">🎙️ Hablar</button></div>
+        <div class="vp-res" id="vpR3">—</div>
+    </div>
+    <div class="vp-card" id="vpResumen" style="display:none; text-align:center; font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px;"></div>
+    <div class="vp-card">
+        <div class="vp-tt">🗣️ Práctica libre</div>
+        <div class="vp-tx">Cuando acabes los pasos, cada toque de los cascos escucha una frase y te dice lo que ha entendido, sin apuntarla. Sirve para probar apodos o palabras con ruido.</div>
+        <div id="vpLista" style="margin-top:6px;"></div>
+    </div>
+    <div class="vp-card">
+        <details><summary style="font-weight:800; font-size:12.5px; color:#ff5577; cursor:pointer;">📖 Qué decir</summary><table class="voz-dic" id="vpDic"></table></details>
+    </div>
+</div></div>
+<script>
+(function () {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const vozEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const nombreCorto = (p) => p ? String(p.name || '').split(' ')[0] : '';
+
+    // ───────── Botón y tira en la pantalla del partido ─────────
+    const fila = $('startPauseBtn') && $('startPauseBtn').parentElement;
+    if (fila) { fila.insertAdjacentHTML('beforeend', '<button id="vozBtn" type="button" style="flex:0 0 54px; padding:0 2px;">🎙️ VOZ</button>'); const sel = $('formationSelector'); if (sel) sel.style.flex = '1.05'; }
+    const anclaTira = $('ltAnularRow') || fila;
+    if (anclaTira) anclaTira.insertAdjacentHTML('afterend', '<div id="vozTira"><div class="cab"><span id="vozTiraCab">🎧 VOZ ACTIVA · toca los cascos y habla</span><span style="display:flex; gap:6px;"><button type="button" id="vozHablarBtn">🎙️ Hablar</button><button type="button" id="vozBolBtn">🔒 Bolsillo</button></span></div><div id="vozLista"></div></div>');
+
+    // ───────── Texto ─────────
+    const NUM = { cero: 0, uno: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, veintidos: 22, veintitres: 23, veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29, treinta: 30 };
+    const OIDO = { gold: 'gol', goal: 'gol', gool: 'gol', goool: 'gol', corne: 'corner', korner: 'corner', penal: 'penalti' }; // lo que el móvil oye mal
+    function norm(s) {
+        return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/(\d+)\s*º/g, '$1').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(Boolean)
+            .map(w => (NUM[w] != null ? String(NUM[w]) : (OIDO[w] || w))).join(' ');
+    }
+    const STOP = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'al', 'a', 'y', 'o', 'san', 'van', 'von', 'da', 'dos']);
+    const PALABRAS = new Set(('gol golazo goles marca marcan marcamos pase pases clave area regate regatea jugada jugadon individual defensa defensiva recupera recuperacion robo roba corte corta despeje despeja intercepta intercepcion ' +
+        'tiro tira tiran disparo dispara chut chuta chutan remate remata fuera puerta palo poste larguero parada paradon dificil buena gran falta faltas amarilla roja tarjeta corner esquina saque cambio cambios entra entran sale salen ' +
+        'por asistencia asiste centro fallo falla fallazo perdida pierde importante gordo grave ellos rival rivales suyo suya nuestro nuestra favor contra juego penalti penalty provoca provocado borra borrar deshaz deshacer anula anular elimina ' +
+        'propia autogol peligro sin desviado alto flojo para parado dentro hacen hace hecho sobre recibe recibida nosotros otro otra ese esa ahi bien mal vale accion sube quita mordido').split(' '));
+    const DIMIN = { alejandro: ['alex', 'ale'], alexis: ['alex'], sebastian: ['sebas'], ignacio: ['nacho'], jose: ['pepe'], daniel: ['dani'], javier: ['javi'], francisco: ['fran', 'paco'],
+        rafael: ['rafa'], eduardo: ['edu'], guillermo: ['guille'], nicolas: ['nico'], gonzalo: ['gonza'], santiago: ['santi'], miguel: ['migue'], manuel: ['manu'], antonio: ['toni', 'tony'],
+        adrian: ['adri'], samuel: ['samu'], gabriel: ['gabi'], jesus: ['chus'], enrique: ['quique'], roberto: ['rober'], alberto: ['alber'], fernando: ['fer', 'nando'],
+        joaquin: ['joaco'], ismael: ['isma'], cristian: ['cris'], rodrigo: ['rodri'], leonardo: ['leo'], leon: ['leo'], alvaro: ['alva'] };
+    const tokensNombre = (n) => norm(n).split(' ').filter(t => t.length >= 3 && !STOP.has(t) && !/^\d+$/.test(t));
+    function lev(a, b) {
+        if (a === b) return 0;
+        const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+        let prev = Array.from({ length: n + 1 }, (_, i) => i);
+        for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+        return prev[n];
+    }
+    const tolerancia = (t) => t.length >= 7 ? 2 : t.length >= 4 ? 1 : 0;
+
+    // ───────── Los niños de hoy (campo + banquillo) ─────────
+    let JUG = [], CAMPO = new Set(), PORTERO = null;
+    function cargarJugadores() {
+        const ids = [...(onFieldIds || []), ...(benchIds || [])].filter((id, i, a) => a.indexOf(id) === i && playersData[id]);
+        let lista = ids.map(id => playersData[id]);
+        if (!lista.length) lista = Object.values(playersData).filter(p => p && p.convocado);
+        JUG = lista.filter(p => p && p.name && p.dorsal != null && p.dorsal !== '').map(p => {
+            const toks = tokensNombre(p.name), dim = new Set();
+            toks.forEach(k => (DIMIN[k] || []).forEach(a => dim.add(a)));
+            return { id: p.id, name: String(p.name).trim(), dorsal: Number(p.dorsal), toks, dimin: [...dim], apodos: (Array.isArray(p.apodos) ? p.apodos : []).map(norm).filter(Boolean) };
+        }).sort((a, b) => a.dorsal - b.dorsal);
+        const cuenta = {};
+        JUG.forEach(j => { const f = j.name.split(/\s+/)[0]; cuenta[f] = (cuenta[f] || 0) + 1; });
+        JUG.forEach(j => { const pt = j.name.split(/\s+/); j.corto = cuenta[pt[0]] > 1 && pt[1] ? pt[0] + ' ' + pt[1] : pt[0]; });
+        CAMPO = new Set((onFieldIds || []).map(String));
+        PORTERO = onFieldIds && onFieldIds.length ? onFieldIds[0] : null;
+    }
+
+    // Busca niños en la frase → [{ j, pos }] o { error }
+    function buscarJugadores(tokens) {
+        const out = [];
+        const meter = (j, i) => { if (!out.length || out[out.length - 1].j !== j || i - out[out.length - 1].pos > 2) out.push({ j, pos: i }); };
+        for (let i = 0; i < tokens.length; i++) {
+            const t = tokens[i];
+            if (/^\d{1,2}$/.test(t)) {
+                const d = Number(t), j = JUG.find(x => x.dorsal === d);
+                if (!j) return { error: 'Hoy no hay nadie con el ' + d };
+                meter(j, i); continue;
+            }
+            if (t.length < 2 || PALABRAS.has(t) || STOP.has(t)) continue;
+            const dos = tokens[i + 1] ? t + ' ' + tokens[i + 1] : null;
+            let cand = [], usados = 0;
+            if (dos) { const c2 = JUG.filter(j => j.apodos.includes(dos)); if (c2.length) { cand = c2.map(j => ({ j, d: -1 })); usados = 1; } }
+            if (!cand.length) JUG.forEach(j => {
+                let mejor = 99;
+                if (j.apodos.includes(t)) mejor = -1;
+                else if (j.dimin.includes(t)) mejor = 0.5;
+                j.toks.forEach(k => {
+                    const d = lev(t, k); if (d <= tolerancia(k) && d < mejor) mejor = d;
+                    if (mejor > 1 && t.length >= 4 && k.length > t.length && k.startsWith(t)) mejor = 1; // «Sebas» → Sebastián
+                });
+                j.apodos.forEach(a => { if (a.length >= 4 && lev(t, a) <= 1 && mejor > 1) mejor = 1; });
+                if (mejor < 99) cand.push({ j, d: mejor });
+            });
+            if (!cand.length) continue;
+            const min = Math.min(...cand.map(c => c.d));
+            cand = cand.filter(c => c.d === min).map(c => c.j);
+            if (cand.length > 1 && tokens[i + 1]) {
+                const sig = tokens[i + 1];
+                const conAp = cand.filter(j => j.toks.some(k => k !== t && lev(sig, k) <= tolerancia(k)));
+                if (conAp.length >= 1) { cand = conAp; usados = 1; }
+            }
+            if (cand.length > 1) { const enC = cand.filter(j => CAMPO.has(String(j.id))); if (enC.length === 1) cand = enC; }
+            if (cand.length > 1) return { error: 'Hay varios ' + t + ', di el dorsal' };
+            meter(cand[0], i);
+            i += usados;
+        }
+        return out;
+    }
+
+    // ───────── Frases → acciones ─────────
+    const ACC = {
+        GOL: ['⚽', 'Gol'], ASISTENCIA: ['👟', 'Asistencia'], TIRO_PUERTA: ['🎯', 'Tiro a puerta'], TIRO_FUERA: ['💨', 'Tiro sin peligro'], PALO: ['🪵', 'Tiro al palo'],
+        PASE_CLAVE: ['🔑', 'Pase clave'], PASE_AREA: ['📯', 'Pase al área'], REGATE: ['🌀', 'Regate'], DEFENSA: ['🛡️', 'Acción defensiva'], DEFENSA_CLAVE: ['🛡️⭐', 'Defensa clave'],
+        FALLO: ['❌', 'Fallo'], FALLO_IMP: ['💥', 'Fallo importante'], PARADA: ['🧤', 'Parada'], PARADA_DIFICIL: ['🧤⭐', 'Paradón'], FUERA_JUEGO: ['🚩', 'Fuera de juego'],
+        AMARILLA: ['🟨', 'Amarilla'], ROJA: ['🟥', 'Roja'], FALTA_FAVOR: ['🟡', 'Falta a favor'], FALTA_CONTRA: ['🟠', 'Falta en contra'],
+        CORNER_FAVOR: ['⛳', 'Córner a favor'], CORNER_CONTRA: ['⛳', 'Córner en contra'], GOL_RIVAL: ['🥅', 'Gol del rival'], TIRO_RIVAL_PUERTA: ['🥅', 'Tiro del rival a puerta'],
+        TIRO_RIVAL_FUERA: ['💨', 'Tiro del rival fuera'], PALO_RIVAL: ['🪵', 'Palo del rival'], FJ_RIVAL: ['🚩', 'Fuera de juego del rival'], GOL_PROPIA_RIVAL: ['⚽', 'Gol en propia del rival'],
+        PEN_FAVOR: ['🎯', 'Penalti'], PEN_RIVAL: ['🎯', 'Penalti del rival'], CAMBIO: ['🔄', 'Cambio'], DESHACER: ['↩', 'Borrar lo último']
+    };
+    const RES_PEN = { GOL: 'gol', PARADO: 'parado', FUERA: 'fuera' };
+    const ok = (o) => Object.assign({ ok: true }, o);
+    const falla = (msg, seguir) => ({ ok: false, msg, seguir: !!seguir });
+    const esRival = (t) => / (ellos|rival|rivales|suyo|suya|contrario|contrarios) /.test(t);
+    const esRivalAcc = (t) => esRival(t) || / en contra /.test(t); // v212: «en contra» también vale para las acciones del rival (no para faltas ni fuera de juego)
+    const esFuera = (t) => / (fuera|sin peligro|desviado|alto|flojo|mordido) /.test(t);
+    function conJugador(t, act, obligatorio) {
+        const r = buscarJugadores(t.trim().split(' '));
+        if (r.error) return falla(r.error);
+        if (!r.length) {
+            if (obligatorio) return falla(ACC[act][1] + ', ¿de quién?', true);
+            return ok({ act });
+        }
+        return ok({ act, j: r[0].j });
+    }
+    function parseGol(t) {
+        const tok = t.trim().split(' ');
+        const r = buscarJugadores(tok);
+        if (r.error) return falla(r.error);
+        const iGol = tok.findIndex(w => /^(gol|golazo|marca|marcamos)$/.test(w));
+        const iAsi = tok.findIndex(w => /^(asistencia|asiste|pase|centro)$/.test(w));
+        let gol = null, asi = null;
+        if (iGol >= 0) gol = r.find(x => x.pos > iGol && !(iAsi > iGol && x.pos > iAsi)) || null;
+        if (!gol) gol = r.find(x => iAsi < 0 || x.pos < iAsi) || null;
+        if (iAsi >= 0) asi = r.find(x => x.pos > iAsi && (!gol || x.j !== gol.j)) || null;
+        if (!gol) return falla('Gol, ¿de quién?', true);
+        return ok({ act: 'GOL', j: gol.j, asist: asi && asi.j !== gol.j ? asi.j : null });
+    }
+    function parseCambio(t) {
+        const tok = t.trim().split(' ');
+        const r = buscarJugadores(tok);
+        if (r.error) return falla(r.error);
+        const entran = [], salen = [];
+        r.forEach(x => {
+            let rol = null;
+            for (let k = x.pos - 1; k >= 0; k--) {
+                if (/^(entra|entran|sube)$/.test(tok[k])) { rol = 'entra'; break; }
+                if (/^(sale|salen|por|quita)$/.test(tok[k])) { rol = 'sale'; break; }
+            }
+            if (!rol) rol = CAMPO.has(String(x.j.id)) ? 'sale' : 'entra'; // «cambio 14 por 7»
+            (rol === 'entra' ? entran : salen).push(x.j);
+        });
+        if (!entran.length || !salen.length || entran.length !== salen.length) return falla('Cambio, ¿quién entra y quién sale?', true);
+        const pares = entran.map((e, i) => {
+            let en = e, sa = salen[i];
+            if (CAMPO.has(String(en.id)) && !CAMPO.has(String(sa.id))) { const x = en; en = sa; sa = x; } // dicho al revés
+            return { entra: en, sale: sa };
+        });
+        return ok({ act: 'CAMBIO', pares });
+    }
+    function parsePenalti(t) {
+        const rival = esRival(t) || / (en contra|para ellos) /.test(t);
+        let res = null;
+        if (/ (gol|dentro|marca|marcado|adentro) /.test(t)) res = 'GOL';
+        else if (/ (parado|para|parada|paradon|detiene) /.test(t)) res = 'PARADO';
+        else if (/ (fuera|falla|fallado|palo|poste|larguero) /.test(t)) res = 'FUERA';
+        if (!res) return falla('Penalti, ¿cómo acabó?', true);
+        if (rival) return ok({ act: 'PEN_RIVAL', res });
+        const tok = t.trim().split(' ');
+        const r = buscarJugadores(tok);
+        if (r.error) return falla(r.error);
+        const iProv = tok.findIndex(w => /^(provoca|provocado|provoco)$/.test(w));
+        const lanza = r.find(x => iProv < 0 || x.pos < iProv);
+        const prov = iProv >= 0 ? r.find(x => x.pos > iProv) : null;
+        if (!lanza) return falla('Penalti, ¿quién lo tira?', true);
+        return ok({ act: 'PEN_FAVOR', j: lanza.j, res, provoca: prov && prov.j !== lanza.j ? prov.j : null });
+    }
+    function parseFalta(t) {
+        if (esRival(t) || / (a favor|favor|le hacen|le han hecho|nos hacen|sobre|recibe|recibida|para nosotros) /.test(t) || / falta (al|a) /.test(t)) return conJugador(t, 'FALTA_FAVOR', false);
+        if (/ (en contra|contra|comete|nuestra) /.test(t)) return ok({ act: 'FALTA_CONTRA' });
+        const r = buscarJugadores(t.trim().split(' '));
+        if (r.error) return falla(r.error);
+        if (r.length) return ok({ act: 'FALTA_CONTRA', j: r[0].j });
+        return falla('Falta, ¿a favor o en contra?', true);
+    }
+    function parse(raw) {
+        const t = ' ' + norm(raw) + ' ';
+        const has = (re) => re.test(t);
+        if (!t.trim()) return falla('No he oído nada');
+        if (has(/ (borra|borrar|deshaz|deshacer|anula|anular|elimina) /)) return ok({ act: 'DESHACER' });
+        if (has(/ (cambio|cambios|entra|entran|sale|salen) /)) return parseCambio(t);
+        if (has(/ fuera (de )?juego /)) return esRival(t) ? ok({ act: 'FJ_RIVAL' }) : conJugador(t, 'FUERA_JUEGO', true);
+        if (has(/ (autogol|en propia|propia puerta|propia meta) /)) return ok({ act: 'GOL_PROPIA_RIVAL' });
+        if (has(/ (penalti|penalty) /)) return parsePenalti(t);
+        if ((has(/ (gol|golazo) /) && esRivalAcc(t)) || has(/ (nos marcan|nos meten|nos han metido|marcan ellos|gol en contra) /)) return ok({ act: 'GOL_RIVAL' });
+        if (has(/ (palo|poste|larguero) /) && esRivalAcc(t)) return ok({ act: 'PALO_RIVAL' });
+        if (has(/ (tiro|tira|tiran|disparo|dispara|chut|chuta|chutan|remate|remata|rematan) /) && esRivalAcc(t)) return ok({ act: esFuera(t) ? 'TIRO_RIVAL_FUERA' : 'TIRO_RIVAL_PUERTA' });
+        if (has(/ (corner|esquina) /)) {
+            if (esRival(t) || has(/ (en contra|contra|para ellos) /)) return ok({ act: 'CORNER_CONTRA' });
+            if (has(/ (nuestro|a favor|favor|para nosotros) /)) return ok({ act: 'CORNER_FAVOR' });
+            return falla('Córner, ¿a favor o en contra?', true);
+        }
+        if (has(/ falta /)) return parseFalta(t);
+        if (has(/ amarilla /)) return conJugador(t, 'AMARILLA', true);
+        if (has(/ roja /)) return conJugador(t, 'ROJA', true);
+        if (has(/ (paradon|parada dificil|parada buena|gran parada|parada clave) /)) return ok({ act: 'PARADA_DIFICIL' });
+        if (has(/ parada /)) return ok({ act: 'PARADA' });
+        if (has(/ pase clave /)) return conJugador(t, 'PASE_CLAVE', true);
+        if (has(/ (pase al area|centro al area|centro) /) && !has(/ (gol|golazo|marca) /)) return conJugador(t, 'PASE_AREA', true);
+        if (has(/ (defensa|defensiva|recupera|recuperacion|robo|roba|corte|corta|intercepta|intercepcion|despeje|despeja) /)) return conJugador(t, has(/ clave /) ? 'DEFENSA_CLAVE' : 'DEFENSA', true);
+        if (has(/ (regate|regatea|jugada individual|jugadon) /)) return conJugador(t, 'REGATE', true);
+        if (has(/ (fallo|falla|fallazo|perdida|pierde) /)) return conJugador(t, has(/ (importante|gordo|grave|fallazo) /) ? 'FALLO_IMP' : 'FALLO', true);
+        if (has(/ (palo|poste|larguero) /)) return conJugador(t, 'PALO', true);
+        const tg = t.replace(/ pase de gol /g, ' asistencia ');
+        if (/ (gol|golazo|marca|marcamos) /.test(tg)) return parseGol(tg);
+        if (/ (asistencia|asiste) /.test(tg)) return conJugador(tg, 'ASISTENCIA', true);
+        if (has(/ (tiro|tira|disparo|dispara|chut|chuta|remate|remata|a puerta) /)) return conJugador(t, esFuera(t) ? 'TIRO_FUERA' : 'TIRO_PUERTA', true);
+        return falla('No te he entendido');
+    }
+    const quien = (j) => j ? '#' + j.dorsal + ' ' + j.corto : '';
+    function textoLog(r) {
+        const [ic, nom] = ACC[r.act];
+        if (r.act === 'CAMBIO') return ic + ' ' + r.pares.map(p => 'Entra ' + quien(p.entra) + ' · sale ' + quien(p.sale)).join(' | ');
+        let s = ic + ' ' + nom + (r.j ? ' · ' + quien(r.j) : '');
+        if (r.asist) s += ' · asist. ' + quien(r.asist);
+        if (r.res) s += ' · ' + RES_PEN[r.res];
+        if (r.provoca) s += ' · provoca ' + quien(r.provoca);
+        return s;
+    }
+    function textoVoz(r) {
+        if (r.act === 'CAMBIO') return r.pares.map(p => 'Entra ' + p.entra.corto + ', sale ' + p.sale.corto).join('. ');
+        if (r.act === 'GOL') return 'Gol de ' + r.j.corto + (r.asist ? ', asistencia de ' + r.asist.corto : '') + '. Origen pendiente';
+        if (r.act === 'GOL_RIVAL') return 'Gol del rival. Origen pendiente';
+        if (r.act === 'GOL_PROPIA_RIVAL') return 'Gol en propia del rival. Posición pendiente';
+        if (r.act === 'PEN_FAVOR') return 'Penalti de ' + r.j.corto + ', ' + RES_PEN[r.res];
+        if (r.act === 'PEN_RIVAL') return 'Penalti del rival, ' + RES_PEN[r.res];
+        if ((r.act === 'PARADA' || r.act === 'PARADA_DIFICIL') && r.j) return ACC[r.act][1] + ', ' + r.j.corto;
+        if (r.act === 'FALTA_CONTRA') return 'Falta en contra';
+        return ACC[r.act][1] + (r.j ? ', ' + r.j.corto : '');
+    }
+
+    // ───────── Aplicar en el partido (las mismas funciones que los botones) ─────────
+    const VOZ_LINEAS = new Set(); // líneas de la cronología apuntadas por voz (para el 🎙️ de la tira)
+    const enDirecto = () => partidoEmpezado && !matchFinished;
+    function enCampo(j) { return j && onFieldIds.indexOf(j.id) !== -1; }
+    function aplicar(r) {
+        if (r.act === 'DESHACER') {
+            if (!actionHistory.length) return { msg: 'No hay nada que borrar', mal: true };
+            const ult = String(substitutionTimeline[substitutionTimeline.length - 1] || '').replace(/^\[\d+'\]\s*/, '');
+            document.getElementById('undoBtn').click();
+            return { msg: 'Borrado: ' + ult, voz: 'Borrado' };
+        }
+        if (!enDirecto()) return { msg: matchFinished ? 'El partido ya ha terminado' : 'El partido no ha empezado: pulsa ▶ INICIAR', mal: true };
+        // comprobaciones antes de tocar nada
+        const nec = ['GOL', 'ASISTENCIA', 'TIRO_PUERTA', 'TIRO_FUERA', 'PALO', 'PASE_CLAVE', 'PASE_AREA', 'REGATE', 'DEFENSA', 'DEFENSA_CLAVE', 'FALLO', 'FALLO_IMP', 'FUERA_JUEGO', 'AMARILLA', 'ROJA', 'PEN_FAVOR'];
+        if (nec.includes(r.act) && !enCampo(r.j)) return { msg: r.j.corto + ' no está en el campo', mal: true };
+        if (r.asist && !enCampo(r.asist)) return { msg: r.asist.corto + ' no está en el campo', mal: true };
+        if (r.j && r.act === 'FALTA_FAVOR' && !enCampo(r.j)) r.j = null;
+        if (r.act === 'PARADA' || r.act === 'PARADA_DIFICIL') {
+            const pid = onFieldIds[0];
+            if (pid == null || !playersData[pid]) return { msg: 'No hay portero en el campo', mal: true };
+            r.j = JUG.find(x => x.id === pid) || { id: pid, corto: nombreCorto(playersData[pid]), dorsal: playersData[pid].dorsal };
+        }
+        if (r.act === 'CAMBIO') {
+            for (const p of r.pares) {
+                if (!enCampo(p.sale)) return { msg: p.sale.corto + ' no está en el campo', mal: true };
+                if (benchIds.indexOf(p.entra.id) === -1) return { msg: p.entra.corto + ' no está en el banquillo', mal: true };
+                if ((expulsadosIds || []).includes(p.entra.id)) return { msg: p.entra.corto + ' está expulsado', mal: true };
+            }
+        }
+        const h0 = actionHistory.length, t0 = substitutionTimeline.length;
+        let golDe = null, golPropia = false;
+        reproduciendoPrevio = true; // así no salen las preguntas (asistencia, origen, falta) ni se guarda a medias
+        try {
+            selectedPlayerId = null; activeActionPlayerId = null; pendingAction = null;
+            const jug = (id, accion) => { activeActionPlayerId = id; pendingAction = accion; registrarAccionJugador(); };
+            const boton = (id, btn) => { activeActionPlayerId = id; document.getElementById(btn).onclick(); };
+            const rival = (accion) => { pendingAction = accion; registrarAccionRival(); };
+            switch (r.act) {
+                case 'GOL': jug(r.j.id, 'GOL'); if (r.asist) jug(r.asist.id, 'ASISTENCIA'); golDe = playersData[r.j.id]; break;
+                case 'ASISTENCIA': jug(r.j.id, 'ASISTENCIA'); break;
+                case 'TIRO_PUERTA': jug(r.j.id, 'DISPARO_PUERTA'); break;
+                case 'TIRO_FUERA': jug(r.j.id, 'DISPARO_FUERA'); break;
+                case 'PALO': jug(r.j.id, 'PALO'); break;
+                case 'PASE_CLAVE': case 'PASE_AREA': case 'REGATE': case 'DEFENSA': case 'DEFENSA_CLAVE': jug(r.j.id, r.act); break;
+                case 'FALLO': boton(r.j.id, 'actionFalloBtn'); break;
+                case 'FALLO_IMP': boton(r.j.id, 'actionFalloImpBtn'); break;
+                case 'FUERA_JUEGO': boton(r.j.id, 'actionFueraJuegoBtn'); break;
+                case 'AMARILLA': boton(r.j.id, 'actionYellowBtn'); break;
+                case 'ROJA': boton(r.j.id, 'actionRedBtn'); break;
+                case 'PARADA': activeActionPlayerId = r.j.id; registrarParada('normal'); break;
+                case 'PARADA_DIFICIL': activeActionPlayerId = r.j.id; registrarParada('dificil'); break;
+                case 'FALTA_FAVOR': registrarFaltaFavor(r.j ? r.j.id : null); break;
+                case 'FALTA_CONTRA': document.getElementById('faltaContraBtn').onclick(); break;
+                case 'CORNER_FAVOR': document.getElementById('cornerFavorBtn').onclick(); break;
+                case 'CORNER_CONTRA': document.getElementById('cornerContraBtn').onclick(); break;
+                case 'GOL_RIVAL': rival('GOL_RIVAL'); break;
+                case 'TIRO_RIVAL_PUERTA': rival('TIRO_RIVAL_PUERTA'); break;
+                case 'TIRO_RIVAL_FUERA': rival('TIRO_RIVAL_FUERA'); break;
+                case 'PALO_RIVAL': rival('TIRO_RIVAL_PALO'); break;
+                case 'FJ_RIVAL': document.getElementById('fueraJuegoRivalBtn').onclick(); break;
+                case 'GOL_PROPIA_RIVAL': registrarGolPropiaRival(); golPropia = true; break;
+                case 'PEN_FAVOR':
+                    penaltiEjecutorId = r.j.id; penaltiProvocadorId = r.provoca && enCampo(r.provoca) ? r.provoca.id : null;
+                    registrarPenaltiFavor(r.res); if (r.res === 'GOL') golDe = playersData[r.j.id];
+                    break;
+                case 'PEN_RIVAL': registrarPenaltiRival(r.res); break;
+                case 'CAMBIO': r.pares.forEach(p => { selectedPlayerId = p.sale.id; handleBenchPlayerClick(p.entra.id); }); break;
+            }
+        } finally {
+            reproduciendoPrevio = false;
+            selectedPlayerId = null; activeActionPlayerId = null; pendingAction = null;
+        }
+        // una frase = un solo paso de ↩ (gol + asistencia, varios cambios…)
+        if (actionHistory.length > h0 + 1) actionHistory.splice(h0 + 1);
+        for (let k = t0; k < substitutionTimeline.length; k++) VOZ_LINEAS.add(k + '|' + substitutionTimeline[k]);
+        saveState();
+        try { renderPlayers(); } catch (e) {}
+        try { actualizarLiveStats(); } catch (e) {}
+        try { if (typeof actualizarLiveMatchStatsBar === 'function') actualizarLiveMatchStatsBar(); } catch (e) {}
+        try { if (golDe) notificarGolPush(golDe.name); else if (golPropia) notificarGolPush('', 'Gol en propia puerta del rival.'); } catch (e) {}
+        if (substitutionTimeline.length === t0 && actionHistory.length === h0) return { msg: 'No se ha podido apuntar', mal: true };
+        return { msg: textoLog(r), voz: textoVoz(r) };
+    }
+
+    // ───────── Voz de confirmación ─────────
+    let vozEs = null;
+    function elegirVoz() { if (!window.speechSynthesis) return; const vs = speechSynthesis.getVoices(); vozEs = vs.find(v => /^es[-_]ES/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null; }
+    if (window.speechSynthesis) { elegirVoz(); speechSynthesis.onvoiceschanged = elegirVoz; }
+    function decir(txt, luego) {
+        let hecho = false;
+        const fin = () => { if (hecho) return; hecho = true; if (luego) luego(); };
+        if (!window.speechSynthesis || !txt) { fin(); return; }
+        try {
+            speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(txt);
+            u.lang = 'es-ES'; if (vozEs) u.voice = vozEs; u.rate = 1.2;
+            u.onend = fin; u.onerror = fin;
+            speechSynthesis.speak(u);
+            setTimeout(fin, 1800 + txt.length * 90);
+        } catch (e) { fin(); }
+    }
+
+    // ───────── Escuchar una frase ─────────
+    let rec = null, escuchando = false, tEscucha = 0;
+    function escuchar(alTerminar) {
+        if (!SR) { alTerminar(null, 'Este navegador no tiene reconocimiento de voz (usa Chrome)'); return; }
+        if (escuchando) return;
+        try { speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
+        pausarSilencio();
+        let finales = null, error = null;
+        rec = new SR();
+        rec.lang = 'es-ES'; rec.interimResults = true; rec.maxAlternatives = 5; rec.continuous = false;
+        rec.onstart = () => { escuchando = true; tEscucha = Date.now(); pintarTira(); };
+        rec.onresult = (e) => { const r = e.results[e.results.length - 1]; const alts = Array.from(r).map(a => a.transcript); oyendo = alts[0]; pintarTira(); if (r.isFinal) finales = alts; };
+        rec.onerror = (e) => {
+            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') error = 'Sin permiso de micrófono para la app';
+            else if (e.error === 'no-speech') error = 'No he oído nada';
+            else if (e.error === 'network') error = 'Sin conexión: la voz necesita datos';
+            else if (e.error !== 'aborted') error = 'Error del micro: ' + e.error;
+        };
+        rec.onend = () => { escuchando = false; oyendo = ''; alTerminar(finales, error); };
+        try { rec.start(); } catch (e) { escuchando = false; alTerminar(null, 'No se pudo abrir el micro'); }
+    }
+
+    // ───────── Partido: procesar lo dicho ─────────
+    let vozOn = false, pendiente = null, oyendo = '';
+    const ERRORES = []; // { ts, txt, oido }
+    function procesarPartido(alts, error) {
+        if (!alts || !alts.length) { if (error) { ERRORES.push({ ts: Date.now(), txt: error }); pintarTira(); } return reposo(); }
+        cargarJugadores();
+        alts = alts.map(a => String(a || '').trim()).filter(Boolean);
+        const pend = pendiente && Date.now() < pendiente.hasta ? pendiente : null;
+        pendiente = null;
+        let res = null, usado = alts[0];
+        for (const a of alts) {
+            if (pend) { const r = parse(pend.texto + ' ' + a); if (r.ok) { res = r; usado = a; break; } }
+            const r = parse(a); if (r.ok) { res = r; usado = a; break; }
+        }
+        if (!res) res = pend ? parse(pend.texto + ' ' + alts[0]) : parse(alts[0]);
+        const oido = (pend ? pend.texto + ' … ' : '') + usado;
+        if (!res.ok) {
+            let msg = res.msg, seguir = res.seguir;
+            if (/^(Hoy no hay nadie|Hay varios)/.test(msg)) { // se guarda la acción y se vuelve a preguntar por el niño
+                const limpio = norm((pend ? pend.texto + ' ' : '') + usado).split(' ').filter(w => PALABRAS.has(w) || STOP.has(w)).join(' ');
+                const pr = parse(limpio);
+                if (!pr.ok && pr.seguir) { pendiente = { texto: limpio, hasta: Date.now() + 15000 }; seguir = true; msg += '. ¿De quién?'; }
+            } else if (seguir) pendiente = { texto: (pend ? pend.texto + ' ' : '') + usado, hasta: Date.now() + 15000 };
+            ERRORES.push({ ts: Date.now(), txt: msg, oido }); pintarTira();
+            return decir(msg, () => seguir ? escuchar(procesarPartido) : reposo());
+        }
+        const a = aplicar(res);
+        if (a.mal) { ERRORES.push({ ts: Date.now(), txt: a.msg, oido }); pintarTira(); return decir(a.msg, reposo); }
+        $('vozBolUlt').textContent = a.msg;
+        pintarTira();
+        decir(a.voz, reposo);
+    }
+    function reposo() { if (!escuchando) { reanudarSilencio(); pintarTira(); } }
+    function pulsarPartido() {
+        if (escuchando) { if (Date.now() - tEscucha > 800) { try { rec.abort(); } catch (e) {} } return; }
+        escuchar(procesarPartido);
+    }
+
+    // ───────── Tira: últimas acciones (dichas o tocadas) ─────────
+    function golPendiente(k, t) {
+        if (!/^⚽ Gol #|^⚽ Gol en propia|^🥅 Gol rival(?! de penalti)/.test(t)) return false;
+        try { return !mgdLeer().some(x => x.idx === k && x.linea === substitutionTimeline[k]); } catch (e) { return false; }
+    }
+    let ultimoHtml = '';
+    function pintarTira() {
+        const tira = $('vozTira'); if (!tira) return;
+        tira.classList.toggle('on', vozOn);
+        if (!vozOn) return;
+        $('vozTiraCab').textContent = escuchando ? '🎙️ TE ESCUCHO…' + (oyendo ? ' «' + oyendo + '»' : '') : (pendiente ? '🎧 Falta un dato · toca los cascos' : '🎧 VOZ ACTIVA · toca los cascos y habla');
+        const filas = [];
+        for (let k = substitutionTimeline.length - 1; k >= 0 && filas.length < 4; k--) {
+            const m = /^\[(\d+)'\]\s*(.*)$/.exec(String(substitutionTimeline[k] || ''));
+            if (!m) continue;
+            filas.push({ k, min: m[1], t: m[2], voz: VOZ_LINEAS.has(k + '|' + substitutionTimeline[k]) });
+        }
+        const err = ERRORES.length && Date.now() - ERRORES[ERRORES.length - 1].ts < 20000 ? ERRORES[ERRORES.length - 1] : null;
+        let html = err ? `<div class="voz-ev err"><span class="m"></span><span class="v">🎙️</span><span class="t">❓ ${vozEsc(err.txt)}${err.oido ? `<small>«${vozEsc(err.oido)}» · no se ha apuntado</small>` : ''}</span></div>` : '';
+        html += filas.map((f, i) => {
+            const limpio = f.t.replace(/\s*\(([-+]?\d+[.,]?\d*)\)\s*$/, '').replace(/\s\+\d+(\.\d+)?$/, '');
+            const pend = golPendiente(f.k, f.t);
+            return `<div class="voz-ev"><span class="m">${f.min}'</span><span class="v">${f.voz ? '🎙️' : '👆'}</span><span class="t">${vozEsc(limpio)}</span>`
+                + (pend ? `<button type="button" class="pend" data-k="${f.k}" data-e="${/^🥅/.test(f.t) ? 'rival' : 'hergar'}">📍 Completar</button>` : '')
+                + (i === 0 && !matchFinished ? `<button type="button" class="x" data-undo="1" aria-label="Borrar lo último">✕</button>` : '') + '</div>';
+        }).join('');
+        if (!html) html = '<div class="voz-vacio">Aún nada. Lo que digas o toques aparece aquí (las 4 últimas).</div>';
+        if (html === ultimoHtml) return; // sin cambios: no se repinta (así no se pierde un toque a medias)
+        ultimoHtml = html;
+        $('vozLista').innerHTML = html;
+        $('vozLista').querySelectorAll('.pend').forEach(b => b.onclick = () => { if (window.v169AbrirMapaGol) window.v169AbrirMapaGol(Number(b.dataset.k), b.dataset.e); });
+        $('vozLista').querySelectorAll('[data-undo]').forEach(b => b.onclick = () => document.getElementById('undoBtn').click());
+    }
+    setInterval(() => { if (vozOn) pintarTira(); }, 1500);
+    // al guardar el origen de un gol, la tira se refresca
+    { const ok169 = $('v169MapaOk'); if (ok169) ok169.addEventListener('click', () => setTimeout(pintarTira, 50)); }
+
+    // ───────── Botón de los cascos (sonido silencioso + controles multimedia) ─────────
+    let audio = null;
+    function wavSilencio(seg) {
+        const sr = 8000, n = sr * seg, b = new ArrayBuffer(44 + n), v = new DataView(b);
+        const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+        w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+        v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr, true);
+        v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+        for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+        return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+    }
+    const pruebaAbierta = () => $('vozPrueba').classList.contains('on');
+    function pausarSilencio() { try { if (audio && !audio.paused) audio.pause(); } catch (e) {} }
+    function reanudarSilencio() {
+        if (!audio || !(vozOn || pruebaAbierta())) return;
+        const p = audio.play(); if (p && p.catch) p.catch(() => {});
+        try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+    }
+    function alPulsarCascos() { if (pruebaAbierta()) pruebaPulsar(); else if (vozOn) pulsarPartido(); }
+    function prepararCascos() {
+        if (!audio) {
+            audio = new Audio(wavSilencio(10)); audio.loop = true;
+            if ('mediaSession' in navigator) {
+                try { navigator.mediaSession.metadata = new MediaMetadata({ title: 'Hergar · voz', artist: 'Toca los cascos y habla', album: 'C.D. Hergar' }); } catch (e) {}
+                ['play', 'pause', 'nexttrack', 'previoustrack', 'stop'].forEach(a => { try { navigator.mediaSession.setActionHandler(a, alPulsarCascos); } catch (e) {} });
+            }
+        }
+        const p = audio.play(); if (p && p.catch) p.catch(() => {});
+        // pide ya el permiso del micro, para que no salga en mitad del partido
+        try { if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {}); } catch (e) {}
+    }
+    let wl = null;
+    async function pantallaEncendida() { try { if ('wakeLock' in navigator && !wl) { wl = await navigator.wakeLock.request('screen'); wl.addEventListener('release', () => { wl = null; }); } } catch (e) {} }
+    function soltarPantalla() { try { if (wl) wl.release(); } catch (e) {} wl = null; }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && vozOn) { pantallaEncendida(); reanudarSilencio(); } });
+
+    // ───────── Encender / apagar ─────────
+    function activarVoz() {
+        $('vozHoja').classList.remove('on');
+        if (!SR) { alert('Este navegador no tiene reconocimiento de voz. Abre la app en Chrome.'); return; }
+        vozOn = true; prepararCascos(); pantallaEncendida();
+        $('vozBtn').classList.add('on'); pintarTira();
+        decir('Listo. Toca los cascos y habla.', reposo);
+    }
+    function apagarVoz() {
+        vozOn = false; pendiente = null;
+        try { if (rec && escuchando) rec.abort(); } catch (e) {}
+        pausarSilencio(); soltarPantalla();
+        $('vozBtn').classList.remove('on'); $('vozBolsillo').classList.remove('on'); pintarTira();
+        decir('Voz apagada');
+    }
+    $('vozBtn').onclick = () => { if (vozOn) apagarVoz(); else $('vozHoja').classList.add('on'); };
+    $('vozHojaActivar').onclick = activarVoz;
+    $('vozHojaCerrar').onclick = () => $('vozHoja').classList.remove('on');
+    $('vozHoja').addEventListener('click', (e) => { if (e.target === $('vozHoja')) $('vozHoja').classList.remove('on'); });
+    $('vozHojaProbar').onclick = () => { $('vozHoja').classList.remove('on'); abrirPrueba(); };
+
+    // ───────── Modo bolsillo ─────────
+    const bol = $('vozBolsillo'), cand = $('vozBolCand');
+    let tCand = null;
+    $('vozBolBtn').onclick = () => { bol.classList.add('on'); pintarBolsillo(); };
+    $('vozHablarBtn').onclick = () => pulsarPartido();
+    ['touchstart', 'touchmove', 'touchend', 'click', 'contextmenu'].forEach(ev => bol.addEventListener(ev, (e) => { if (e.target !== cand) e.preventDefault(); }, { passive: false }));
+    cand.addEventListener('pointerdown', (e) => { e.preventDefault(); cand.classList.add('carga'); tCand = setTimeout(() => { bol.classList.remove('on'); cand.classList.remove('carga'); }, 1500); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => cand.addEventListener(ev, () => { clearTimeout(tCand); cand.classList.remove('carga'); }));
+    cand.addEventListener('contextmenu', (e) => e.preventDefault());
+    function pintarBolsillo() { if (!bol.classList.contains('on')) return; $('vozBolMar').textContent = goalsLocal + ' — ' + goalsRival; const s = getElapsedSeconds(); $('vozBolRel').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
+    setInterval(pintarBolsillo, 1000);
+
+    // ───────── Modo prueba de cascos ─────────
+    const VP = { boton: null, oido: null, micro: null, practica: [] };
+    function marca(n, v) { const el = $('vpN' + n); el.classList.toggle('ok', v === true); el.classList.toggle('mal', v === false); el.textContent = v === true ? '✓' : v === false ? '✗' : n; }
+    function pintarPrueba() {
+        marca(1, VP.boton); marca(2, VP.oido); marca(3, VP.micro);
+        const r = $('vpResumen');
+        if (VP.boton != null && VP.oido != null && VP.micro != null) {
+            const todo = VP.boton && VP.oido && VP.micro;
+            r.style.display = 'block'; r.style.color = todo ? '#2ed573' : '#f5c26b';
+            r.innerHTML = (todo ? '✅ Todo listo para el partido' : '⚠️ Hay algo que revisar') + `<div style="font-family:Inter,sans-serif; font-weight:600; font-size:12px; color:#94a3b8; margin-top:4px;">${VP.boton ? '✓' : '✗'} botón · ${VP.oido ? '✓' : '✗'} oído · ${VP.micro ? '✓' : '✗'} micro${!VP.boton ? '<br>Sin botón: prueba con doble toque, o usa «🎙️ Hablar» en la tira.' : ''}</div>`;
+        } else r.style.display = 'none';
+        $('vpLista').innerHTML = VP.practica.slice(-6).reverse().map(x => `<div class="vp-res ${x.ok ? 'ok' : 'mal'}">${vozEsc(x.txt)}<small>«${vozEsc(x.oido)}»</small></div>`).join('') || '';
+    }
+    function abrirPrueba() {
+        if (!SR) { alert('Este navegador no tiene reconocimiento de voz. Abre la app en Chrome.'); return; }
+        VP.boton = null; VP.oido = null; VP.micro = null; VP.practica = [];
+        $('vpR1').className = 'vp-res'; $('vpR1').textContent = 'Esperando el toque…';
+        $('vpR3').className = 'vp-res'; $('vpR3').textContent = '—';
+        $('vozPrueba').classList.add('on'); prepararCascos(); pintarPrueba();
+    }
+    function cerrarPrueba() {
+        $('vozPrueba').classList.remove('on');
+        try { if (rec && escuchando) rec.abort(); } catch (e) {}
+        if (!vozOn) pausarSilencio();
+    }
+    $('vpCerrar').onclick = cerrarPrueba;
+    function oirPrueba(alts, error) {
+        reanudarSilencio();
+        cargarJugadores();
+        const oido = alts && alts.length ? alts[0] : '';
+        let res = null;
+        if (alts) for (const a of alts) { const r = parse(a); if (r.ok) { res = r; break; } }
+        if (!res && alts) res = parse(alts[0]);
+        const txt = !alts ? (error || 'No he oído nada') : res.ok ? 'Entendido: ' + textoLog(res) : '❓ ' + res.msg;
+        if (VP.micro == null || VP.micro === false) {
+            VP.micro = !!(res && res.ok);
+            $('vpR3').className = 'vp-res ' + (VP.micro ? 'ok' : 'mal');
+            $('vpR3').innerHTML = vozEsc(txt) + (oido ? `<small>Ha oído: «${vozEsc(oido)}»${VP.micro ? '' : ' · prueba otra vez'}</small>` : '');
+        } else VP.practica.push({ ok: !!(res && res.ok), txt: res && res.ok ? textoLog(res) : txt, oido });
+        pintarPrueba();
+        decir(res && res.ok ? 'Entendido. ' + textoVoz(res).replace('. Origen pendiente', '') : (error || res && res.msg || 'No he oído nada'));
+    }
+    function pruebaPulsar() {
+        if (VP.boton !== true) { VP.boton = true; $('vpR1').className = 'vp-res ok'; $('vpR1').textContent = '✓ Botón detectado'; pintarPrueba(); decir('Botón detectado'); return; }
+        if (escuchando) return;
+        escuchar(oirPrueba);
+    }
+    $('vpHablar').onclick = () => { if (!escuchando) escuchar(oirPrueba); };
+    $('vpOirBtn').onclick = () => { prepararCascos(); decir('Hola Javi. Si me oyes por los cascos, pulsa lo he oído.'); };
+    $('vpOirSi').onclick = () => { VP.oido = true; pintarPrueba(); };
+    $('vpOirNo').onclick = () => { VP.oido = false; pintarPrueba(); };
+
+    // ───────── Qué decir ─────────
+    const DIC = [
+        ['NUESTRAS ACCIONES'], ['Gol', 'gol del 9 · gol de Martín · gol del 9 pase del 7'], ['Asistencia', 'asistencia del 7 · pase de gol del 7'],
+        ['Tiro a puerta', 'tiro del 9 · remate del 9'], ['Tiro sin peligro', 'tiro fuera del 9 · tiro sin peligro del 9'], ['Al palo', 'palo del 9 · larguero del 9'],
+        ['Pase clave', 'pase clave del 8'], ['Pase al área', 'pase al área del 7 · centro del 7'], ['Regate', 'regate del 11 · jugada individual del 11'],
+        ['Defensa', 'defensa del 4 · robo del 4 · corte del 4'], ['Defensa clave', 'defensa clave del 4'], ['Fallo', 'fallo del 5 · fallo importante del 5'],
+        ['Parada', 'parada · paradón (el portero que está en el campo)'], ['Fuera de juego', 'fuera de juego del 9'], ['Tarjetas', 'amarilla al 6 · roja al 6'],
+        ['Penalti', 'penalti del 9 gol · parado · fuera'], ['Cambio', 'entra el 14 por el 7 · cambio 14 por 7'],
+        ['DEL RIVAL Y DEL EQUIPO'], ['Gol del rival', 'gol de ellos · gol en contra · nos marcan'], ['Tiro del rival', 'tiro de ellos · tiro en contra · tiro en contra fuera'], ['Palo del rival', 'palo de ellos · palo en contra'],
+        ['Penalti del rival', 'penalti de ellos / en contra + gol · parado · fuera'], ['Fuera de juego rival', 'fuera de juego de ellos'], ['Gol en propia del rival', 'gol en propia · autogol'],
+        ['Córners', 'córner a favor · córner de ellos · córner en contra'], ['Faltas', 'falta a favor · le hacen falta al 9 · falta en contra (la cometemos nosotros)'],
+        ['CORREGIR'], ['Quitar lo último', 'borra · deshaz (igual que ↩)']
+    ];
+    const dicHTML = DIC.map(r => r.length === 1 ? `<tr><td colspan="2" style="font-family:Montserrat,sans-serif; font-weight:800; font-size:10px; letter-spacing:1px; color:#64748b; font-style:normal; padding-top:10px;">${vozEsc(r[0])}</td></tr>` : `<tr><td>${vozEsc(r[0])}</td><td>${vozEsc(r[1])}</td></tr>`).join('');
+    $('vpDic').innerHTML = dicHTML;
+
+    // ───────── Ajustes: apodos y prueba (en «Editar plantilla y configuración») ─────────
+    const ancla = Array.from(document.querySelectorAll('#rosterEditSection > div')).find(d => /CONFIGURACIÓN IA/.test(d.textContent || ''));
+    if (ancla) ancla.insertAdjacentHTML('beforebegin', `<div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+        <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎙️ CONTROL POR VOZ</div>
+        <button type="button" onclick="vozAbrirPrueba()" style="width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(255,85,119,0.5); background:rgba(180,20,56,0.12); color:#ff8fa3; font-weight:800; font-size:12px;">🧪 PROBAR VOZ Y CASCOS</button>
+        <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin:6px 0 8px;">Para cuando cambies de cascos. No apunta nada en el partido.</div>
+        <details id="vozApodosDet"><summary style="font-size:12px; font-weight:800; color:#e2e8f0; cursor:pointer; min-height:36px; display:flex; align-items:center;">🏷️ Apodos de cada niño para la voz</summary>
+            <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin:2px 0 6px;">Cómo le llamáis en el equipo, separado por comas (p. ej. «Alex, Ale»). Los diminutivos normales (Sebas, Dani, Santi…) ya se entienden sin ponerlos.</div>
+            <div id="vozApodosLista" style="background:rgba(0,0,0,0.2); border-radius:8px; padding:2px 8px;"></div>
+        </details>
+    </div>`);
+    window.vozAbrirPrueba = abrirPrueba;
+    function pintarApodos() {
+        const caja = $('vozApodosLista'); if (!caja) return;
+        const lista = Object.values(playersData).filter(p => p && p.name).sort((a, b) => (a.dorsal ?? 99) - (b.dorsal ?? 99));
+        caja.innerHTML = lista.map(p => `<div class="voz-apodo"><b>${p.dorsal ?? ''}</b><span class="n">${vozEsc(p.name)}</span><input type="text" data-id="${vozEsc(p.id)}" value="${vozEsc((p.apodos || []).join(', '))}" placeholder="Apodos" autocomplete="off"></div>`).join('') || '<div style="font-size:11.5px; color:#64748b; padding:8px 0;">Aún no hay jugadores.</div>';
+        caja.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+            const p = Object.values(playersData).find(x => String(x.id) === inp.dataset.id); if (!p) return;
+            const v = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+            if (v.length) p.apodos = v; else delete p.apodos;
+            saveState();
+        }));
+    }
+    { const det = $('vozApodosDet'); if (det) det.addEventListener('toggle', () => { if (det.open) pintarApodos(); }); }
+
+    pintarTira();
 })();
 </script>
 
