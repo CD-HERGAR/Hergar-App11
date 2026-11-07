@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    213                                            ║
+  ║  Versión:    217                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1807,7 +1807,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v213</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v217</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2988,7 +2988,7 @@
         minMinutosRanking: 35,   // ranking de temporada: mínimo de minutos acumulados
         minMinutosSinergia: 20,  // v69: sinergias: mínimo de minutos juntos medidos
         minMinutosMVP: 10,
-        mvpCriterio: 'aporte', // v190: MVP = impacto por encima de un compañero medio en sus mismos minutos
+        mvpCriterio: 'acciones', // v215: MVP = el que más suma con sus acciones (sin la parte de equipo); a mano: v190 (aporte)
         suelo: -5,
         acciones: {
             gol: 0.75, golExtraDefensa: 1.25, golExtraMedio: 0.15,
@@ -4175,35 +4175,52 @@
         h += `<details style="margin-top:10px;"><summary style="font-size:11.5px; font-weight:700; color:${acento}; cursor:pointer;">ℹ️ Cómo se calcula</summary>${snExplicacionHTML()}</details>`;
         return h;
     }
-    // ── v190 · MVP DEL PARTIDO: lo que aporta por encima de un compañero medio en sus mismos minutos (misma explicación en app y visor) ──
+    // ── v215 · MVP DEL PARTIDO: el que más suma con SUS ACCIONES (sin la parte de equipo) (misma idea en app y visor) ──
     function mvpExplicacionHTML(minMin) {
         minMin = minMin || 10;
-        const fila = (a, b, c, d, e, neg) => `<div style="display:grid; grid-template-columns:1.4fr .7fr .7fr .9fr .9fr; gap:4px; padding:5px 0; border-top:1px solid rgba(255,255,255,.06); font-size:11.5px; ${neg ? 'font-weight:800; color:#94a3b8; font-size:9.5px; letter-spacing:.4px;' : 'color:#e2e8f0;'}"><span>${a}</span><span style="text-align:center;">${b}</span><span style="text-align:center;">${c}</span><span style="text-align:center;">${d}</span><span style="text-align:center;${neg ? '' : ' font-weight:800; color:#f5a623;'}">${e}</span></div>`;
+        const fila = (a, b, c, d, neg) => `<div style="display:grid; grid-template-columns:1.5fr .7fr .8fr .9fr; gap:4px; padding:5px 0; border-top:1px solid rgba(255,255,255,.06); font-size:11.5px; ${neg ? 'font-weight:800; color:#94a3b8; font-size:9.5px; letter-spacing:.4px;' : 'color:#e2e8f0;'}"><span>${a}</span><span style="text-align:center;">${b}</span><span style="text-align:center;">${c}</span><span style="text-align:center;${neg ? '' : ' font-weight:800; color:#f5a623;'}">${d}</span></div>`;
         return `<div style="font-size:12.5px; line-height:1.55; color:#e2e8f0; padding-top:6px;">
-            <p style="margin:0 0 8px;">Gana quien más suma <strong>por encima de lo que habría hecho un compañero medio en sus mismos minutos</strong>. La media es la del equipo en ese partido.</p>
-            <p style="margin:0 0 8px;">Mirar solo el impacto por minuto engañaba: si entras 15' y en ese rato el equipo marca dos goles, te llevas el +1 de cada gol aunque no toques el balón, y por minuto parece un partidazo.</p>
-            <p style="margin:0 0 4px;">· <strong>Si juega todo el partido a su nivel normal</strong>, su aporte es 0: jugar mucho no da el MVP por sí solo.<br>· <strong>Si juega poco</strong>, solo gana si en ese rato hace algo de verdad grande.</p>
-            <div style="margin:8px 0;">${fila('', 'Minutos', 'Impacto', 'Lo normal', 'Aporte', true)}${fila('Entra al final', "15'", '+4', '+1,3', '+2,7')}${fila('Titular', "70'", '+12', '+6,0', '+6,0')}</div>
-            <p style="margin:0 0 8px; font-size:11.5px; color:#cbd5e1;">Ejemplo con un equipo que hace +6 por 70'. «Lo normal» es lo que habría sumado un compañero medio en esos minutos. Para ganar al titular, el que entra al final tendría que sumar más de +7,3 en sus 15'.</p>
-            <p style="margin:0;">Mínimo ${minMin} minutos jugados. Solo decide quién es el MVP: el impacto de cada niño no se toca.</p>
+            <p style="margin:0 0 8px;">Gana quien más suma con <strong>sus acciones</strong>: goles, asistencias, tiros, pases clave y al área, regates, defensas y paradas; los fallos restan.</p>
+            <p style="margin:0 0 8px;">No cuenta lo que le toca por estar en el campo: el +1 de cada gol del equipo, lo que restan los goles y tiros del rival, ni la portería a cero (que sí cuenta en el impacto). Así no gana quien tuvo la suerte de estar cuando caían los goles, sino quien más hizo.</p>
+            <div style="margin:8px 0;">${fila('', 'Minutos', 'Impacto', 'Sus acciones', true)}${fila('Entra y caen 3 goles', "30'", '+4,9', '+1,5')}${fila('Titular con gol y regates', "70'", '+5,2', '+3,4')}</div>
+            <p style="margin:0 0 8px; font-size:11.5px; color:#cbd5e1;">El MVP es el titular: hizo mucho más, aunque al otro le sumaran los goles del equipo. Quien entra desde el banquillo también puede ganarlo si en su rato hace mucho.</p>
+            <p style="margin:0;">Si empatan, decide el impacto. Mínimo ${minMin} minutos jugados. En los partidos cargados a mano (sin detalle de acciones) se mira lo que aporta por encima de un compañero medio en sus minutos. Solo decide quién es el MVP: el impacto de cada niño no se toca.</p>
         </div>`;
     }
     // Elige el MVP. filas: [{ ref, mins, imp }] de todos los que jugaron ese partido.
     // v190: media = impacto por minuto del equipo en ese partido; aporte = su impacto − lo que habría sumado un compañero medio en sus minutos.
     function mvpPuntuacion(imp, mins, mediaMin) { return imp - mediaMin * mins; }
+    // v215: si todos los que pueden ser MVP tienen «sus acciones» (acc), gana el que más suma; empate → el impacto.
+    //       Si falta en alguno (partidos cargados a mano), se usa el criterio de la v190.
     function mvpElegir(filas, minMin) {
         const v = (filas || []).filter(f => f && (f.mins || 0) > 0);
         const sm = v.reduce((s, f) => s + f.mins, 0);
         const media = sm > 0 ? v.reduce((s, f) => s + (Number(f.imp) || 0), 0) / sm : 0;
+        const cand = v.filter(f => f.mins >= (minMin || 10));
+        const conAcc = cand.length > 0 && cand.every(f => f.acc !== null && f.acc !== undefined && isFinite(f.acc));
         let best = null;
-        v.filter(f => f.mins >= (minMin || 10)).forEach(f => {
-            const sc = mvpPuntuacion(Number(f.imp) || 0, f.mins, media);
-            if (!best || sc > best.score) best = Object.assign({}, f, { score: sc });
+        cand.forEach(f => {
+            const sc = conAcc ? Number(f.acc) : mvpPuntuacion(Number(f.imp) || 0, f.mins, media);
+            const des = Number(f.imp) || 0;
+            if (!best || sc > best.score + 1e-9 || (Math.abs(sc - best.score) <= 1e-9 && des > best.des)) best = Object.assign({}, f, { score: sc, des, criterio: conAcc ? 'acciones' : 'aporte' });
         });
         return best;
     }
+    // v215 · «Sus acciones» de un niño en un partido guardado: lo guardado (v213), el registro minuto a minuto (desde el 17 oct)
+    // o, en partidos más antiguos, sus acciones contadas una a una (sin fallos). null si no hay detalle (cargado a mano).
+    function accionesPartidoDe(p, j, h) {
+        if (!h) return null;
+        if (h.accImp !== undefined && h.accImp !== null) return Number(h.accImp) || 0;
+        const M = p && p.minutos && Number(p.minutos.v) === 1 && p.minutos.j ? p.minutos.j[String(j.id)] : null;
+        if (M && M.a !== undefined) return String(M.a || '').split(',').reduce((s, x) => s + (Number(x) || 0), 0);
+        if (!h.acc) return null;
+        const A = REGLAS_IMPACTO.acciones, a = h.acc, n = (k) => Number(a[k]) || 0;
+        return (h.goles || 0) * A.gol + (h.asistencias || 0) * A.asistencia + n('dp') * A.disparoPuerta + n('df') * A.disparoFuera + n('pal') * A.disparoPuerta
+            + n('pc') * A.paseClave + n('pa') * A.paseArea + n('reg') * A.regate + n('def') * A.defensa + n('defC') * A.defensaClave
+            + n('par') * A.parada + n('parD') * A.paradaDificil + n('fj') * A.fueraJuego;
+    }
     function mvpFilasEnDirecto() {
-        return Object.values(playersData).filter(p => p.convocado).map(p => ({ ref: p, mins: Math.floor((p.minutosAcumulados || 0) / 60), imp: Number(p.impacto) || 0 }));
+        return Object.values(playersData).filter(p => p.convocado).map(p => ({ ref: p, mins: Math.floor((p.minutosAcumulados || 0) / 60), imp: Number(p.impacto) || 0, acc: (Number(p.impacto) || 0) - (Number(p.equipoImp) || 0) })); // v215
     }
     function mvpEnDirecto() { const b = mvpElegir(mvpFilasEnDirecto(), REGLAS_IMPACTO.minMinutosMVP); return b ? b.ref : null; }
     // v161/v190 · Recalcula el MVP de todos los partidos de la temporada con el criterio nuevo (una sola vez)
@@ -4212,7 +4229,7 @@
         const cambios = [];
         ((t && t.partidos) || []).forEach((p, i) => {
             const filas = [];
-            js.forEach(j => { const h = ptsHistDe(j, p); if (h && (h.mins || 0) > 0) filas.push({ ref: j, h, mins: h.mins, imp: pesoImpDe(h) }); });
+            js.forEach(j => { const h = ptsHistDe(j, p); if (h && (h.mins || 0) > 0) filas.push({ ref: j, h, mins: h.mins, imp: pesoImpDe(h), acc: accionesPartidoDe(p, j, h) }); });
             if (!filas.length) return;
             const b = mvpElegir(filas, REGLAS_IMPACTO.minMinutosMVP);
             if (!b) return;
@@ -4229,13 +4246,13 @@
     function migrarMvpV190() {
         try {
             const t = getTemporada();
-            if (!t || t.mvpRegla === 190) return;
+            if (!t || (t.mvpRegla || 0) >= 217) return; // v215 · v217 (deshace la v216: la portería a cero no cuenta para el MVP)
             const cambios = recalcularMvpTemporada(t);
-            t.mvpRegla = 190;
+            t.mvpRegla = 217;
             saveTemporada(t);
             if (!cambios.length) return;
             setTimeout(() => { try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} }, 4000);
-            alert(`⭐ MVP recalculados con el criterio nuevo (v190): lo que aporta cada niño por encima de un compañero medio en sus mismos minutos.\n\nCambia el MVP en ${cambios.length} ${cambios.length === 1 ? 'partido' : 'partidos'}:\n\n${cambios.join('\n')}\n\nEl impacto de los niños no cambia. Se envía al visor en unos segundos; si no aparece, usa "Sincronizar temporada con el visor".`);
+            alert(`⭐ MVP recalculados (v217): gana el que más suma con sus acciones, sin el bonus por los goles del equipo ni la portería a cero (la portería a cero sigue contando en el impacto).\n\nCambia el MVP en ${cambios.length} ${cambios.length === 1 ? 'partido' : 'partidos'}:\n\n${cambios.join('\n')}\n\nEl impacto de los niños no cambia. Se envía al visor en unos segundos; si no aparece, usa "Sincronizar temporada con el visor".`);
         } catch (e) { console.error('v190 MVP:', e); }
     }
     setTimeout(migrarMvpV190, 1500);
@@ -11849,7 +11866,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         // MVP con los datos nuevos
         const mvpAntes = P.mvp && P.mvp !== '-' ? P.mvp : '—';
         const filasMvp = [];
-        Object.values(T.jugadores).forEach(j => { const h = j.historial ? j.historial[rvHist(j, Pn)] : null; if (h && (h.mins || 0) > 0) filasMvp.push({ ref: j, h, mins: h.mins, imp: pesoImpDe(h) }); });
+        Object.values(T.jugadores).forEach(j => { const h = j.historial ? j.historial[rvHist(j, Pn)] : null; if (h && (h.mins || 0) > 0) filasMvp.push({ ref: j, h, mins: h.mins, imp: pesoImpDe(h), acc: accionesPartidoDe(Pn, j, h) }); });
         const b = mvpElegir(filasMvp, REGLAS_IMPACTO.minMinutosMVP);
         if (b) {
             const j = b.ref, h = b.h;
