@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    221                                            ║
+  ║  Versión:    224                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1809,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v221</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v224</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -3441,13 +3441,17 @@
         };
         return { ini, fin, estado };
     }
-    // ── v221 · SINERGIAS RECALCULADAS ──────────────────────────────────────
-    // Antes: solo parejas vecinas en la pizarra y solo el impacto medido en directo (desde v69), extrapolado a 70'
-    // con muestras de 20' → rankings sin sentido. Ahora, con los titulares y los minutos de cada partido guardado:
-    // diferencia de goles (a favor − en contra) por 70' mientras los dos coinciden en el campo, MENOS lo que suele
-    // ir el equipo con cada uno de ellos en el campo (media del ritmo de A y del de B, en todos sus minutos). Se "encoge" hacia 0 con
-    // pocos minutos (× min ÷ (min + 140)) para que 50' con suerte no ganen a 300' sólidos. Puede salir negativo.
-    const SIN_MIN_JUNTOS = 45, SIN_PRIOR = 140;
+    // ── v224 · SINERGIAS: PUNTOS JUNTOS FRENTE A PAREJAS DEL MISMO TIPO ─────
+    // Solo parejas que juegan CERCA (por el puesto de cada uno en ese partido). El número es medible y entran todas,
+    // también las que juegan siempre juntas: puntos de las ACCIONES de los dos (sin la parte de equipo: ni bonus por
+    // gol, ni goles/tiros del rival, ni portería a cero) por cada 70' que coinciden en el campo, MENOS la media de
+    // todas las parejas del mismo tipo de puestos (p. ej. MCD-MCD, DEF-DEF, MED-DEL) en esos mismos minutos.
+    // Desde el 17 oct (v145), minuto a minuto; antes, las acciones del partido se reparten por igual entre sus minutos.
+    // Debajo, cuando hay minutos para comparar, las acciones de cada uno con el otro y sin él.
+    const SIN_MIN_JUNTOS = 60, SIN_MIN_SIN = 30;
+    const SIN_CAT = { POR: 'POR', LI: 'DEF', DFC: 'DEF', LD: 'DEF', MCD: 'MCD', MC: 'MED', MI: 'MED', MD: 'MED', MP: 'MED', EI: 'DEL', DC: 'DEL', ED: 'DEL' };
+    const SIN_CAT_ORD = ['POR', 'DEF', 'MCD', 'MED', 'DEL'];
+    function sinTipo(pa, pb) { const a = SIN_CAT[(pa || [])[0]] || '?', b = SIN_CAT[(pb || [])[0]] || '?'; return [a, b].sort((x, y) => SIN_CAT_ORD.indexOf(x) - SIN_CAT_ORD.indexOf(y)).join('-'); }
     // Solo cuentan las parejas que juegan CERCA (como las parejas de la pizarra): nada de delantero con central.
     // Se mira el puesto de cada uno EN ESE PARTIDO (h.puestos); si el partido no lo tiene, su puesto habitual.
     const SIN_VECINOS = {
@@ -3475,85 +3479,114 @@
         if (lin && L2P[lin]) return [L2P[lin]];
         return hab || [];
     }
+    // Presencia (fracción de cada minuto en el campo) y acciones por minuto (ac = null si no hay acciones) de cada niño.
+    function sinMinutosPartido(p, filas, dur, tit) {
+        const out = {};
+        const M = p && p.minutos && Number(p.minutos.v) === 1 && p.minutos.j ? p.minutos : null;
+        if (M) {
+            const lee = s => String(s || '').split(',').map(x => x === '' ? 0 : (Number(x) || 0));
+            const ini = Math.max(0, Number(M.ini) || 0);
+            filas.forEach(f => {
+                const r = M.j[String(f.j.id)]; if (!r) return;
+                const c = lee(r.c), a = lee(r.a), n = Math.max(c.length, a.length);
+                const pr = [], ac = [];
+                for (let k = 0; k < n; k++) { pr[k] = k < ini ? 0 : Math.min(1, (c[k] || 0) / 60); ac[k] = k < ini ? 0 : (a[k] || 0); }
+                if (pr.some(v => v > 0)) out[f.j.id] = { pr, ac, exacto: true };
+            });
+            if (Object.keys(out).length) return out;
+        }
+        filas.forEach(f => {
+            const tr = muroTramo(p, f.h, dur, tit, f.j.id); if (!tr) return;
+            const acc = accionesPartidoDe(p, f.j, f.h);
+            const n = Math.ceil(dur), pr = [], mins = Math.max(1e-9, tr.fin - tr.ini);
+            for (let k = 0; k < n; k++) pr[k] = Math.max(0, Math.min(k + 1, tr.fin) - Math.max(k, tr.ini));
+            out[f.j.id] = { pr, ac: acc == null ? null : pr.map(v => acc * v / mins), exacto: false };
+        });
+        return out;
+    }
     function sinergiasV221(t) {
         const ps = (t && t.partidos) || [], js = Object.values((t && t.jugadores) || {});
-        const ind = {}, par = {}; let usados = 0, eqMin = 0, eqNet = 0; const sinDatos = [];
-        ps.forEach((p, i) => {
+        const par = {}, tipos = {}; let usados = 0, exactos = 0;
+        const P = (a, b) => { const k = clavePareja(Number(a), Number(b)); const [x, y] = k.split('_').map(Number); return par[k] || (par[k] = { clave: k, a: x, b: y, min: 0, pj: 0, acc: 0, T: {}, X: { [x]: { wA: 0, oA: 0, oM: 0 }, [y]: { wA: 0, oA: 0, oM: 0 } } }); };
+        ps.forEach(p => {
             const filas = [];
             js.forEach(j => { const h = ptsHistDe(j, p); if (h && (h.mins || 0) > 0) filas.push({ j, h, mins: h.mins }); });
             if (!filas.length) return;
-            const tit = Array.isArray(p.titulares) && p.titulares.length ? p.titulares.map(String) : null;
-            const gf = Number(p.golesLocal) || 0, gc = Number(p.golesRival) || 0;
-            const gN = ptsGolesOrdenados(p, 'hergar'), gR = ptsGolesOrdenados(p, 'rival');
-            const conMin = (arr, n) => n === 0 || (arr && arr.length === n && arr.every(g => ptsGolMin(g) != null));
             const dur = mmDuracion(p, filas);
-            const todosEnteros = filas.every(f => f.mins >= dur);
-            if ((!tit && !todosEnteros) || !conMin(gN, gf) || !conMin(gR, gc)) { sinDatos.push(i); return; }
-            const tr = filas.map(f => ({ id: f.j.id, pu: sinPuestosDe(f.j, f.h), t: muroTramo(p, f.h, dur, tit, f.j.id) })).filter(x => x.t);
-            if (!tr.length) { sinDatos.push(i); return; }
-            usados++; eqMin += dur; eqNet += gf - gc;
-            const goles = [...(gN || []).map(g => ({ m: ptsGolMin(g), s: 1 })), ...(gR || []).map(g => ({ m: ptsGolMin(g), s: -1 }))];
-            const peso = (x, m) => { const e = x.t.estado(m); return e === 'on' ? 1 : e === '?' ? 0.5 : 0; };
-            tr.forEach(x => {
-                const r = ind[x.id] || (ind[x.id] = { min: 0, net: 0 });
-                r.min += x.t.fin - x.t.ini;
-                goles.forEach(g => { r.net += g.s * peso(x, g.m); });
-            });
-            for (let a = 0; a < tr.length; a++) for (let b = a + 1; b < tr.length; b++) {
-                const A = tr[a], B = tr[b];
-                const ov = Math.min(A.t.fin, B.t.fin) - Math.max(A.t.ini, B.t.ini);
-                if (ov <= 0 || !sinCerca(A.pu, B.pu)) continue; // solo parejas que juegan cerca
-                const k = clavePareja(Number(A.id), Number(B.id));
-                const r = par[k] || (par[k] = { a: A.id, b: B.id, min: 0, gf: 0, gc: 0, pj: 0 });
-                r.min += ov; r.pj++;
-                goles.forEach(g => { const w = peso(A, g.m) * peso(B, g.m); if (g.s > 0) r.gf += w; else r.gc += w; });
+            const tit = Array.isArray(p.titulares) && p.titulares.length ? p.titulares.map(String) : null;
+            const pu = {}; filas.forEach(f => { pu[f.j.id] = sinPuestosDe(f.j, f.h); });
+            const MM = sinMinutosPartido(p, filas, dur, tit), ids = Object.keys(MM).filter(id => MM[id].ac);
+            if (!ids.length) return;
+            usados++; if (MM[ids[0]].exacto) exactos++;
+            for (let x = 0; x < ids.length; x++) for (let y = x + 1; y < ids.length; y++) {
+                const ia = ids[x], ib = ids[y], A = MM[ia], B = MM[ib];
+                if (!sinCerca(pu[ia] || [], pu[ib] || [])) continue;
+                const n = Math.max(A.pr.length, B.pr.length);
+                let J = 0, acc = 0; const w = { [ia]: { wA: 0, oA: 0, oM: 0 }, [ib]: { wA: 0, oA: 0, oM: 0 } };
+                for (let k = 0; k < n; k++) {
+                    const pa = A.pr[k] || 0, pb = B.pr[k] || 0, jj = Math.min(pa, pb); J += jj;
+                    [[ia, pa, A.ac[k] || 0], [ib, pb, B.ac[k] || 0]].forEach(([id, pp, aa]) => {
+                        const f = pp > 0 ? jj / pp : 0;
+                        w[id].wA += aa * f; w[id].oA += aa * (1 - f); w[id].oM += pp - jj; acc += aa * f;
+                    });
+                }
+                if (J <= 0) continue;
+                const tipo = sinTipo(pu[ia], pu[ib]);
+                const r = P(ia, ib); r.min += J; r.pj++; r.acc += acc;
+                const rt = r.T[tipo] || (r.T[tipo] = { min: 0, acc: 0 }); rt.min += J; rt.acc += acc;
+                const tt = tipos[tipo] || (tipos[tipo] = { min: 0, acc: 0, pares: new Set() }); tt.min += J; tt.acc += acc; tt.pares.add(r.clave);
+                [ia, ib].forEach(id => { const q = r.X[id]; q.wA += w[id].wA; q.oA += w[id].oA; q.oM += w[id].oM; });
             }
         });
-        const rT = eqMin ? eqNet / eqMin * 70 : 0;
-        const rate = id => { const r = ind[id]; return r && r.min ? r.net / r.min * 70 : 0; };
-        const pares = Object.entries(par).map(([clave, x]) => {
-            const rP = (x.gf - x.gc) / x.min * 70;
-            const esperado = (rate(x.a) + rate(x.b)) / 2; // lo que suele ir el equipo con cada uno en el campo
-            const raw = rP - esperado;
-            return Object.assign(x, { clave, rP, esperado, raw, val: raw * x.min / (x.min + SIN_PRIOR) });
+        const media = tp => { const q = tipos[tp]; return q && q.min ? q.acc / q.min * 70 : 0; };
+        const pares = Object.values(par).map(x => {
+            const juntos = x.acc / x.min * 70;
+            const esperado = Object.entries(x.T).reduce((s, [tp, q]) => s + media(tp) * q.min, 0) / x.min; // media de su tipo, en sus minutos
+            const tipo = Object.entries(x.T).sort((a, b) => b[1].min - a[1].min)[0][0];
+            const solos = (tipos[tipo] && tipos[tipo].pares.size) || 1;
+            const det = [x.a, x.b].map(id => { const q = x.X[id]; return { id, con: q.wA / x.min * 70, sin: q.oM >= SIN_MIN_SIN ? q.oA / q.oM * 70 : null, minSin: q.oM }; });
+            return Object.assign(x, { juntos, esperado, val: juntos - esperado, tipo, solos, det, entra: x.min >= SIN_MIN_JUNTOS });
         });
-        return { pares, usados, total: ps.length, sinDatos, rT };
+        return { pares, usados, exactos, total: ps.length, tipos };
     }
     function htmlSinergiasV221(S, nombres) {
-        const fmtG = v => (Math.round(v * 2) / 2).toString().replace('.', ',');
-        const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace('.', ',');
-        const nom = id => nombres[id] || `ID${id}`;
-        let html = `<p style="margin:0 0 6px; font-size:11px; line-height:1.5; color:#94a3b8;">Cuánto mejor (o peor) va el equipo cuando estos dos coinciden en el campo que cuando juega cada uno de ellos en general. Es la diferencia de goles (a favor − en contra) por 70' juntos, menos la que suele tener el equipo con cada uno en el campo. Con pocos minutos el valor se acerca a 0 hasta que haya muestra. Solo parejas que juegan cerca (portero-defensas, defensas entre sí y con medios, medios con medios y delanteros, delanteros entre sí), según el puesto de cada uno en ese partido. Entran con ${SIN_MIN_JUNTOS}' juntos.</p>`;
-        html += `<p style="margin:0 0 10px; font-size:10.5px; color:#52665c;">Datos de ${S.usados} de ${S.total} partidos (los que tienen titulares y el minuto de todos los goles).</p>`;
+        const f1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+        const sg = v => (v > 0.05 ? '+' : v < -0.05 ? '−' : '') + Math.abs(Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+        const nom = id => nombres[id] || `ID${id}`, corto = id => nom(id).replace(/^#\d+ /, '');
+        const col = v => v >= 0.3 ? '#2ed573' : v <= -0.3 ? '#ff6b7a' : '#8da499';
+        let html = `<p style="margin:0 0 6px; font-size:11px; line-height:1.5; color:#94a3b8;">Parejas que juegan cerca. El número son los <b style="color:#cdd6e0">puntos de las acciones de los dos por cada 70' juntos</b> (tiros, pases, regates, defensa, paradas, goles y asistencias; sin lo que suma o resta el marcador), <b style="color:#cdd6e0">comparados con la media de las parejas de los mismos puestos</b>. +0,6 = entre los dos hacen 0,6 puntos más por 70' que una pareja normal de esos puestos. Entran con ${SIN_MIN_JUNTOS}' juntos.</p>`;
+        html += `<p style="margin:0 0 10px; font-size:10.5px; color:#52665c;">Datos de ${S.usados} de ${S.total} partidos (${S.exactos} minuto a minuto; en los demás, las acciones de cada partido se reparten entre sus minutos).</p>`;
         if (!S.pares.length) return html + '<p style="color:#52665c; font-size:12px; padding:10px;">Sin datos aún.</p>';
-        const medidas = S.pares.filter(d => d.min >= SIN_MIN_JUNTOS).sort((a, b) => b.val - a.val || b.min - a.min);
-        const observ = S.pares.filter(d => d.min < SIN_MIN_JUNTOS).sort((a, b) => b.min - a.min);
+        const medidas = S.pares.filter(d => d.entra).sort((a, b) => b.val - a.val || b.min - a.min);
+        const observ = S.pares.filter(d => !d.entra).sort((a, b) => b.min - a.min);
         if (!medidas.length) html += `<p style="color:#52665c; font-size:12px; padding:6px 0 10px;">Aún ninguna pareja llega a ${SIN_MIN_JUNTOS}' juntos.</p>`;
         else {
             const maxAbs = Math.max(...medidas.map(d => Math.abs(d.val)), 0.01);
             html += medidas.map(d => {
-                const pct = Math.round(Math.abs(d.val) / maxAbs * 50);
-                const col = d.val >= 0.25 ? '#2ed573' : d.val <= -0.25 ? '#ff6b7a' : '#8da499';
+                const pct = Math.round(Math.abs(d.val) / maxAbs * 50), c = col(d.val);
                 const barra = d.val >= 0
-                    ? `<div style="position:absolute; left:50%; width:${pct}%; height:100%; background:${col}; border-radius:0 3px 3px 0;"></div>`
-                    : `<div style="position:absolute; right:50%; width:${pct}%; height:100%; background:${col}; border-radius:3px 0 0 3px;"></div>`;
+                    ? `<div style="position:absolute; left:50%; width:${pct}%; height:100%; background:${c}; border-radius:0 3px 3px 0;"></div>`
+                    : `<div style="position:absolute; right:50%; width:${pct}%; height:100%; background:${c}; border-radius:3px 0 0 3px;"></div>`;
+                const cs = d.det.map(q => `${corto(q.id)} ${f1(q.con)}${q.sin != null ? ' con / ' + f1(q.sin) + ' sin' : ' (siempre con él)'}`).join(' · ');
                 return `<div style="background:#112a1e; border-radius:8px; padding:10px 12px; margin-bottom:6px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
                         <span style="font-size:11px; font-weight:700; color:#cdd6e0;">${nom(d.a)} <span style="color:#52665c;">↔</span> ${nom(d.b)}</span>
-                        <span style="font-size:13px; font-weight:900; color:${col}; font-family:monospace;">${sg(d.val)}</span>
+                        <span style="font-size:14px; font-weight:900; color:${c}; font-family:monospace;">${sg(d.val)}</span>
                     </div>
-                    <div style="position:relative; background:#0d1f17; border-radius:3px; height:5px; margin-bottom:6px;"><div style="position:absolute; left:50%; top:-2px; width:1px; height:9px; background:#52665c;"></div>${barra}</div>
-                    <div style="font-size:10.5px; color:#8da499; font-family:monospace;">${Math.round(d.min)}' juntos · ${d.pj} PJ · goles juntos ${fmtG(d.gf)}-${fmtG(d.gc)}</div>
+                    <div style="position:relative; background:#0d1f17; border-radius:3px; height:5px; margin-bottom:7px;"><div style="position:absolute; left:50%; top:-2px; width:1px; height:9px; background:#52665c;"></div>${barra}</div>
+                    <div style="font-size:11px; color:#94a3b8; font-family:monospace; margin-bottom:3px;">${f1(d.juntos)} juntos · media ${d.tipo} ${f1(d.esperado)}${d.solos <= 1 ? ' (única pareja así)' : ''}</div>
+                    <div style="font-size:10.5px; color:#8da499; line-height:1.4; margin-bottom:2px;">${cs}</div>
+                    <div style="font-size:10px; color:#52665c;">${Math.round(d.min)}' juntos · ${d.pj} PJ</div>
                 </div>`;
             }).join('');
         }
         if (observ.length) {
             html += `<div style="margin-top:12px; padding:10px 12px; border:1px dashed rgba(255,255,255,0.18); border-radius:12px;">
                 <div style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; letter-spacing:.08em; color:#e2e8f0;">EN OBSERVACIÓN</div>
-                <div style="font-size:10.5px; line-height:1.4; color:#94a3b8; margin:2px 0 6px;">Menos de ${SIN_MIN_JUNTOS}' juntos: muestra demasiado corta para sacar conclusiones.</div>
+                <div style="font-size:10.5px; line-height:1.4; color:#94a3b8; margin:2px 0 6px;">Menos de ${SIN_MIN_JUNTOS}' juntos: muestra demasiado corta.</div>
                 ${observ.map(d => `<div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(255,255,255,0.06); font-size:11.5px; color:#cbd5e1;">
                     <span>${nom(d.a)} <span style="color:#52665c;">↔</span> ${nom(d.b)}</span>
-                    <span style="color:#94a3b8; font-family:monospace; white-space:nowrap;">${Math.round(d.min)}' · ${fmtG(d.gf)}-${fmtG(d.gc)}</span>
+                    <span style="color:#94a3b8; font-family:monospace; white-space:nowrap;">${Math.round(d.min)}' · ${sg(d.val)}</span>
                 </div>`).join('')}
             </div>`;
         }
@@ -6758,10 +6791,10 @@
         const c = Object.assign({}, t); delete c.convocatorias;
         if (Array.isArray(c.partidos)) c.partidos = c.partidos.map(p => { if (!p || !p.dlg) return p; const q = Object.assign({}, p); delete q.dlg; return q; }); // v190: los apuntes del delegado no viajan al visor
         c.actaVisor = (typeof actaVisorOn === 'function') ? actaVisorOn() : false; // v139
-        try { // v221: el visor recibe las sinergias recalculadas (mismos campos: impN/(segsN/60)*70 = valor)
+        try { // v224: el visor recibe las sinergias recalculadas (mismos campos: impN/(segsN/60)*70 = valor)
             const S = sinergiasV221(t), o = {};
-            S.pares.forEach(x => { o[x.clave] = { segs: Math.round(x.min * 60), segsN: Math.round(x.min * 60), impN: x.val * x.min / 70, impactoAcum: 0, gf: x.gf, gc: x.gc, pj: x.pj }; });
-            c.sinergias = o; c.sinergiasInfo = { usados: S.usados, total: S.total, version: 221 };
+            S.pares.forEach(x => { o[x.clave] = { segs: Math.round(x.min * 60), segsN: Math.round(x.min * 60), impN: x.val * x.min / 70, impactoAcum: 0, pj: x.pj, juntos: x.juntos, media: x.esperado, tipo: x.tipo }; }); // el visor enseña la diferencia con la media de su tipo
+            c.sinergias = o; c.sinergiasInfo = { usados: S.usados, total: S.total, version: 224 };
         } catch (e) { console.error('sinergias visor v221', e); }
         c.resumenDatos = (typeof resumenDatosOn === 'function') ? resumenDatosOn() : true; // v203
         // v119 · solo viaja el vídeo si se pueden ver vídeos, el gol no está oculto y el goleador tiene permiso
