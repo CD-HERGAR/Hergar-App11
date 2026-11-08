@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    217                                            ║
+  ║  Versión:    220                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1592,6 +1592,8 @@
                 <div class="controls-row" style="flex-wrap:nowrap;"><!-- v205 -->
                     <button id="golPropiaRivalBtn" class="btn-favor" style="flex:1.4;"><span class="icn">⚽</span>GOL EN PROPIA DEL RIVAL</button>
                     <button id="paloRivalBtn" class="btn-contra"><span class="icn">🪵</span>PALO RIV<span class="badge" id="lsb_palR">0</span></button>
+                    <button id="amarillaRivalBtn" class="btn-contra"><span class="icn">🟨</span>TA RIV<span class="badge" id="lsb_taR">0</span></button><!-- v220 -->
+                    <button id="rojaRivalBtn" class="btn-contra"><span class="icn">🟥</span>TR RIV<span class="badge" id="lsb_trR">0</span></button>
                 </div>
                 <div class="controls-row" style="flex-wrap:nowrap;">
                     <button id="undoBtn" class="undo-btn" style="flex:0 0 46px;">↩</button>
@@ -1807,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v217</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v220</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2275,6 +2277,12 @@
         <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">🟨🟥 TARJETAS POR JUGADOR — corrige amarillas y rojas de este partido</label>
         <div id="editPartidoTarjetasList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:6px;"></div>
         <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">Se ajustan el total de la temporada, la ficha del jugador y el detalle del partido. Las tarjetas no cambian el impacto. No se modifican las sanciones ya aplicadas.</div>
+
+        <!-- v220 · tarjetas del rival -->
+        <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">🟨🟥 TARJETAS DEL RIVAL — con su minuto si lo sabes</label>
+        <div id="editPartidoTarjRivList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:6px;"></div>
+        <button type="button" id="editPartidoAddTarjRivBtn" style="width:100%; padding:8px; background:rgba(245,197,24,0.07); color:#f5c518; border:1px dashed rgba(245,197,24,0.45); border-radius:9px; font-weight:800; font-size:12px; margin-bottom:6px;">+ Añadir tarjeta del rival</button>
+        <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">No cambian el impacto de nadie. Una segunda amarilla al mismo jugador, apúntala como 🟥. Con el minuto de la roja se calcula cuánto jugamos con uno más y cómo fue el marcador en ese rato.</div>
 
         <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">⏱ GOLES CON MINUTO — para la lista de Partidos, los Récords y el 🎯 Mapa de goles del visor</label>
         <div id="egMapaResumen" style="font-size:11px; line-height:1.45; margin-bottom:6px; min-height:14px;"></div>
@@ -4509,6 +4517,9 @@
             js.forEach(j => { const h = ptsHistDe(j, p); if (h && h.acc) { hay = true; n += mdNum(h.acc.am) + mdNum(h.acc.ro); } });
             if (hay) { conTarj++; tarj += n; }
         });
+        { const conTR = S.filter(p => trLista(p) && trNuestras(t, p)); // v220 · tarjetas del rival
+          if (conTR.length) filas.push(['Tarjetas', media(conTR, p => { const x = trNuestras(t, p); return x.am + x.ro; }), media(conTR, p => { const x = trCuenta(p); return x.am + x.ro; }), conTR.length]); }
+        const sup = trTemporada(S); // v220
         // indicadores
         const sTn = sum(live, tn), sTr = sum(live, tr), sTrP = sum(live, trP);
         const sGl = sum(live, p => mdNum(p.golesLocal)), sGr = sum(live, p => mdNum(p.golesRival));
@@ -4531,7 +4542,7 @@
                 cf: (x, a) => a ? x.cf : x.cornersFavor };
             partes = { n: conP.length, filas: [['Goles a favor', 'gl'], ['Goles en contra', 'gr'], ['Disparos Hergar', 'tn'], ['Disparos rival', 'tr'], ['Córners a favor', 'cf']].map(([l, k]) => [l, m1(G[k]), Math.max(0, m2(G[k]))]) };
         }
-        return { pj, live: live.length, gf, gc, pts, filas, tarj: conTarj ? tarj / conTarj : null, conTarj, cuota, acierto, paradas, imp, nImp: impPart.length, partes };
+        return { pj, live: live.length, gf, gc, pts, filas, sup, tarj: conTarj ? tarj / conTarj : null, conTarj, cuota, acierto, paradas, imp, nImp: impPart.length, partes };
     }
     function mdFilaHTML(label, h, r, n, nLive) {
         const max = Math.max(h || 0, r || 0, 0.01);
@@ -4563,6 +4574,7 @@
             h += `<div style="font-size:10px; color:#64748b; text-align:center; margin-bottom:2px;">${mdNota(M.live)} con estadísticas</div>`;
             h += M.filas.map(([l, a, b, n]) => mdFilaHTML(l, a, b, n, M.live)).join('');
             if (M.tarj != null) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px;">🟨🟥 <b>${mdFmt(M.tarj)}</b> tarjetas del Hergar por partido <span style="color:#64748b;">(${mdNota(M.conTarj)})</span></div>`;
+            if (M.sup && (M.sup.mas || M.sup.menos)) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px; line-height:1.55;">${M.sup.mas ? `💪 <b>${Math.round(M.sup.mas)}'</b> con uno más en la temporada · goles en ese rato <b>${M.sup.gMas[0]}-${M.sup.gMas[1]}</b>` : ''}${M.sup.mas && M.sup.menos ? '<br>' : ''}${M.sup.menos ? `🛡️ <b>${Math.round(M.sup.menos)}'</b> con uno menos · goles en ese rato <b>${M.sup.gMenos[0]}-${M.sup.gMenos[1]}</b>` : ''}</div>`; // v220
         } else {
             h += `<div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Son partidos cargados a mano: no tienen tiros, córners ni faltas apuntados.</div>`;
         }
@@ -4646,6 +4658,49 @@
         });
         return { am, ro };
     }
+    // ── v220 · TARJETAS DEL RIVAL y SUPERIORIDAD NUMÉRICA (misma función en la app y en el visor) ──
+    // p.tarjetasRival = [{ min, tipo: 'A' | 'R' }] (una segunda amarilla del rival se apunta como roja).
+    // Superioridad: con el minuto de las rojas (del rival y nuestras, del acta) se sabe cuánto se jugó con uno más / uno menos.
+    function trLista(p) { return Array.isArray(p && p.tarjetasRival) ? p.tarjetasRival : null; }
+    function trCuenta(p) { const L = trLista(p); return L ? { am: L.filter(x => x && x.tipo === 'A').length, ro: L.filter(x => x && x.tipo === 'R').length } : null; }
+    function trNuestras(t, p) {
+        let am = 0, ro = 0, hay = false;
+        Object.values((t && t.jugadores) || {}).forEach(j => { const h = (j.historial || []).find(x => x.fecha === p.fecha && x.rival === p.rival); if (h && h.acc) { hay = true; am += Number(h.acc.am) || 0; ro += h.acc.ro ? 1 : 0; } });
+        return hay ? { am, ro } : null;
+    }
+    function trSuperioridad(p) {
+        const dur = parseInt(String((p && p.duracion) || ''), 10) || 70;
+        const exp = [];
+        (trLista(p) || []).forEach(x => { if (x && x.tipo === 'R' && x.min != null && x.min !== '') exp.push({ min: Number(x.min), d: 1 }); });
+        const A = p && p.acta && Array.isArray(p.acta.tarjetas) ? p.acta.tarjetas : [];
+        A.forEach(x => { if (x && !x.rival && (x.tipo === 'R' || x.tipo === 'AA') && x.min != null) exp.push({ min: Number(x.min), d: -1 }); });
+        if (!exp.length) return null;
+        exp.sort((a, b) => a.min - b.min);
+        const estadoEn = (m) => exp.reduce((s, e) => s + (e.min < m ? e.d : 0), 0);
+        const r = { mas: 0, menos: 0, gMas: [0, 0], gMenos: [0, 0], desdeMas: null, desdeMenos: null };
+        let dif = 0, desde = 0;
+        const tramo = (a, b) => { if (b <= a) return; if (dif > 0) r.mas += b - a; else if (dif < 0) r.menos += b - a; };
+        exp.forEach(e => { tramo(desde, e.min); dif += e.d; desde = e.min; if (e.d > 0 && r.desdeMas == null) r.desdeMas = e.min; if (e.d < 0 && r.desdeMenos == null) r.desdeMenos = e.min; });
+        tramo(desde, Math.max(desde, dur));
+        (Array.isArray(p.goles) ? p.goles : []).forEach(g => {
+            const m = g && (g.min != null ? g.min : g.minuto); if (m == null) return;
+            const d = estadoEn(Number(m)), k = g.equipo === 'rival' ? 1 : 0;
+            if (d > 0) r.gMas[k]++; else if (d < 0) r.gMenos[k]++;
+        });
+        return r;
+    }
+    function trSuperioridadHTML(p) {
+        const s = trSuperioridad(p); if (!s || (!s.mas && !s.menos)) return '';
+        const L = [];
+        if (s.mas) L.push(`💪 <b>${Math.round(s.mas)}'</b> con uno más (desde el ${s.desdeMas}') · en ese rato, <b>${s.gMas[0]}-${s.gMas[1]}</b>`);
+        if (s.menos) L.push(`🛡️ <b>${Math.round(s.menos)}'</b> con uno menos (desde el ${s.desdeMenos}') · en ese rato, <b>${s.gMenos[0]}-${s.gMenos[1]}</b>`);
+        return `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px; line-height:1.55;">${L.join('<br>')}</div>`;
+    }
+    function trTemporada(ps) {
+        const out = { mas: 0, menos: 0, gMas: [0, 0], gMenos: [0, 0], n: 0 };
+        (ps || []).forEach(p => { const s = trSuperioridad(p); if (!s) return; out.n++; out.mas += s.mas; out.menos += s.menos; out.gMas[0] += s.gMas[0]; out.gMas[1] += s.gMas[1]; out.gMenos[0] += s.gMenos[0]; out.gMenos[1] += s.gMenos[1]; });
+        return out;
+    }
     function estadisticasPartidoHTML(t, p, snCtx, plegado) {
         if (!p) return '';
         const n = v => Number(v) || 0;
@@ -4662,7 +4717,8 @@
                 ['Córners', n(p.cornersFavor), n(p.cornersContra)],
                 ['Faltas cometidas', n(p.faltasContra), n(p.faltasFavor)],
                 ['Fueras de juego', n(p.fuerasJuegoNuestros), n(p.fuerasJuegoRival)]
-            ].filter(([, a, b]) => a + b > 0);
+            ].concat((() => { const C = trCuenta(p), Nn = C ? trNuestras(t, p) : null; return C && Nn ? [['Amarillas', Nn.am, C.am], ['Rojas', Nn.ro, C.ro]] : []; })()) // v220
+            .filter(([, a, b]) => a + b > 0);
             h += `<div style="display:flex; justify-content:space-between; font-size:10.5px; font-weight:800; letter-spacing:.6px; margin-bottom:8px;"><span style="color:#ff5577;">HERGAR</span><span style="color:#94a3b8;">${momEsc(String(p.rival || 'RIVAL').toUpperCase())}</span></div>`;
             h += filas.map(([l, a, b]) => epFila(l, a, b)).join('');
             const acH = tn ? Math.round(gl / tn * 100) : null, acR = tr ? Math.round(gr / tr * 100) : null;
@@ -4696,6 +4752,7 @@
         // Tarjetas
         const T = epTarjetas(t, p);
         if (T.am.length || T.ro.length) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:10px; line-height:1.5;">${T.am.length ? `🟨 ${T.am.join(', ')}` : ''}${T.am.length && T.ro.length ? ' · ' : ''}${T.ro.length ? `🟥 ${T.ro.join(', ')}` : ''}</div>`;
+    { const C = trCuenta(p); if (C && (C.am || C.ro)) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px;">Rival: ${C.am ? '🟨 ×' + C.am : ''}${C.am && C.ro ? ' · ' : ''}${C.ro ? '🟥 ×' + C.ro : ''}</div>`; h += trSuperioridadHTML(p); } // v220
         const cuerpo = `<div style="padding-top:8px;">${h}</div>`;
         if (!plegado) return `<div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);"><div style="font-size:11px; font-weight:800; color:#f5a623; letter-spacing:.4px;">📊 ESTADÍSTICAS DEL PARTIDO</div>${cuerpo}</div>`;
         return `<details style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);"><summary style="color:#2ed573; font-size:11px; font-weight:800; cursor:pointer;">📊 Estadísticas del partido</summary>${cuerpo}</details>`;
@@ -5739,7 +5796,9 @@
             tarjetas = [];
             jugadores.forEach(x => { for (let k = 0; k < x.am; k++) tarjetas.push({ min: null, nombre: x.nombre, dorsal: x.dorsal, tipo: 'A' }); if (x.ro) tarjetas.push({ min: null, nombre: x.nombre, dorsal: x.dorsal, tipo: 'R' }); });
         }
-        // tiros y cuota
+            (trLista(p) || []).forEach(x => { if (x) tarjetas.push({ min: x.min != null && x.min !== '' ? Number(x.min) : null, nombre: 'Rival (' + (p.rival || '') + ')', dorsal: null, tipo: x.tipo === 'R' ? 'R' : 'A', rival: true }); }); // v220
+    tarjetas.sort((a, b) => (a.min == null ? 999 : a.min) - (b.min == null ? 999 : b.min));
+    // tiros y cuota
         const tN = (Number(p.tirosNuestrosPuerta) || 0) + (Number(p.tirosNuestrosFuera) || 0), tR = (Number(p.tirosRivalesPuerta) || 0) + (Number(p.tirosRivalesFuera) || 0);
         let cuota = null;
         if (p.tirosNuestrosPuerta != null && tN + tR > 0) {
@@ -7739,6 +7798,7 @@
             narracion: (() => { try { return narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); return []; } })(), // v193
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
             faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, // v117
+            tarjetasRival: tarjetasRival.slice(), // v220
             palosNuestros, palosRival, // v205
             analisisIA: analisisIACompleto, resumenIA: resumenIACompleto, notasIA: MOSTRAR_NOTAS_IA ? notasIAPartido : {}
         };
@@ -8006,6 +8066,7 @@
     let actaDescanso = null; // v139: cómo iba el partido al descanso (para el acta por partes)
     let fuerasJuegoNuestros = 0; // v117
     let fuerasJuegoRival = 0;    // v117
+    let tarjetasRival = [];      // v220 · [{ min, tipo: 'A' | 'R' }]
     let palosNuestros = 0, palosRival = 0; // v205: tiros al palo (también cuentan como tiros a puerta)
     let zonasRivales = {};
     let zonasEquipo = {};
@@ -8149,7 +8210,7 @@
             benchSittingTime,
             substitutionTimeline, rivalName,
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             analisisIACompleto, resumenIACompleto, notasIAPartido,
             tiroGolRival: true // v110
         }));
@@ -8216,6 +8277,7 @@
             cornersContra = state.cornersContra || 0;
             fuerasJuegoNuestros = state.fuerasJuegoNuestros || 0; // v117
             fuerasJuegoRival = state.fuerasJuegoRival || 0;       // v117
+            tarjetasRival = Array.isArray(state.tarjetasRival) ? state.tarjetasRival : []; trPintarBadges(); // v220
             palosNuestros = state.palosNuestros || 0; palosRival = state.palosRival || 0; // v205
             { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
             tirosTrasCambio = state.tirosTrasCambio || { n: 0, r: 0 }; // v137
@@ -9769,6 +9831,35 @@
         document.getElementById("lsb_cornersC").innerText = cornersContra;
     };
 
+    // v220 · TARJETAS DEL RIVAL: un toque, con el minuto. No cambian el impacto de nadie.
+    // Una segunda amarilla del mismo jugador rival se apunta como roja (lo que importa es que se quedan con uno menos).
+    function trPintarBadges() {
+        const a = document.getElementById('lsb_taR'), r = document.getElementById('lsb_trR');
+        if (a) a.innerText = tarjetasRival.filter(x => x.tipo === 'A').length;
+        if (r) r.innerText = tarjetasRival.filter(x => x.tipo === 'R').length;
+    }
+    function registrarTarjetaRival(tipo) {
+        if (!partidoEmpezado || matchFinished) return false;
+        logSnapshot();
+        const min = Math.floor(getElapsedSeconds() / 60);
+        tarjetasRival.push({ min, tipo });
+        substitutionTimeline.push(tipo === 'R' ? `[${min}'] 🟥 Roja al rival` : `[${min}'] 🟨 Amarilla al rival`);
+        trPintarBadges();
+        saveState();
+        actualizarLiveMatchStatsBar();
+        return true;
+    }
+    window.registrarTarjetaRival = registrarTarjetaRival;
+    document.getElementById("amarillaRivalBtn").onclick = function() {
+        if (!partidoEmpezado || matchFinished) { alert('Las tarjetas se apuntan con el partido en marcha.'); return; }
+        registrarTarjetaRival('A');
+    };
+    document.getElementById("rojaRivalBtn").onclick = function() {
+        if (!partidoEmpezado || matchFinished) { alert('Las tarjetas se apuntan con el partido en marcha.'); return; }
+        if (!confirm('🟥 ¿Roja al rival?\n\nSi es su segunda amarilla, apúntala también así: se quedan con uno menos desde este minuto.')) return;
+        registrarTarjetaRival('R');
+    };
+
     // v117 · FUERA DE JUEGO DEL RIVAL: un toque, sin jugador y sin puntos
     document.getElementById("fueraJuegoRivalBtn").onclick = function() {
         if (matchFinished) return;
@@ -10552,7 +10643,7 @@ ${ctxNotas ? `NOTAS DE QUIEN REGISTRA EL PARTIDO: ${ctxNotas}\n` : ''}GOLES: ${g
 TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta${palosNuestros ? `, de ellos ${palosNuestros} al palo` : ''}, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta${palosRival ? `, de ellos ${palosRival} al palo` : ''}, ${tirosRivalesFuera} sin peligro)
 FALTAS/CÓRNERS: F.Favor ${faltasFavor} F.Contra ${faltasContra} | C.Favor ${cornersFavor} C.Contra ${cornersContra}
 FUERAS DE JUEGO: Hergar ${fuerasJuegoNuestros} | Rival ${fuerasJuegoRival} (los del rival suelen indicar que la línea defensiva sube bien)
-TOP SINERGIAS: ${topSinergias || 'Sin datos'}
+${tarjetasRival.length ? `TARJETAS DEL RIVAL: ${tarjetasRival.map(x => (x.tipo === 'R' ? 'roja' : 'amarilla') + ' ' + x.min + "'").join(', ')}${tarjetasRival.some(x => x.tipo === 'R') ? ' (con una roja, el rival juega con uno menos desde ese minuto)' : ''}\n` : ''}TOP SINERGIAS: ${topSinergias || 'Sin datos'}
 CAMBIOS (minuto del reloj del partido; la 2.ª parte empieza en el 35'): ${(() => { try { const cs = substitutionTimeline.filter(x => typeof x === 'string' && x.includes('🔄 Sale')).map(x => { const m = parseInt((/^\[(\d+)'\]/.exec(x) || [])[1], 10); const parte = isNaN(m) ? '' : (m < 35 ? ` (1.ª parte, min ${m})` : m === 35 ? ' (en el descanso)' : ` (2.ª parte, ${m - 35} min después de empezar)`); return x.replace(/^\[\d+'\]\s*🔄\s*/, `${isNaN(m) ? '' : m + "' "}`) + parte; }); return cs.length ? cs.join(' | ') : 'Ninguno'; } catch (e) { return 'Sin datos'; } })()}
 CRONOLOGÍA: ${priorizarCronologia(substitutionTimeline, 15).join(' | ')}
 
@@ -11418,6 +11509,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             case 'tpR': pendingAction = 'TIRO_RIVAL_PUERTA'; registrarAccionRival(); break;
             case 'ff': registrarFaltaFavor(j != null && playersData[j] ? j : null); break; // v205: con el niño que la recibió
             case 'fc': document.getElementById('faltaContraBtn').onclick(); break;
+            case 'taR': tarjetasRival.push({ min: Math.floor(getElapsedSeconds() / 60), tipo: 'A' }); substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🟨 Amarilla al rival`); trPintarBadges(); break; // v220
+            case 'trR': tarjetasRival.push({ min: Math.floor(getElapsedSeconds() / 60), tipo: 'R' }); substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🟥 Roja al rival`); trPintarBadges(); break; // v220
             case 'fjR': fuerasJuegoRival++; substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🚩 Fuera de juego del rival`); break;
             case 'sub': selectedPlayerId = Number(e.s); handleBenchPlayerClick(Number(e.e)); break;
             case 'swap': selectedPlayerId = null; handleFieldPlayerClick(j); handleFieldPlayerClick(Number(e.x)); break;
@@ -11838,6 +11931,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const d = (Number(yP[c]) || 0) - (Number(xP[c]) || 0);
             if (d) Pn[c] = Math.max(0, (Number(Pn[c]) || 0) + d);
         });
+        if (Array.isArray(yP.tarjetasRival)) Pn.tarjetasRival = yP.tarjetasRival.slice(); // v220
         if (yP.tirosTrasCambio && xP.tirosTrasCambio) {
             Pn.tirosTrasCambio = Pn.tirosTrasCambio || { n: 0, r: 0 };
             ['n', 'r'].forEach(c => { Pn.tirosTrasCambio[c] = Math.max(0, (Pn.tirosTrasCambio[c] || 0) + (yP.tirosTrasCambio[c] || 0) - (xP.tirosTrasCambio[c] || 0)); });
@@ -12260,6 +12354,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             tirosRivalesPuerta: num(P.tirosRivalesPuerta), tirosRivalesFuera: num(P.tirosRivalesFuera),
             faltasFavor: num(P.faltasFavor), faltasContra: num(P.faltasContra), cornersFavor: num(P.cornersFavor), cornersContra: num(P.cornersContra),
             fuerasJuegoNuestros: num(P.fuerasJuegoNuestros), fuerasJuegoRival: num(P.fuerasJuegoRival),
+            tarjetasRival: Array.isArray(P.tarjetasRival) ? P.tarjetasRival : [], // v220
             analisisIA: P.analisisIA || '', resumenIA: P.resumenIA || '', notasIA: {},
             republicado: true
         };
@@ -13345,7 +13440,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             { label: 'Córners en contra', v1: p1.cornersContra || 0, v2: p2.cornersContra || 0, invertido: true },
             { label: 'Fueras de juego propios', v1: p1.fuerasJuegoNuestros || 0, v2: p2.fuerasJuegoNuestros || 0, invertido: true },
             { label: 'Fueras de juego del rival', v1: p1.fuerasJuegoRival || 0, v2: p2.fuerasJuegoRival || 0 }
-        ];
+        ].concat((Array.isArray(p1.tarjetasRival) || Array.isArray(p2.tarjetasRival)) ? (() => { const c1 = trCuenta(p1), c2 = trCuenta(p2), sd2 = (c, k) => c ? c[k] : '—'; // v220
+            return [{ label: 'Amarillas al rival', v1: sd2(c1, 'am'), v2: sd2(c2, 'am'), raw1: c1 ? c1.am : 0, raw2: c2 ? c2.am : 0 }, { label: 'Rojas al rival', v1: sd2(c1, 'ro'), v2: sd2(c2, 'ro'), raw1: c1 ? c1.ro : 0, raw2: c2 ? c2.ro : 0 }]; })() : []);
 
         const statsHtml = stats.map(s => {
             const raw1 = s.raw1 !== undefined ? s.raw1 : s.v1;
@@ -14162,6 +14258,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         amarilla: ['Amarilla para {J}.', '{J} ve la amarilla.', 'Tarjeta amarilla a {J}.', 'El árbitro amonesta a {J}.'],
         dobleAmarilla: ['Segunda amarilla para {J}: expulsado.', '{J} ve la segunda amarilla y se va a la calle.'],
         roja: ['Roja directa a {J}.', '{J} es expulsado con roja directa.'],
+        // v220 · tarjetas del rival
+        amarillaRival: ['Amarilla para un jugador del {RIV}.', 'El árbitro amonesta a uno del {RIV}.', 'Tarjeta amarilla para el {RIV}.'],
+        rojaRival: ['¡Expulsión en el {RIV}! El Hergar jugará con uno más.', 'Roja para un jugador del {RIV}: se quedan con uno menos.', '¡El {RIV} se queda con uno menos!'],
         descanso: {
             cero: ['Descanso sin goles.', '0-0 al descanso. Todo por decidir.', 'Al vestuario con el marcador a cero.'],
             ventaja: ['Descanso con ventaja: {H}-{R}.', 'Al vestuario por delante, {H}-{R}.', 'Buen primer tiempo: {H}-{R} al descanso.', '{H}-{R} al descanso. Media parte, media faena.'],
@@ -14221,6 +14320,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             else if ((g = /^🔄 Sale #\S+ (\S+) ➡️ Entra #\S+ (\S+)/.exec(t))) out.push({ tipo: 'cambio', min, idx, sale: g[1], entra: g[2] });
             else if ((g = /^🟨 Amarilla #\S+ (\S+)(.*)$/.exec(t))) out.push({ tipo: /DOBLE AMARILLA/.test(g[2]) ? 'dobleAmarilla' : 'amarilla', min, idx, j: g[1] });
             else if ((g = /^🟥 Roja directa #\S+ (\S+)/.exec(t))) out.push({ tipo: 'roja', min, idx, j: g[1] });
+            else if (/^🟨 Amarilla al rival/.test(t)) out.push({ tipo: 'amarillaRival', min, idx }); // v220
+            else if (/^🟥 Roja al rival/.test(t)) out.push({ tipo: 'rojaRival', min, idx });
         });
         return out;
     }
@@ -14320,6 +14421,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 const y = (arr) => arr.length > 1 ? arr.slice(0, -1).join(', ') + ' y ' + arr[arr.length - 1] : arr[0];
                 const v = { E: y(L.map(c => c.entra)), S: y(L.map(c => c.sale)) };
                 res.push({ m: h.min, ic: '🔄', k: 'cambio', h: '', x: narrRellena(narrElige(ctx, L.length > 1 ? 'cambioD' : 'cambio', L.length > 1 ? NARR.cambioDoble : NARR.cambio, clave), v) });
+            } else if (h.tipo === 'amarillaRival' || h.tipo === 'rojaRival') { // v220
+                res.push({ m: h.min, ic: h.tipo === 'amarillaRival' ? '🟨' : '🟥', k: 'tarjeta', h: '', x: narrRellena(narrElige(ctx, h.tipo, NARR[h.tipo], clave), { RIV }) });
             } else if (h.tipo === 'amarilla' || h.tipo === 'dobleAmarilla' || h.tipo === 'roja') {
                 res.push({ m: h.min, ic: h.tipo === 'amarilla' ? '🟨' : '🟥', k: 'tarjeta', h: '', x: narrRellena(narrElige(ctx, h.tipo, NARR[h.tipo], clave), { J: h.j }) });
             }
@@ -14430,7 +14533,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const accionesDefTotal = convocadosPartido.reduce((s,p)=>s+(p.accionesDef||0),0);
         const pasesAreaTotal = convocadosPartido.reduce((s,p)=>s+(p.pasesArea||0),0);
         const pasesClaveTotal = convocadosPartido.reduce((s,p)=>s+(p.pasesClave||0),0);
-        const partido = { fecha:fechaHoy, rival:rivalName, golesLocal:goalsLocal, golesRival:goalsRival, resultado, duracion:formatTime(getElapsedSeconds()), mvp:mvpNombre, mvpId, mvpStats, goleadores:Object.values(playersData).filter(p=>p.goles>0).map(p=>`${p.name.split(' ')[0]} (${p.goles})`).join(', ')||'-', tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera, faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio: { n: tirosTrasCambio.n, r: tirosTrasCambio.r }, accionesDefTotal, pasesAreaTotal, pasesClaveTotal };
+        const partido = { fecha:fechaHoy, rival:rivalName, golesLocal:goalsLocal, golesRival:goalsRival, resultado, duracion:formatTime(getElapsedSeconds()), mvp:mvpNombre, mvpId, mvpStats, goleadores:Object.values(playersData).filter(p=>p.goles>0).map(p=>`${p.name.split(' ')[0]} (${p.goles})`).join(', ')||'-', tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera, faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tarjetasRival: tarjetasRival.slice(), tirosTrasCambio: { n: tirosTrasCambio.n, r: tirosTrasCambio.r }, accionesDefTotal, pasesAreaTotal, pasesClaveTotal };
         partido.notasIASumadas = Object.keys(notasIAPartido).length > 0; // v59
         partido.tiroGolRival = true; // v110: sus tiros a puerta del rival ya incluyen los goles del rival
         partido.titulares = titularesIniciales.slice(); // v68: titulares de este partido
@@ -15018,6 +15121,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 </div>`;
         }).join('') : '<div style="font-size:11px; color:#52665c;">No hay jugadores con minutos registrados para este partido.</div>';
 
+        // v220: tarjetas del rival
+        document.getElementById('editPartidoTarjRivList').innerHTML = (Array.isArray(p.tarjetasRival) ? p.tarjetasRival : []).map(trEditFilaHTML).join('') || trEditVacioHTML();
+
         // v84: goles con minuto
         editGolesJugadores = (filas.length ? filas : Object.values(t.jugadores || {}).map(j => ({ id: j.id, name: j.name, dorsal: j.dorsal })))
             .slice().sort((a, b) => (a.dorsal || 99) - (b.dorsal || 99));
@@ -15043,6 +15149,35 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         document.getElementById('editPartidoStatus').innerText = '';
         document.getElementById('editarPartidoModal').style.display = 'flex';
     };
+
+    // ── v220 · Editor de tarjetas del rival ──
+    function trEditVacioHTML() { return '<div class="tr-vacio" style="font-size:11px; color:#52665c;">Sin tarjetas del rival apuntadas.</div>'; }
+    function trEditFilaHTML(x) {
+        x = x || {};
+        const est = 'padding:7px 4px; border-radius:7px; border:1px solid rgba(255,255,255,0.1); background:#1a2332; color:#e2e8f0; font-size:12px;';
+        return `<div class="tr-row" style="display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.03); border-radius:9px; padding:6px 8px;">
+            <input type="number" min="0" max="130" inputmode="numeric" class="tr-min" placeholder="min" value="${x.min != null && x.min !== '' ? x.min : ''}" style="width:58px; text-align:center; ${est} color:#f5a623; font-weight:800;">
+            <select class="tr-tipo" style="flex:1; ${est}"><option value="A" ${x.tipo !== 'R' ? 'selected' : ''}>🟨 Amarilla</option><option value="R" ${x.tipo === 'R' ? 'selected' : ''}>🟥 Roja (o 2.ª amarilla)</option></select>
+            <button type="button" class="tr-del" style="padding:6px 10px; border-radius:7px; border:1px solid rgba(231,76,60,0.4); background:rgba(231,76,60,0.08); color:#e74c3c; font-weight:900;">✕</button>
+        </div>`;
+    }
+    function trEditLeer() {
+        return [...document.querySelectorAll('#editPartidoTarjRivList .tr-row')].map(r => {
+            const m = r.querySelector('.tr-min').value.trim();
+            return { min: m === '' || isNaN(parseInt(m, 10)) ? null : parseInt(m, 10), tipo: r.querySelector('.tr-tipo').value === 'R' ? 'R' : 'A' };
+        }).sort((a, b) => (a.min == null ? 999 : a.min) - (b.min == null ? 999 : b.min));
+    }
+    document.getElementById('editPartidoAddTarjRivBtn').onclick = () => {
+        const c = document.getElementById('editPartidoTarjRivList');
+        const v = c.querySelector('.tr-vacio'); if (v) v.remove();
+        c.insertAdjacentHTML('beforeend', trEditFilaHTML({ tipo: 'A' }));
+    };
+    document.getElementById('editPartidoTarjRivList').addEventListener('click', e => {
+        const b = e.target.closest('.tr-del'); if (!b) return;
+        b.closest('.tr-row').remove();
+        const c = document.getElementById('editPartidoTarjRivList');
+        if (!c.querySelector('.tr-row')) c.innerHTML = trEditVacioHTML();
+    });
 
     // ── v84 · Editor de goles con minuto ──
     let editGolesJugadores = [];
@@ -15680,6 +15815,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         let avisoAsist = '';
         try { avisoAsist = aplicarAsistenciasPorJugador(t, golesMin, { fechaVieja, rivalViejo, nuevaFecha, nuevoRival }); } catch (e) { console.error('Asistencias:', e); } // v123
         if (golesMin.length) p.goles = golesMin; else delete p.goles;
+        { const tr = trEditLeer(); if (tr.length || Array.isArray(p.tarjetasRival)) p.tarjetasRival = tr; } // v220 (partido antiguo sin tocar: sigue «sin datos»)
 
         saveTemporada(t);
         publicarTemporadaFirebase(t); // ⚽ HERGAR LIVE: refleja la corrección también en el visor
@@ -16087,7 +16223,7 @@ ${separador}`;
 
         msg += `\n\n📊 *STATS*
 🎯 Tiros: ${totalNuestros} (${tirosNuestrosPuerta} a puerta) | Rival: ${totalRivales} (${tirosRivalesPuerta} a puerta)
-🟡 Faltas: ${faltasFavor}F · ${faltasContra}C  ⛳ Córners: ${cornersFavor}F · ${cornersContra}C${(fuerasJuegoNuestros || fuerasJuegoRival) ? `\n🚩 Fueras de juego: Hergar ${fuerasJuegoNuestros} · Rival ${fuerasJuegoRival}` : ''}`;
+🟡 Faltas: ${faltasFavor}F · ${faltasContra}C  ⛳ Córners: ${cornersFavor}F · ${cornersContra}C${(fuerasJuegoNuestros || fuerasJuegoRival) ? `\n🚩 Fueras de juego: Hergar ${fuerasJuegoNuestros} · Rival ${fuerasJuegoRival}` : ''}${tarjetasRival.length ? `\n🟨🟥 Tarjetas al rival: ${tarjetasRival.map(x => (x.tipo === 'R' ? '🟥' : '🟨') + ' ' + x.min + "'").join(' · ')}` : ''}`;
 
         if (tarjetasStr) msg += `\n🃏 Tarjetas: ${tarjetasStr}`;
 
@@ -16746,6 +16882,7 @@ ${separador}`;
         cornersFavor = 0;
         cornersContra = 0;
         fuerasJuegoNuestros = 0; fuerasJuegoRival = 0; // v117
+        tarjetasRival = []; trPintarBadges(); // v220
         palosNuestros = 0; palosRival = 0; // v205
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = 0; }
         tirosTrasCambio = { n: 0, r: 0 }; // v137
@@ -17161,7 +17298,7 @@ ${separador}`;
             playersData, goalsLocal, goalsRival,
             benchSittingTime,
             substitutionTimeline, tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             accumulatedSeconds: getElapsedSeconds() // BUG FIX: incluir tiempo para coherencia en undo
         }, sinFoto));
         if (actionHistory.length>25) actionHistory.shift();
@@ -17185,6 +17322,7 @@ ${separador}`;
         document.getElementById("lsb_cornersF").innerText = cornersFavor;
         document.getElementById("lsb_cornersC").innerText = cornersContra;
         fuerasJuegoNuestros = prev.fuerasJuegoNuestros||0; fuerasJuegoRival = prev.fuerasJuegoRival||0; // v117
+        tarjetasRival = Array.isArray(prev.tarjetasRival) ? prev.tarjetasRival : []; trPintarBadges(); // v220
         palosNuestros = prev.palosNuestros||0; palosRival = prev.palosRival||0; // v205
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
         tirosTrasCambio = prev.tirosTrasCambio || { n: 0, r: 0 }; // v137
@@ -18473,6 +18611,38 @@ ${separador}`;
         const champ = ord[0]===H ? 1 : 0;
         keyIdx.forEach((m,ci) => { const c=cond[ci][res[m]]; c[0]+=champ; c[1]++; });
         if (H >= 0) { winC[wH][0]+=champ; winC[wH][1]++; const k = pts[H]; if (!ptsC[k]) ptsC[k] = [0,0]; ptsC[k][0]+=champ; ptsC[k][1]++; }
+      }
+      // v219 · «Lo que está en juego» y «el partido que también te interesa»: las opciones de cada resultado se calculan
+      // FORZANDO ese resultado (mismos sorteos para el resto de la Liga), no con las pocas simulaciones en que salió por azar.
+      // Con un 99 % de victoria, «si pierde» salía de ~100 simulaciones y daba cosas como «si pierdes, más opciones».
+      // Se guarda en el mismo formato [campeón, veces]: «veces» sigue siendo lo probable que es cada resultado.
+      if (N >= PRON_N && H >= 0 && keyIdx.length) {
+        const NF = 2000;
+        const forzar = (m, o, sem) => {
+          const r2 = pronRng(sem), rf = pronRng(sem + 7919);
+          let c = 0;
+          for (let s=0; s<NF; s++){
+            for (let i=0;i<NT;i++){ pts[i]=bp[i]; gf[i]=bg[i]; gc[i]=bc[i]; tb[i]=r2(); }
+            for (let k=0; k<rest.length; k++){
+              const p=rest[k]; let a, b;
+              if (k === m) {
+                let t = 0;
+                do { a=pronPoisson(lam[k][0],rf); b=pronPoisson(lam[k][1],rf); t++; } while (t < 60 && (o==='L' ? !(a>b) : o==='V' ? !(a<b) : a!==b));
+                if (o==='L' && !(a>b)) { a=1; b=0; } else if (o==='V' && !(a<b)) { a=0; b=1; } else if (o==='E' && a!==b) { a=b=1; }
+                pronPoisson(lam[k][0],r2); pronPoisson(lam[k][1],r2); // mantiene alineados los sorteos del resto
+              } else { a=pronPoisson(lam[k][0],r2); b=pronPoisson(lam[k][1],r2); }
+              gf[p.l]+=a; gc[p.l]+=b; gf[p.v]+=b; gc[p.v]+=a;
+              if (a>b) pts[p.l]+=3; else if (a<b) pts[p.v]+=3; else { pts[p.l]++; pts[p.v]++; }
+            }
+            ord.sort((x,y) => pts[y]-pts[x] || (gf[y]-gc[y])-(gf[x]-gc[x]) || gf[y]-gf[x] || tb[y]-tb[x]);
+            if (ord[0]===H) c++;
+          }
+          return c / NF;
+        };
+        keyIdx.forEach((m, ci) => {
+          const sem = (seed * 131 + ci * 17 + 5) | 0;
+          ['L','E','V'].forEach(o => { const fr = forzar(m, o, sem), n = cond[ci][o][1]; cond[ci][o] = n > 0 ? [fr * n, n] : [fr * 1e-6, 1e-6]; });
+        });
       }
       const expPts = [...Array(NT).keys()].map(i => { let e=bp[i]; rest.forEach((p,m) => { if (p.l!==i && p.v!==i) return;
         const my = p.l===i ? lam[m][0] : lam[m][1], ot = p.l===i ? lam[m][1] : lam[m][0]; const [w,d] = pronGanaEmpata(my,ot); e += 3*w + d; }); return e; });
@@ -21951,7 +22121,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         FALLO: ['❌', 'Fallo'], FALLO_IMP: ['💥', 'Fallo importante'], PARADA: ['🧤', 'Parada'], PARADA_DIFICIL: ['🧤⭐', 'Paradón'], FUERA_JUEGO: ['🚩', 'Fuera de juego'],
         AMARILLA: ['🟨', 'Amarilla'], ROJA: ['🟥', 'Roja'], FALTA_FAVOR: ['🟡', 'Falta a favor'], FALTA_CONTRA: ['🟠', 'Falta en contra'],
         CORNER_FAVOR: ['⛳', 'Córner a favor'], CORNER_CONTRA: ['⛳', 'Córner en contra'], GOL_RIVAL: ['🥅', 'Gol del rival'], TIRO_RIVAL_PUERTA: ['🥅', 'Tiro del rival a puerta'],
-        TIRO_RIVAL_FUERA: ['💨', 'Tiro del rival fuera'], PALO_RIVAL: ['🪵', 'Palo del rival'], FJ_RIVAL: ['🚩', 'Fuera de juego del rival'], GOL_PROPIA_RIVAL: ['⚽', 'Gol en propia del rival'],
+        TIRO_RIVAL_FUERA: ['💨', 'Tiro del rival fuera'], PALO_RIVAL: ['🪵', 'Palo del rival'], FJ_RIVAL: ['🚩', 'Fuera de juego del rival'], GOL_PROPIA_RIVAL: ['⚽', 'Gol en propia del rival'], TARJ_RIVAL_A: ['🟨', 'Amarilla al rival'], TARJ_RIVAL_R: ['🟥', 'Roja al rival'],
         PEN_FAVOR: ['🎯', 'Penalti'], PEN_RIVAL: ['🎯', 'Penalti del rival'], CAMBIO: ['🔄', 'Cambio'], DESHACER: ['↩', 'Borrar lo último']
     };
     const RES_PEN = { GOL: 'gol', PARADO: 'parado', FUERA: 'fuera' };
@@ -22047,6 +22217,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             return falla('Córner, ¿a favor o en contra?', true);
         }
         if (has(/ falta /)) return parseFalta(t);
+        if (has(/ (amarilla|roja|tarjeta|tarjetas|expulsion|expulsado|expulsan) /) && esRivalAcc(t)) return ok({ act: has(/ (roja|expulsion|expulsado|expulsan|segunda amarilla|doble amarilla) /) ? 'TARJ_RIVAL_R' : 'TARJ_RIVAL_A' }); // v220
         if (has(/ amarilla /)) return conJugador(t, 'AMARILLA', true);
         if (has(/ roja /)) return conJugador(t, 'ROJA', true);
         if (has(/ (paradon|parada dificil|parada buena|gran parada|parada clave) /)) return ok({ act: 'PARADA_DIFICIL' });
@@ -22145,6 +22316,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 case 'TIRO_RIVAL_FUERA': rival('TIRO_RIVAL_FUERA'); break;
                 case 'PALO_RIVAL': rival('TIRO_RIVAL_PALO'); break;
                 case 'FJ_RIVAL': document.getElementById('fueraJuegoRivalBtn').onclick(); break;
+                case 'TARJ_RIVAL_A': registrarTarjetaRival('A'); break; // v220
+                case 'TARJ_RIVAL_R': registrarTarjetaRival('R'); break;
                 case 'GOL_PROPIA_RIVAL': registrarGolPropiaRival(); golPropia = true; break;
                 case 'PEN_FAVOR':
                     penaltiEjecutorId = r.j.id; penaltiProvocadorId = r.provoca && enCampo(r.provoca) ? r.provoca.id : null;
@@ -22414,7 +22587,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         ['Parada', 'parada · paradón (el portero que está en el campo)'], ['Fuera de juego', 'fuera de juego del 9'], ['Tarjetas', 'amarilla al 6 · roja al 6'],
         ['Penalti', 'penalti del 9 gol · parado · fuera'], ['Cambio', 'entra el 14 por el 7 · cambio 14 por 7'],
         ['DEL RIVAL Y DEL EQUIPO'], ['Gol del rival', 'gol de ellos · gol en contra · nos marcan'], ['Tiro del rival', 'tiro de ellos · tiro en contra · tiro en contra fuera'], ['Palo del rival', 'palo de ellos · palo en contra'],
-        ['Penalti del rival', 'penalti de ellos / en contra + gol · parado · fuera'], ['Fuera de juego rival', 'fuera de juego de ellos'], ['Gol en propia del rival', 'gol en propia · autogol'],
+        ['Penalti del rival', 'penalti de ellos / en contra + gol · parado · fuera'], ['Fuera de juego rival', 'fuera de juego de ellos'], ['Tarjetas al rival', 'amarilla de ellos · amarilla al rival · tarjeta en contra · roja de ellos · expulsado uno de ellos (la 2.ª amarilla, como roja)'], ['Gol en propia del rival', 'gol en propia · autogol'],
         ['Córners', 'córner a favor · córner de ellos · córner en contra'], ['Faltas', 'falta a favor · le hacen falta al 9 · falta en contra (la cometemos nosotros)'],
         ['CORREGIR'], ['Quitar lo último', 'borra · deshaz (igual que ↩)']
     ];
