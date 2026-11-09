@@ -1809,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v224</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v225</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4628,6 +4628,118 @@
         } catch (e) { console.error('v207 defensa:', e); }
     }
     setTimeout(migrarDefensaV207, 4600);
+    // ── v225 · MC → MCD EN LOS PARTIDOS QUE EMPEZARON CON 1-4-2-3-1 ──
+    // El 1-4-2-3-1 no tiene MC: los minutos de MC de esos partidos son restos de cambios de formación al principio.
+    // Se pasan a MCD (el MC sigue existiendo para otros sistemas) y se recalcula lo que vale distinto en el pivote:
+    //  · acción defensiva 0,35 en vez de 0,30 y defensiva clave 1,10 en vez de 1,00 (por los minutos de MC, como en la v207);
+    //  · portería a cero +0,60 en vez de +0,30, solo en los partidos desde la v190 (25 oct 2026): antes, el MC ya llevaba +0,60.
+    const MCMCD_DESDE_V190 = '2026-10-25';
+    function mcmcdFechaISO(f) { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(f || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; }
+    function mcmcdCambios(t) {
+        const out = [];
+        (t.partidos || []).forEach((p, i) => {
+            if (p.formacion !== '4-2-3-1' || p.mcmcd225) return;
+            Object.values(t.jugadores || {}).forEach(j => {
+                const k = (j.historial || []).findIndex(h => h.fecha === p.fecha && h.rival === p.rival);
+                if (k < 0) return;
+                const h = j.historial[k];
+                const mMC = Number((h.puestos || {}).MC) || 0;
+                if (!mMC) return;
+                const tot = Object.values(h.puestos).reduce((s, v) => s + (Number(v) || 0), 0) || 1, f = mMC / tot;
+                const a = h.acc || {}, defC = Number(a.defC) || 0, def = Math.max(0, (Number(a.def) || 0) - defC);
+                const extraDef = f * (def * (valorDefensaV207(false, 'MCD') - valorDefensaV207(false, 'MC')) + defC * (valorDefensaV207(true, 'MCD') - valorDefensaV207(true, 'MC')));
+                let extra = extraDef;
+                const pcu = REGLAS_IMPACTO.porteriaCeroPuesto || {};
+                const sinEncajar = h.gcCampo !== undefined ? (Number(h.gcCampo) || 0) === 0 : (Number(p.golesRival) || 0) === 0;
+                if (sinEncajar && mcmcdFechaISO(p.fecha) >= MCMCD_DESDE_V190) extra += ((pcu.MCD || 0) - (pcu.MC || 0)) * Math.min(1, mMC / 70);
+                out.push({ i, p, j, k, mMC, extra, extraDef });
+            });
+        });
+        return out;
+    }
+    function aplicarMcMcd(x) {
+        const j = x.j, h = j.historial[x.k], r2 = (n) => Math.round(n * 100) / 100;
+        ['minutosPorPuesto', 'impactoPorPuesto', 'partidosPorPuesto'].forEach(c => { if (!j[c]) j[c] = {}; });
+        const puViejo = puestoPrincipal(h.puestos, lineaPrincipal(lineasDesdePuestos(h.puestos)));
+        const ipMC = (h.impPuestos || {}).MC !== undefined ? Number(h.impPuestos.MC) || 0 : 0;
+        // 1) los minutos y el impacto de MC pasan a MCD
+        h.puestos.MCD = (Number(h.puestos.MCD) || 0) + x.mMC; delete h.puestos.MC;
+        if (h.impPuestos) { h.impPuestos.MCD = r2((Number(h.impPuestos.MCD) || 0) + ipMC); delete h.impPuestos.MC; }
+        j.minutosPorPuesto.MC = Math.max(0, (j.minutosPorPuesto.MC || 0) - x.mMC); j.minutosPorPuesto.MCD = (j.minutosPorPuesto.MCD || 0) + x.mMC;
+        j.impactoPorPuesto.MC = (j.impactoPorPuesto.MC || 0) - ipMC; j.impactoPorPuesto.MCD = (j.impactoPorPuesto.MCD || 0) + ipMC;
+        const puNuevo = puestoPrincipal(h.puestos, lineaPrincipal(lineasDesdePuestos(h.puestos)));
+        if (puViejo !== puNuevo) {
+            if (puViejo) j.partidosPorPuesto[puViejo] = Math.max(0, (j.partidosPorPuesto[puViejo] || 0) - 1);
+            if (puNuevo) j.partidosPorPuesto[puNuevo] = (j.partidosPorPuesto[puNuevo] || 0) + 1;
+        }
+        if (!(j.minutosPorPuesto.MC > 0) && !(j.partidosPorPuesto.MC > 0)) { delete j.minutosPorPuesto.MC; delete j.partidosPorPuesto.MC; if (Math.abs(j.impactoPorPuesto.MC || 0) < 0.01) delete j.impactoPorPuesto.MC; }
+        // 2) lo que gana por jugar de pivote (va a MCD y a la línea de centrocampista)
+        if (Math.abs(x.extra) >= 1e-9) aplicarExtraDefensaV207(j, x.k, { total: x.extra, porPuesto: { MCD: x.extra } });
+        if (Math.abs(x.extraDef) >= 1e-9 && h.accImp !== undefined && h.accImp !== null) h.accImp = r2((Number(h.accImp) || 0) + x.extraDef); // «sus acciones»: solo lo de la defensa
+        h.mcmcd225 = true;
+    }
+    function migrarMcMcdV225() {
+        try {
+            const t = getTemporada();
+            if (!t || t.mcmcdRegla === 225) return;
+            const cambios = mcmcdCambios(t);
+            const marcar = () => { (t.partidos || []).forEach(p => { if (p.formacion === '4-2-3-1') p.mcmcd225 = true; }); t.mcmcdRegla = 225; };
+            if (!cambios.length) { marcar(); saveTemporada(t); return; }
+            const porNino = {};
+            cambios.forEach(x => { const r = porNino[x.j.id] || (porNino[x.j.id] = { j: x.j, min: 0, extra: 0, ps: [] }); r.min += x.mMC; r.extra += x.extra; r.ps.push(`J${x.i + 1}`); });
+            const f2 = (n) => (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(2).replace('.', ',');
+            const lista = Object.values(porNino).sort((a, b) => b.extra - a.extra).map(r => `#${r.j.dorsal} ${(r.j.name || '').split(' ')[0]}: ${r.min}' de MC (${r.ps.join(', ')}) → impacto ${f2(r.extra)}`).join('\n');
+            if (!confirm(`🔁 v225 · MC → MCD en los partidos que empezaron con 1-4-2-3-1\n\nEse sistema no tiene MC: esos minutos pasan a MCD (pivote). El MC sigue existiendo para otros sistemas.\n\nLo que cambia en cada niño:\n${lista}\n\nGanan por jugar de pivote: acción defensiva 0,35 (antes 0,30), defensiva clave 1,10 (antes 1,00) y portería a cero +0,60 (antes +0,30, solo desde el 25 oct).\n\n¿Recalcular ahora? (Si cancelas, te lo vuelve a preguntar la próxima vez que abras la app.)`)) return;
+            cambios.forEach(aplicarMcMcd);
+            const mvp = recalcularMvpTemporada(t);
+            marcar();
+            saveTemporada(t);
+            setTimeout(() => { try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} }, 4000);
+            try { renderPartidos(); renderRanking(); } catch (e) {}
+            alert(`✅ Recalculado: MC → MCD en ${new Set(cambios.map(x => x.i)).size} ${new Set(cambios.map(x => x.i)).size === 1 ? 'partido' : 'partidos'}.${mvp.length ? '\n\nCambia el MVP:\n' + mvp.join('\n') : '\n\nNo cambia ningún MVP.'}\n\nSe envía al visor en unos segundos; si no aparece, usa "Sincronizar temporada con el visor".`);
+        } catch (e) { console.error('v225 MC → MCD:', e); }
+    }
+    setTimeout(migrarMcMcdV225, 5800);
+    // ── v225 · 📦 BOX-TO-BOX EN DIRECTO ──
+    // Ataque: gol 2 · asistencia 2 · pase clave 1 · pase al área 1 · regate 1 · tiro a puerta 1 (sin contar los que son gol).
+    // Defensa: acción defensiva 1 · defensiva clave 2 (accionesDef ya cuenta las clave). 4 y 4 = 📦; 6 y 6 = 📦📦 total.
+    // Al guardar el estado se mira quién cruza el umbral y en qué minuto (si se deshace la acción, se quita). Sale en el minuto a minuto.
+    const B2B_N = 4, B2B_T = 6;
+    function b2bPuntosDirecto(p) {
+        const g = p.goles || 0;
+        return { at: 2 * g + 2 * (p.asistencias || 0) + (p.pasesClave || 0) + (p.pasesArea || 0) + (p.regates || 0) + Math.max(0, (p.disparosPuerta || 0) - g), de: (p.accionesDef || 0) + (p.accionesDefClave || 0) };
+    }
+    function b2bRevisarDirecto() {
+        if (!partidoEmpezado && !matchFinished) return;
+        const min = matchFinished ? 'fin' : Math.floor(getElapsedSeconds() / 60);
+        Object.values(playersData).forEach(p => {
+            if (!p || !p.convocado) return;
+            const b = b2bPuntosDirecto(p);
+            if (b.at >= B2B_N && b.de >= B2B_N) { if (p.b2bN == null) p.b2bN = min; } else delete p.b2bN;
+            if (b.at >= B2B_T && b.de >= B2B_T) { if (p.b2bT == null) p.b2bT = min; } else delete p.b2bT;
+        });
+    }
+    const B2B_FRASES = {
+        n: ['¡Partido box-to-box de {J}!', '¡{J} llega a todo!', '¡{J}, de área a área!', '¡Box-to-box de {J}!'],
+        nx: ['Llega a todo, arriba y abajo.', 'Ataca y defiende sin parar.', 'Está en las dos áreas.', 'Arriba ayuda y abajo corta.'],
+        t: ['¡Box-to-box total de {J}!', '¡{J} firma un box-to-box total!'],
+        tx: ['Ataca y defiende como nadie: 6 y 6.', 'Un partidazo en las dos áreas.', 'Imposible estar en más sitios.']
+    };
+    function b2bNarracion(dur) {
+        const out = [];
+        Object.values(playersData).forEach(p => {
+            if (!p) return;
+            const J = String(p.name || '').split(' ')[0];
+            [['b2bN', 'b2b', 'n', 'nx', '📦'], ['b2bT', 'b2bT', 't', 'tx', '📦📦']].forEach(([campo, k, fh, fx, ic]) => {
+                if (p[campo] == null) return;
+                if (campo === 'b2bN' && p.b2bT != null && p.b2bT === p.b2bN) return; // si llega a las dos a la vez, solo el total
+                const m = p[campo] === 'fin' ? dur : Number(p[campo]) || 0;
+                const hsh = narrHash(J + k), h = B2B_FRASES[fh][hsh % B2B_FRASES[fh].length].replace('{J}', J), x = B2B_FRASES[fx][hsh % B2B_FRASES[fx].length];
+                out.push({ m, ic, k, j: J, h, x });
+            });
+        });
+        return out;
+    }
     // ── v160 · 📊 MEDIAS POR PARTIDO (misma función en la app y en el visor) ──
     // Cómo es un partido medio del Hergar, con filtro Temporada / Últimos 5 / Casa / Fuera.
     // Cada dato sale solo de los partidos que lo tienen: los cargados a mano solo tienen goles,
@@ -8346,6 +8458,7 @@
 
     function saveState() {
         if (reproduciendoPrevio) return; // v129: mientras se reconstruye el tramo previo no se guarda ni se publica nada
+        try { b2bRevisarDirecto(); } catch (e) { console.error('Box-to-box:', e); } // v225
         try { sincronizarRolesDesdePizarra(); } catch (e) {} // v93
         // Nunca sobreescribir jugadores si playersData está vacío
         if (Object.keys(playersData).length > 0) {
@@ -14605,12 +14718,17 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
         const goles = golesDesdeCronologia();
         const hechos = narrHechos(lineas, goles);
-        return narrConstruir(hechos, {
+        const res = narrConstruir(hechos, {
             rival: rivalName || (document.getElementById('rivalNameInput') || {}).value || 'RIVAL',
             duracion: 70,
             descanso: partNumber === 2 || matchFinished,
             final: !!matchFinished
         });
+        try { // v225 · 📦 box-to-box en su minuto (el final, siempre el último)
+            const bb = b2bNarracion(70);
+            if (bb.length) { const fin = res.filter(e => e.k === 'final'), resto = res.filter(e => e.k !== 'final').concat(bb); resto.sort((a, b) => (a.m - b.m) || ((a.k === 'b2b' || a.k === 'b2bT') - (b.k === 'b2b' || b.k === 'b2bT'))); return resto.concat(fin); }
+        } catch (e) { console.error('Box-to-box (narración):', e); }
+        return res;
     }
 
     // ── v171 · Origen y lado de los goles para el informe IA ──
@@ -17066,6 +17184,7 @@ ${separador}`;
             p.accionesDefClave = 0; p.regates = 0; // v67
             p.fuerasJuego = 0; // v117
             p.palos = 0; p.faltasRecibidas = 0; // v205
+            delete p.b2bN; delete p.b2bT; // v225
             p.segsPorLinea = {}; p.golesContraEnCampo = 0; p.tirosFavorEnCampo = 0; p.tirosContraEnCampo = 0; p.bonusPorteriaCero = 0; p.golesFavorEnCampo = 0; p.bonusGolEquipo = 0; p.equipoImp = 0; p.tirRivBruto = 0; p.tirRivPen = 0; // v192 · v67: portería a cero · v145: parte de equipo
             p.impPorLinea = {}; p._impUlt = 0; // v94
             p.segsPorPuesto = {}; p.impPorPuesto = {}; // v95
