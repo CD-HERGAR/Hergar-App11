@@ -1809,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v226</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v228</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4700,6 +4700,313 @@
         } catch (e) { console.error('v225 MC → MCD:', e); }
     }
     setTimeout(migrarMcMcdV225, 5800);
+    // ── v227 · QUÍMICA DEL ONCE Y PARTIDOS GRANDES (copia de las funciones del visor, para la IA) ──
+    // QUÍMICA (v224): cuánto se conocían los que estaban en el campo. Cada jugador se enlaza con sus vecinos en la pizarra
+    //  (21 enlaces en el 1-4-2-3-1). Cada enlace vale de 0 a 10 según los minutos que esa pareja jugó junta en los
+    //  QM_VENTANA partidos anteriores, sobre los minutos de esos partidos (4 partidos = 280'). Se calcula POR TRAMOS: en cada
+    //  cambio el que entra ocupa el hueco del que sale, y la química del partido es la media de los tramos según sus minutos.
+    //  Los cambios salen de los guardados con el partido (v139) o se deducen de los minutos de cada uno.
+    //  Solo partidos con los 11 titulares en el orden de la pizarra (los cargados a mano no; sí cuentan sus minutos juntos).
+    const QM_VENTANA = 4, QM_MIN_BASE = 140; // v226: cada pareja, sobre los minutos del que menos jugó de los dos (nunca menos de 140')
+    const QM_ENLACES = {
+      '4-2-3-1': [[0, 2], [0, 3], [2, 3], [1, 2], [3, 4], [1, 5], [4, 6], [2, 5], [3, 6], [5, 6], [5, 8], [6, 8], [1, 7], [4, 9], [7, 8], [9, 8], [8, 10], [5, 7], [6, 9], [7, 10], [9, 10]],
+      '4-3-3': [[0, 2], [0, 3], [2, 3], [1, 2], [3, 4], [2, 5], [3, 5], [1, 6], [4, 7], [5, 6], [5, 7], [6, 8], [7, 10], [6, 9], [7, 9], [8, 9], [10, 9], [1, 8], [4, 10]],
+      '4-4-2': [[0, 2], [0, 3], [2, 3], [1, 2], [3, 4], [1, 5], [4, 8], [2, 6], [3, 7], [5, 6], [6, 7], [7, 8], [6, 9], [7, 10], [9, 10], [5, 9], [8, 10]],
+      '3-5-2': [[0, 1], [0, 2], [0, 3], [1, 2], [2, 3], [1, 4], [3, 8], [1, 5], [3, 7], [2, 5], [2, 7], [4, 5], [7, 8], [5, 6], [7, 6], [6, 9], [6, 10], [9, 10], [4, 9], [8, 10]],
+      '3-4-3': [[0, 1], [0, 2], [0, 3], [1, 2], [2, 3], [1, 4], [3, 7], [1, 5], [3, 6], [2, 5], [2, 6], [4, 5], [5, 6], [6, 7], [4, 8], [7, 10], [5, 9], [6, 9], [8, 9], [10, 9]]
+    };
+    const qmCache = new WeakMap();
+    function qmClave(a, b) { a = String(a); b = String(b); return a < b ? a + '|' + b : b + '|' + a; }
+    // Cambios del partido: [{ min, entra: id, sale: id|null }]
+    function qmCambios(t, p) {
+      const js = Object.values(t.jugadores || {});
+      const porDorsal = d => { const j = js.find(x => String(x.dorsal) === String(d).replace(/^#/, '')); return j ? String(j.id) : null; };
+      const A = p.acta || {};
+      if (Array.isArray(A.cambios) && A.cambios.length) {
+        return A.cambios.map(c => ({ min: Number(c.min) || 0, entra: porDorsal(c.entraD), sale: porDorsal(c.saleD) })).filter(c => c.entra).sort((a, b) => a.min - b.min);
+      }
+      let inf = null; try { inf = bqPartidoInfo(t, p); } catch (e) { inf = null; }
+      if (!inf) return [];
+      const sal = inf.sal.slice().sort((a, b) => a.min - b.min), usadas = new Set();
+      return inf.ent.slice().sort((a, b) => a.min - b.min).map(e => {
+        let k = -1, mejor = 99;
+        sal.forEach((s, si) => { if (usadas.has(si)) return; const d = Math.abs(s.min - e.min); if (d < mejor) { mejor = d; k = si; } });
+        const s = (k >= 0 && mejor <= 2) ? sal[k] : null; if (s) usadas.add(k);
+        return { min: e.min, entra: String(e.j.id), sale: s ? String(s.j.id) : null };
+      });
+    }
+    // v227 · Pizarra de cada tramo: [{ ini, fin, form, ids:[11 ids o null por hueco] }]
+    //  · Partidos desde la app v226: la app guarda la pizarra entera cada vez que cambia (p.pizarra), con su minuto.
+    //  · Partidos anteriores: con los cambios y los puestos donde jugó cada niño (h.puestos). La recolocación se hace
+    //    justo después de los cambios: el titular sigue en su puesto de inicio los minutos que jugó ahí y después pasa
+    //    a su otro puesto (ese momento se lleva al cambio más cercano); el que entra empieza en el puesto del que sale.
+    const QM_LINEA_PU = { POR: 'P', LI: 'D', DFC: 'D', LD: 'D', MCD: 'M', MC: 'M', MI: 'M', MD: 'M', MP: 'M', EI: 'A', ED: 'A', DC: 'A' };
+    function qmColocar(ids, puesto, form, prev) {
+      // reparte a los niños (con su puesto) en los huecos de la formación; prev = huecos del tramo anterior (para no bailar)
+      const PU = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[form]) || [];
+      const sl = new Array(11).fill(null), pend = ids.slice();
+      const quitar = id => { const k = pend.indexOf(id); if (k >= 0) pend.splice(k, 1); };
+      // 1) se queda en su hueco si sigue en ese mismo puesto
+      if (prev) prev.forEach((id, k) => { if (id && pend.includes(id) && puesto[id] && puesto[id] === PU[k]) { sl[k] = id; quitar(id); } });
+      // 2) a un hueco libre de su puesto
+      pend.slice().forEach(id => { const k = PU.findIndex((pu, kk) => !sl[kk] && pu === puesto[id]); if (k >= 0) { sl[k] = id; quitar(id); } });
+      // 3) a un hueco libre de su línea, 4) si no, a su hueco de antes o al primero libre
+      pend.slice().forEach(id => { const L = QM_LINEA_PU[puesto[id]]; const k = PU.findIndex((pu, kk) => !sl[kk] && L && QM_LINEA_PU[pu] === L); if (k >= 0) { sl[k] = id; quitar(id); } });
+      pend.slice().forEach(id => { let k = prev ? prev.indexOf(id) : -1; if (k < 0 || sl[k]) k = sl.findIndex(x => !x); if (k >= 0) { sl[k] = id; quitar(id); } });
+      return sl;
+    }
+    function qmTramosPartido(t, p, tit, form, dur, filas) {
+      // 1) con la pizarra guardada por la app
+      if (Array.isArray(p.pizarra) && p.pizarra.length) {
+        const L = p.pizarra.map(x => ({ m: Number(x.m) || 0, f: x.f || form, ids: (Array.isArray(x.ids) ? x.ids : String(x.ids || '').split(',')).map(v => v === '' || v == null ? null : String(v)) })).sort((a, b) => a.m - b.m);
+        const out = []; let prev = null;
+        L.forEach((x, k) => {
+          let sl;
+          if (x.ids.length === 11) sl = x.ids.slice();
+          else { // con un expulsado la app quita su hueco: se mantiene a cada uno donde estaba
+            sl = prev ? prev.map(id => (id && x.ids.includes(id)) ? id : null) : new Array(11).fill(null);
+            x.ids.filter(id => id && !sl.includes(id)).forEach(id => { const h = sl.findIndex(v => !v); if (h >= 0) sl[h] = id; });
+          }
+          const ini = k === 0 ? 0 : Math.min(dur, x.m), fin = k === L.length - 1 ? dur : Math.min(dur, Math.max(ini, L[k + 1].m));
+          if (fin > ini) out.push({ ini, fin, form: QM_ENLACES[x.f] ? x.f : form, ids: sl });
+          prev = sl;
+        });
+        if (out.length) return out;
+      }
+      // 2) partido anterior: cambios + puestos
+      const PU0 = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[form]) || [];
+      const cambios = qmCambios(t, p);
+      const mins = cambios.map(c => Math.min(dur, Math.max(0, c.min)));
+      const snap = (m) => { let best = m, d = 6; mins.forEach(c => { if (Math.abs(c - m) < d) { d = Math.abs(c - m); best = c; } }); return best; };
+      const conPuestos = filas.some(f => f.h.puestos && Object.keys(f.h.puestos).length);
+      const seg = {}; // id → [{ ini, fin, pu }]
+      const salePu = {}; // puesto final de cada titular (para el que entra por él)
+      filas.forEach(f => {
+        const id = String(f.j.id), tr = muroTramo(p, f.h, dur, tit, f.j.id);
+        if (!tr) return;
+        const pz = f.h.puestos || {}, keys = Object.keys(pz).filter(k => (Number(pz[k]) || 0) > 0);
+        const k0 = tit.indexOf(id);
+        const L = [];
+        if (k0 >= 0) { // titular: primero su puesto de inicio
+          const P0 = PU0[k0];
+          if (keys.length > 1 && keys.includes(P0)) {
+            const corte = snap(tr.ini + (Number(pz[P0]) || 0));
+            L.push({ ini: tr.ini, fin: corte, pu: P0 });
+            const resto = keys.filter(k => k !== P0).sort((a, b) => pz[b] - pz[a]);
+            L.push({ ini: corte, fin: tr.fin, pu: resto[0] });
+          } else L.push({ ini: tr.ini, fin: tr.fin, pu: keys.length === 1 ? keys[0] : P0 });
+        } else L.push({ ini: tr.ini, fin: tr.fin, pu: null, keys, pz }); // suplente: se completa con el que sale
+        seg[id] = L;
+      });
+      Object.keys(seg).forEach(id => { const L = seg[id]; if (tit.includes(id)) salePu[id] = L[L.length - 1].pu; });
+      cambios.forEach(c => {
+        const L = c.entra && seg[c.entra]; if (!L || L[0].pu) return;
+        const x = L[0], Ps = c.sale ? salePu[c.sale] : null;
+        if (x.keys.length > 1 && Ps && x.keys.includes(Ps)) {
+          const corte = snap(x.ini + (Number(x.pz[Ps]) || 0));
+          const otro = x.keys.filter(k => k !== Ps).sort((a, b) => x.pz[b] - x.pz[a])[0];
+          seg[c.entra] = [{ ini: x.ini, fin: corte, pu: Ps }, { ini: corte, fin: x.fin, pu: otro }];
+        } else x.pu = x.keys.length === 1 ? x.keys[0] : (Ps || x.keys.sort((a, b) => x.pz[b] - x.pz[a])[0] || null);
+        salePu[c.entra] = seg[c.entra][seg[c.entra].length - 1].pu;
+      });
+      Object.values(seg).forEach(L => L.forEach(x => { if (!x.pu) x.pu = (x.keys || []).sort((a, b) => x.pz[b] - x.pz[a])[0] || null; }));
+      const cortes = new Set([0, dur]);
+      mins.forEach(m => cortes.add(m));
+      Object.values(seg).forEach(L => L.forEach(x => { cortes.add(Math.max(0, Math.min(dur, x.ini))); cortes.add(Math.max(0, Math.min(dur, x.fin))); }));
+      const C = [...cortes].sort((a, b) => a - b);
+      const out = []; let prev = tit.slice();
+      for (let k = 0; k < C.length - 1; k++) {
+        const a = C[k], b = C[k + 1]; if (b - a < 0.5) continue;
+        const mid = (a + b) / 2, puesto = {}, ids = [];
+        Object.entries(seg).forEach(([id, L]) => { const x = L.find(s => s.ini <= mid && mid < s.fin); if (x) { ids.push(id); puesto[id] = x.pu; } });
+        if (!ids.length) continue;
+        let sl;
+        if (!conPuestos) { // sin puestos: el que entra ocupa el hueco del que sale
+          sl = prev.map(id => ids.includes(id) ? id : null);
+          ids.filter(id => !sl.includes(id)).forEach(id => { const c = cambios.find(cc => cc.entra === id); let h = c && c.sale ? prev.indexOf(c.sale) : -1; if (h < 0 || sl[h]) h = sl.findIndex(v => !v); if (h >= 0) sl[h] = id; });
+        } else sl = qmColocar(ids, puesto, form, prev);
+        const last = out[out.length - 1];
+        if (last && last.ids.join(',') === sl.join(',')) last.fin = b;
+        else out.push({ ini: a, fin: b, form, ids: sl });
+        prev = sl;
+      }
+      return out.length ? out : [{ ini: 0, fin: dur, form, ids: tit.slice() }];
+    }
+    function qmTemporada(t) {
+      if (!t) return null;
+      if (qmCache.has(t)) return qmCache.get(t);
+      const ps = t.partidos || [];
+      const acum = {}, porPartido = [], durs = [], minsJug = [];
+      const partidos = ps.map((p, i) => {
+        let res = null;
+        const form = p.formacion, E = QM_ENLACES[form];
+        const tit = Array.isArray(p.titulares) ? p.titulares.map(String) : null;
+        let filas = [], dur = 70;
+        try { filas = proFilas(t, p); dur = mmDuracion(p, filas); } catch (e) {}
+        if (E && tit && tit.length === 11 && !p.manual) {
+          if (i === 0) res = { q: null, primero: true, form, tit };
+          else {
+            // minutos juntos de los QM_VENTANA partidos anteriores
+            const desde = Math.max(0, i - QM_VENTANA), ven = {}, mj = {}; let base = 0;
+            for (let k = desde; k < i; k++) { base += durs[k] || 0; Object.entries(porPartido[k] || {}).forEach(([c, m]) => { ven[c] = (ven[c] || 0) + m; }); Object.entries(minsJug[k] || {}).forEach(([id, m]) => { mj[id] = (mj[id] || 0) + m; }); }
+            const once = (sl, f) => {
+              const EE = QM_ENLACES[f] || E, PU = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[f]) || [];
+              const enlaces = EE.filter(([x, y]) => sl[x] && sl[y]).map(([x, y]) => {
+                const m = ven[qmClave(sl[x], sl[y])] || 0, den = Math.max(QM_MIN_BASE, Math.min(mj[sl[x]] || 0, mj[sl[y]] || 0));
+                return { x, y, a: sl[x], b: sl[y], pa: PU[x] || '', pb: PU[y] || '', min: Math.round(m), den: Math.round(den), v: Math.min(1, m / den) * 10 };
+              });
+              return { q: enlaces.length ? enlaces.reduce((s2, e) => s2 + e.v, 0) / enlaces.length : 0, enlaces, tit: sl.slice(), form: f };
+            };
+            // tramos con la pizarra de cada momento (v227: guardada por la app, o deducida de cambios y puestos)
+            const tramos = qmTramosPartido(t, p, tit, form, dur, filas).map(x => Object.assign({ ini: x.ini, fin: x.fin }, once(x.ids, x.form)));
+            const tot = tramos.reduce((s, x) => s + (x.fin - x.ini), 0);
+            const q = tot ? tramos.reduce((s, x) => s + x.q * (x.fin - x.ini), 0) / tot : tramos[0].q;
+            res = { q, tramos, form, tit, base, nPrevios: i - desde, enlaces: tramos[0].enlaces };
+          }
+        }
+        // los minutos juntos de este partido (para los siguientes)
+        const mio = {};
+        try {
+          const tr = filas.map(f => ({ id: String(f.j.id), t: muroTramo(p, f.h, dur, tit, f.j.id) })).filter(x => x.t);
+          for (let a = 0; a < tr.length; a++) for (let b = a + 1; b < tr.length; b++) {
+            const s = Math.max(tr[a].t.ini, tr[b].t.ini), f = Math.min(tr[a].t.fin, tr[b].t.fin);
+            if (f > s) { const k = qmClave(tr[a].id, tr[b].id); mio[k] = (mio[k] || 0) + (f - s); acum[k] = (acum[k] || 0) + (f - s); }
+          }
+        } catch (e) { console.error('Química · minutos juntos:', e); }
+        porPartido[i] = mio; durs[i] = filas.length ? dur : 0;
+        const mm = {}; filas.forEach(f => { mm[String(f.j.id)] = (mm[String(f.j.id)] || 0) + (Number(f.mins) || 0); }); minsJug[i] = mm;
+        return res;
+      });
+      const R = { partidos, acum, porPartido, minsJug };
+      qmCache.set(t, R);
+      return R;
+    }
+    function qmDe(t, p) { const R = qmTemporada(t); if (!R) return null; const i = (t.partidos || []).indexOf(p); return i >= 0 ? R.partidos[i] : null; }
+    // GRANDES: partido grande = contra uno de los GR_TOP rivales con más Elo el día del partido (sin contar al Hergar; Elo de antes de esa jornada).
+    //  Se compara el peso en el equipo de cada niño (frente a sus compañeros del mismo partido) en los grandes y en el resto.
+    //  En el visor solo salen quienes se crecen (positivo). Mínimo GR_MIN minutos en grandes y en el resto.
+    const GR_MIN = 70, GR_FIABLE = 4, GR_TOP = 4; // v223: los 4 rivales con más Elo
+    function grPartidosGrandes(t, liga) {
+      const out = new Map();
+      if (!t || !liga || !liga.equipos || !liga.partidos || typeof pronPreparar !== 'function') return out;
+      const D = pronPreparar(liga);
+      if (D.H < 0) return out;
+      const casa = eloCasaUsada(liga);
+      const jug = D.P.filter(p => p.jugado).sort((a, b) => a.jg - b.jg);
+      const elo = Array(D.NT).fill(ELO_BASE), antes = {};
+      jug.forEach(p => {
+        if (!antes[p.jg]) antes[p.jg] = elo.slice();
+        const we = 1 / (1 + Math.pow(10, -(elo[p.l] + casa - elo[p.v]) / 400));
+        const w = p.gl > p.gv ? 1 : p.gl === p.gv ? 0.5 : 0;
+        const gd = Math.abs(p.gl - p.gv), G = gd <= 1 ? 1 : gd === 2 ? 1.5 : (11 + gd) / 8;
+        const d = ELO_K * G * (w - we); elo[p.l] += d; elo[p.v] -= d;
+      });
+      const nGrandes = GR_TOP, usados = new Set(), vistas = {};
+      (t.partidos || []).forEach((p, i) => {
+        const rv = proRivalLiga(liga, p);
+        if (rv.i < 0 || rv.i === D.H) return;
+        let lp = null;
+        const id = p.contexto && p.contexto.ligaId;
+        if (id != null) lp = jug.find(x => x.id === id) || null;
+        if (!lp) {
+          const n = vistas[rv.i] = (vistas[rv.i] || 0) + 1;
+          lp = jug.filter(x => (x.l === D.H && x.v === rv.i) || (x.v === D.H && x.l === rv.i))[n - 1] || null;
+        }
+        if (!lp || usados.has(lp.id)) return;
+        usados.add(lp.id);
+        const E = antes[lp.jg]; if (!E) return;
+        const otros = E.map((v, k) => ({ v, k })).filter(x => x.k !== D.H).sort((a, b) => b.v - a.v);
+        const pos = otros.findIndex(x => x.k === rv.i);
+        if (pos >= 0 && pos < nGrandes && E[rv.i] > ELO_BASE + 0.5) out.set(i, { i, p, elo: Math.round(E[rv.i]), puesto: pos + 1, nombre: liga.equipos[rv.i].nombre });
+      });
+      return out;
+    }
+    function grandesTemporada(t, liga) {
+      const G = grPartidosGrandes(t, liga);
+      const pesos = pesoEquipoTemporada(t);
+      const jug = Object.values(pesos).map(r => {
+        let gs = 0, gm = 0, rs = 0, rm = 0, ng = 0;
+        r.partidos.forEach(x => { if (G.has(x.i)) { gs += x.dif * x.mins; gm += x.mins; ng++; } else { rs += x.dif * x.mins; rm += x.mins; } });
+        const g = gm ? gs / gm : null, re = rm ? rs / rm : null;
+        return { j: r.j, g, re, gm, rm, ng, dif: g != null && re != null ? g - re : null, ok: gm >= GR_MIN && rm >= GR_MIN };
+      });
+      return { grandes: [...G.values()].sort((a, b) => a.i - b.i), jug };
+    }
+    // ── v227 · LA IA SABE LA QUÍMICA, SI ES PARTIDO GRANDE Y EL BOX-TO-BOX (mismos cálculos que el visor) ──
+    const QM_RODADA = 6.5, QM_CASI_NUEVA = 2.5;
+    function iaRivalTop4(liga, rivalIdx) { // ¿el rival está entre los 4 de más Elo (sin contar al Hergar)?
+        const E = eloLiga(liga); if (!E || !E.jugados || rivalIdx == null || rivalIdx < 0) return null;
+        const otros = E.equipos.filter(x => !x.e.esHergar);
+        const pos = otros.findIndex(x => x.i === rivalIdx);
+        return pos >= 0 ? { grande: pos < GR_TOP && otros[pos].elo > ELO_BASE + 0.5, puesto: pos + 1 } : null;
+    }
+    function iaSeCrecen(t, liga) {
+        try { return grandesTemporada(t, liga).jug.filter(x => x.ok && x.dif != null && x.dif > 0.05).sort((a, b) => b.dif - a.dif).slice(0, 3).map(x => String(x.j.name || '').split(' ')[0]); } catch (e) { return []; }
+    }
+    function iaQuimicaPartido(t) {
+        let r = null;
+        if (partidoYaTransferido) { const ps = t.partidos || []; r = ps.length ? qmDe(t, ps[ps.length - 1]) : null; }
+        else if (pizarraLog.length && (t.partidos || []).length) {
+            const sel = document.getElementById('formationSelector');
+            const p0 = { fecha: '__actual__', rival: '__actual__', formacion: formacionInicialPartido || (sel && sel.value) || '4-2-3-1', titulares: (pizarraLog[0].ids || []).map(String),
+                pizarra: pizarraLog.map(x => ({ m: x.m, f: x.f, ids: x.ids.join(',') })), duracion: formatTime(getElapsedSeconds()) };
+            const t2 = Object.assign({}, t, { partidos: (t.partidos || []).concat([p0]) });
+            r = qmDe(t2, p0);
+        }
+        if (!r || r.q == null) return '';
+        const f1 = v => v.toFixed(1).replace('.', ',');
+        const et = r.q >= 8.5 ? 'muy rodado' : r.q >= 6.5 ? 'bastante rodado' : r.q >= 4.5 ? 'a medio rodar' : 'con muchas parejas nuevas';
+        const qs = (t.partidos || []).map(p => qmDe(t, p)).filter(x => x && x.q != null && x !== r).map(x => x.q);
+        const media = qs.length ? qs.reduce((a, b) => a + b, 0) / qs.length : null;
+        const nom = id => { const j = (t.jugadores || {})[id] || playersData[id]; return j ? String(j.name || '').split(' ')[0] : '¿?'; };
+        const nuevas = r.tramos[0].enlaces.filter(e => e.v < QM_CASI_NUEVA).slice(0, 4).map(e => `${nom(e.a)}-${nom(e.b)} (${e.pa} y ${e.pb})`);
+        const T = r.tramos, fin = T[T.length - 1];
+        return `QUÍMICA DEL ONCE (cuánto habían jugado juntas las parejas de vecinos en los 4 partidos anteriores; 0-10): ${f1(r.q)}, once ${et}${media != null ? ` (media de la temporada ${f1(media)})` : ''}.`
+            + (nuevas.length ? ` Parejas casi nuevas en el once inicial: ${nuevas.join(', ')}.` : ' Todas las parejas del once inicial venían rodadas.')
+            + (T.length > 1 ? ` Once inicial ${f1(T[0].q)}; tras los cambios y recolocaciones, ${f1(fin.q)}.` : '');
+    }
+    function iaExtrasPartido() {
+        const L = [];
+        let t = null; try { t = getTemporada(); } catch (e) {}
+        if (!t) return '';
+        try { const q = iaQuimicaPartido(t); if (q) L.push(q); } catch (e) { console.error('IA química:', e); }
+        try {
+            const liga = getLiga();
+            if (liga && liga.equipos) {
+                const rv = proRivalLiga(liga, { rival: rivalName, contexto: {} });
+                const G = iaRivalTop4(liga, rv.i);
+                if (G && G.grande) { const c = iaSeCrecen(t, liga); L.push(`PARTIDO GRANDE: el rival es el ${G.puesto}.º de los rivales por Elo (uno de los 4 más fuertes).${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
+            }
+        } catch (e) { console.error('IA partido grande:', e); }
+        try {
+            const bb = Object.values(playersData).filter(p => p && p.convocado).map(p => ({ p, b: b2bPuntosDirecto(p) })).filter(x => x.b.at >= B2B_N && x.b.de >= B2B_N)
+                .map(x => `${String(x.p.name || '').split(' ')[0]}${x.b.at >= B2B_T && x.b.de >= B2B_T ? ' (BOX-TO-BOX TOTAL)' : ''} (ataque ${x.b.at}, defensa ${x.b.de})`);
+            if (bb.length) L.push(`BOX-TO-BOX (4 o más puntos de ataque y 4 o más de defensa en el partido: llegó a todo, arriba y abajo): ${bb.join(', ')}.`);
+        } catch (e) { console.error('IA box-to-box:', e); }
+        return L.length ? L.join('\n') + '\n' : '';
+    }
+    function iaExtrasPrevia(liga, riv) {
+        const L = [];
+        let t = null; try { t = getTemporada(); } catch (e) {}
+        try {
+            const G = iaRivalTop4(liga, riv);
+            if (G && G.grande) { const c = t ? iaSeCrecen(t, liga) : []; L.push(`- Es un partido grande: el rival es uno de los 4 equipos con más Elo.${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
+        } catch (e) {}
+        try { // v228 · el box-to-box solo si alguien lo consiguió en el partido anterior
+            const ps = (t && t.partidos) || [], ult = ps[ps.length - 1];
+            if (ult) {
+                const L2 = [];
+                Object.values(t.jugadores || {}).forEach(j => {
+                    const h = (j.historial || []).find(x => x.fecha === ult.fecha && x.rival === ult.rival); if (!h || !h.acc) return;
+                    const a = h.acc, g = h.goles || 0;
+                    const at = 2 * g + 2 * (h.asistencias || 0) + (a.pc || 0) + (a.pa || 0) + (a.reg || 0) + Math.max(0, (a.dp || 0) - g), de = (a.def || 0) + (a.defC || 0);
+                    if (at >= B2B_N && de >= B2B_N) L2.push(`${String(j.name || '').split(' ')[0]}${at >= B2B_T && de >= B2B_T ? ' (box-to-box total)' : ''}`);
+                });
+                if (L2.length) L.push(`- En el partido anterior (contra ${ult.rival}) hizo un partido box-to-box (llegó a todo, en ataque y en defensa): ${L2.join(', ')}.`);
+            }
+        } catch (e) {}
+        return L.join('\n');
+    }
     // ── v225 · 📦 BOX-TO-BOX EN DIRECTO ──
     // Ataque: gol 2 · asistencia 2 · pase clave 1 · pase al área 1 · regate 1 · tiro a puerta 1 (sin contar los que son gol).
     // Defensa: acción defensiva 1 · defensiva clave 2 (accionesDef ya cuenta las clave). 4 y 4 = 📦; 6 y 6 = 📦📦 total.
@@ -10907,6 +11214,7 @@ REGLAS
 - Básate solo en los datos de abajo. Describe acciones que estén en los números: no inventes situaciones (rivales encima, combinaciones entre jugadores concretos), ni actitudes que no se pueden medir (concentración, intensidad, ganas), ni hables de la temporada o de partidos anteriores salvo con los datos de LIGA y TEMPORADA. No afirmes nada táctico que los datos no muestren (por ejemplo, "presionamos alto" o "dominamos por banda").
 - Usa los datos de TEMPORADA para comentar en 1-3 frases algo de algún jugador cuando sea relevante: su primer gol, una racha goleadora, que sea el máximo goleador o asistente, que hoy rinda por encima o por debajo de su media (/70), su puntería a lo largo de la temporada... Siempre con los números reales; si no hay nada destacable, no lo fuerces.
 - Usa los datos de LIGA para situar al rival (su posición, su racha, el enfrentamiento anterior) y dar su valor al resultado.
+- Si vienen QUÍMICA DEL ONCE, PARTIDO GRANDE o BOX-TO-BOX, úsalos en una o dos frases cuando aporten: que el once venía rodado o con parejas nuevas (por rotaciones o bajas), el valor de rendir en un partido grande o quién hizo un partido box-to-box (siempre en positivo). Una química baja nunca es culpa de ningún niño: dilo en colectivo.
 - La hora del partido es la del CONTEXTO: si dices mañana o tarde, que cuadre (antes de las 14:00 es por la mañana).
 - Estas reglas son para ti: no las expliques ni las menciones en el informe (por ejemplo, no expliques que un sustituido no puede volver a entrar, aunque debes tenerlo en cuenta en las rotaciones). No atribuyas intenciones al cuerpo técnico.
 - No termines con lemas, ánimos ni emojis de colores: acaba con la última idea útil.
@@ -10929,7 +11237,7 @@ FUERAS DE JUEGO: Hergar ${fuerasJuegoNuestros} | Rival ${fuerasJuegoRival} (los 
 ${tarjetasRival.length ? `TARJETAS DEL RIVAL: ${tarjetasRival.map(x => (x.tipo === 'R' ? 'roja' : 'amarilla') + ' ' + x.min + "'").join(', ')}${tarjetasRival.some(x => x.tipo === 'R') ? ' (con una roja, el rival juega con uno menos desde ese minuto)' : ''}\n` : ''}TOP SINERGIAS: ${topSinergias || 'Sin datos'}
 CAMBIOS (minuto del reloj del partido; la 2.ª parte empieza en el 35'): ${(() => { try { const cs = substitutionTimeline.filter(x => typeof x === 'string' && x.includes('🔄 Sale')).map(x => { const m = parseInt((/^\[(\d+)'\]/.exec(x) || [])[1], 10); const parte = isNaN(m) ? '' : (m < 35 ? ` (1.ª parte, min ${m})` : m === 35 ? ' (en el descanso)' : ` (2.ª parte, ${m - 35} min después de empezar)`); return x.replace(/^\[\d+'\]\s*🔄\s*/, `${isNaN(m) ? '' : m + "' "}`) + parte; }); return cs.length ? cs.join(' | ') : 'Ninguno'; } catch (e) { return 'Sin datos'; } })()}
 CRONOLOGÍA: ${priorizarCronologia(substitutionTimeline, 15).join(' | ')}
-
+${(() => { try { return iaExtrasPartido(); } catch (e) { return ''; } })()}
 ESTADÍSTICAS INDIVIDUALES DE ESTE PARTIDO (ordenadas por impacto /70):
 ${jugadoresData}
 ${temporadaTxt ? `
@@ -20541,6 +20849,7 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
             }
         } catch (e) {}
         try { const hx = previaDatosHergarTexto(); if (hx) L.push(hx); } catch (e) { console.error('Previa IA (datos del Hergar):', e); } // v196
+        try { const ex = iaExtrasPrevia(liga, riv); if (ex) L.push(`PARTIDO GRANDE Y BOX-TO-BOX:\n${ex}`); } catch (e) { console.error('Previa IA (extras):', e); } // v227
         const cap = previaIA && previaIA.captura;
         if (cap && cap.localId && cap.visitanteId && cap.golesLocal != null && cap.golesVisitante != null) {
             const iL = IDX[cap.localId], iV = IDX[cap.visitanteId];
