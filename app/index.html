@@ -1809,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v225</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v226</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -8335,6 +8335,18 @@
     let fuerasJuegoNuestros = 0; // v117
     let fuerasJuegoRival = 0;    // v117
     let tarjetasRival = [];      // v220 · [{ min, tipo: 'A' | 'R' }]
+    // v226 · PIZARRA DE CADA MOMENTO: cada vez que cambia el once en el campo (cambios, recolocaciones o formación) se apunta
+    // la pizarra entera con su minuto. Se guarda con el partido (partido.pizarra) y el visor la usa para la química por tramos.
+    let pizarraLog = [];         // [{ m, f, ids: [ids en el orden de la pizarra] }]
+    function pizarraRegistrar() {
+        if (!partidoEmpezado || matchFinished) return;
+        const sel = document.getElementById('formationSelector');
+        const m = Math.floor(getElapsedSeconds() / 60), f = (sel && sel.value) || '4-2-3-1', ids = onFieldIds.map(String);
+        const ult = pizarraLog[pizarraLog.length - 1];
+        if (ult && ult.f === f && ult.ids.join(',') === ids.join(',')) return;
+        if (ult && ult.m === m && pizarraLog.length > 1) { pizarraLog[pizarraLog.length - 1] = { m, f, ids }; return; } // varios toques en el mismo minuto: vale el último
+        pizarraLog.push({ m, f, ids });
+    }
     let palosNuestros = 0, palosRival = 0; // v205: tiros al palo (también cuentan como tiros a puerta)
     let zonasRivales = {};
     let zonasEquipo = {};
@@ -8459,6 +8471,7 @@
     function saveState() {
         if (reproduciendoPrevio) return; // v129: mientras se reconstruye el tramo previo no se guarda ni se publica nada
         try { b2bRevisarDirecto(); } catch (e) { console.error('Box-to-box:', e); } // v225
+        try { pizarraRegistrar(); } catch (e) { console.error('Pizarra:', e); } // v226
         try { sincronizarRolesDesdePizarra(); } catch (e) {} // v93
         // Nunca sobreescribir jugadores si playersData está vacío
         if (Object.keys(playersData).length > 0) {
@@ -8479,7 +8492,7 @@
             benchSittingTime,
             substitutionTimeline, rivalName,
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, pizarraLog, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             analisisIACompleto, resumenIACompleto, notasIAPartido,
             tiroGolRival: true // v110
         }));
@@ -8547,6 +8560,7 @@
             fuerasJuegoNuestros = state.fuerasJuegoNuestros || 0; // v117
             fuerasJuegoRival = state.fuerasJuegoRival || 0;       // v117
             tarjetasRival = Array.isArray(state.tarjetasRival) ? state.tarjetasRival : []; trPintarBadges(); // v220
+            pizarraLog = Array.isArray(state.pizarraLog) ? state.pizarraLog : []; // v226
             palosNuestros = state.palosNuestros || 0; palosRival = state.palosRival || 0; // v205
             { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
             tirosTrasCambio = state.tirosTrasCambio || { n: 0, r: 0 }; // v137
@@ -14812,6 +14826,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         partido.tiroGolRival = true; // v110: sus tiros a puerta del rival ya incluyen los goles del rival
         partido.titulares = titularesIniciales.slice(); // v68: titulares de este partido
         partido.formacion = formacionInicialPartido || document.getElementById('formationSelector').value; // v96: formación con la que empezó
+        try { if (pizarraLog.length) partido.pizarra = pizarraLog.map(x => ({ m: x.m, f: x.f, ids: x.ids.join(',') })); } catch (e) {} // v226: la pizarra de cada momento
         if (horaInicioPartido) partido.horaInicio = horaInicioPartido; // v99: para el tiempo y el contexto
         try { partido.goles = golesDesdeCronologia(); } catch (e) { console.error('Goles con minuto:', e); } // v84
         if (!sim) { try { partido.narracion = narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); } } // v193
@@ -17148,6 +17163,7 @@ ${separador}`;
         cornersContra = 0;
         fuerasJuegoNuestros = 0; fuerasJuegoRival = 0; // v117
         tarjetasRival = []; trPintarBadges(); // v220
+        pizarraLog = []; // v226
         palosNuestros = 0; palosRival = 0; // v205
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = 0; }
         tirosTrasCambio = { n: 0, r: 0 }; // v137
@@ -17564,7 +17580,7 @@ ${separador}`;
             playersData, goalsLocal, goalsRival,
             benchSittingTime,
             substitutionTimeline, tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, pizarraLog, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             accumulatedSeconds: getElapsedSeconds() // BUG FIX: incluir tiempo para coherencia en undo
         }, sinFoto));
         if (actionHistory.length>25) actionHistory.shift();
@@ -17589,6 +17605,7 @@ ${separador}`;
         document.getElementById("lsb_cornersC").innerText = cornersContra;
         fuerasJuegoNuestros = prev.fuerasJuegoNuestros||0; fuerasJuegoRival = prev.fuerasJuegoRival||0; // v117
         tarjetasRival = Array.isArray(prev.tarjetasRival) ? prev.tarjetasRival : []; trPintarBadges(); // v220
+        if (Array.isArray(prev.pizarraLog)) pizarraLog = prev.pizarraLog; // v226
         palosNuestros = prev.palosNuestros||0; palosRival = prev.palosRival||0; // v205
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
         tirosTrasCambio = prev.tirosTrasCambio || { n: 0, r: 0 }; // v137
