@@ -1809,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v229</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v231</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -8445,7 +8445,7 @@
         // La plantilla completa (incluye a quien aún no ha jugado minutos) va aparte del resto
         // de "temporada": solo se calcula al publicar, no se guarda en el JSON de la temporada.
         const plantilla = Object.values(playersData).map(p => ({ id: p.id, name: p.name, dorsal: p.dorsal, estado: estadoDe(p) }));
-        const payload = { secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), temporada: temporadaPublica(t), reglas: Object.assign({}, REGLAS_IMPACTO, { minMinutosSinergia: SIN_MIN_JUNTOS }), plantilla }; // v67: las reglas viajan con la temporada
+        const payload = { secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), temporada: temporadaPublica(t), premios: (typeof window.premiosPublicados === 'function' ? window.premiosPublicados() : null), reglas: Object.assign({}, REGLAS_IMPACTO, { minMinutosSinergia: SIN_MIN_JUNTOS }), plantilla }; // v67: las reglas viajan con la temporada
         return window.__hergarFirebaseSet('temporada', payload);
     }
 
@@ -19115,11 +19115,85 @@ ${separador}`;
                 <div class="liga-equipo-nombre ${eq.esHergar?'hergar':''}" style="flex:1; cursor:pointer;" onclick="abrirFichaRival('${eq.id}')">${eq.nombre}${pendiente ? '<div style="font-size:9.5px; color:#f5a623; font-weight:700; margin-top:2px;">Escudo pendiente de enviar al visor</div>' : ''}<div style="font-size:10px; font-weight:600; margin-top:2px; color:${eq.campo ? '#64748b' : '#f5a623'};">${eq.campo ? ctxEsc([eq.campo.nombre, CTX_CESPED[eq.campo.cesped], eq.campo.lat == null ? 'sin ubicación' : ''].filter(Boolean).join(' · ')) : 'Sin campo todavía'}</div></div>
                 <button onclick="abrirCampoEquipo('${eq.id}')" style="${btn} background:${eq.campo ? 'rgba(46,213,115,0.1)' : 'rgba(245,166,35,0.1)'}; color:${eq.campo ? '#2ed573' : '#f5a623'}; border:1px solid ${eq.campo ? 'rgba(46,213,115,0.4)' : 'rgba(245,166,35,0.45)'};">🏟️</button>
                 ${eq.esHergar ? '' : `
+                <button onclick="abrirColorEquipo('${eq.id}')" aria-label="Color de sus barras en el visor" style="${btn} background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); display:inline-flex; align-items:center;"><span style="width:15px; height:15px; border-radius:50%; display:inline-block; background:${eq.color || '#64748b'}; border:2px solid ${eq.color ? '#fff' : 'rgba(255,255,255,0.3)'};"></span></button>
                 <label for="escudoEquipoInput" onclick="escudoEquipoPendiente='${eq.id}'" style="${btn} background:rgba(46,213,115,0.1); color:#2ed573; border:1px solid rgba(46,213,115,0.4);">📷 ${tiene ? 'Cambiar' : 'Escudo'}</label>
                 ${tiene ? `<button onclick="quitarEscudoEquipo('${eq.id}')" aria-label="Quitar escudo" style="${btn} background:rgba(255,255,255,0.05); color:#94a3b8; border:1px solid rgba(255,255,255,0.1);">🗑</button>` : ''}
                 <button class="liga-equipo-del" onclick="eliminarEquipoLiga('${eq.id}')">✕</button>`}
             </div>`;
         }).join('');
+    }
+
+    // ── v231 · 🎨 COLOR DE CADA EQUIPO: lo elige Javi y el visor pinta con él las barras del rival ──
+    // Se guarda en la Liga (eq.color) y viaja al visor con ella. Sin color = gris, como antes. El Hergar, siempre rojo.
+    const COLORES_EQUIPO = [
+        ['', 'Sin color', '#64748b', '#fff'], ['#2563eb', 'Azul', '#2563eb', '#fff'], ['#38bdf8', 'Celeste', '#38bdf8', '#0a0e14'],
+        ['#16a34a', 'Verde', '#16a34a', '#fff'], ['#eab308', 'Amarillo', '#eab308', '#0a0e14'], ['#f97316', 'Naranja', '#f97316', '#0a0e14'],
+        ['#7c3aed', 'Morado', '#7c3aed', '#fff'], ['#e5e7eb', 'Blanco', '#e5e7eb', '#0a0e14'], ['#8b1d3a', 'Granate', '#8b1d3a', '#fff'], ['#dc2626', 'Rojo', '#dc2626', '#fff']
+    ];
+    // ¿Se confunde con el rojo del Hergar (180,20,56)? Tono rojizo y bastante saturado.
+    function colorPareceRojoHergar(hex) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return false;
+        const n = parseInt(m[1], 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+        if (mx < 0.2 || d / mx < 0.45) return false;
+        let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360;
+        return h >= 335 || h <= 15;
+    }
+    let colorEquipoTmp = { id: null, color: '' };
+    function abrirColorEquipo(id) {
+        const eq = getLiga().equipos.find(e => e.id === id);
+        if (!eq) return;
+        colorEquipoTmp = { id, color: eq.color || '' };
+        let m = document.getElementById('colorEquipoModal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'colorEquipoModal';
+            m.style.cssText = 'display:none; position:fixed; inset:0; z-index:10300; background:rgba(0,0,0,.85); align-items:center; justify-content:center; padding:20px;';
+            m.addEventListener('click', ev => { if (ev.target === m) cerrarColorEquipo(); });
+            document.body.appendChild(m);
+        }
+        pintarColorEquipo(eq);
+        m.style.display = 'flex';
+    }
+    function pintarColorEquipo(eq) {
+        const m = document.getElementById('colorEquipoModal'); if (!m) return;
+        eq = eq || getLiga().equipos.find(e => e.id === colorEquipoTmp.id);
+        if (!eq) return;
+        const sel = colorEquipoTmp.color || '';
+        const libre = sel && !COLORES_EQUIPO.some(c => c[0].toLowerCase() === sel.toLowerCase());
+        const muestras = COLORES_EQUIPO.map(([v, nom, hex, txt]) => {
+            const on = (v || '').toLowerCase() === sel.toLowerCase();
+            return `<button type="button" onclick="elegirColorEquipo('${v}')" aria-label="${nom}" style="height:46px; border-radius:10px; background:${hex}; border:${on ? '3px solid #fff' : '1px solid rgba(255,255,255,.15)'}; color:${txt}; font-size:9px; font-weight:800; display:flex; align-items:flex-end; justify-content:center; padding-bottom:3px; cursor:pointer;">${nom}</button>`;
+        }).join('');
+        const muestra = sel || '#64748b';
+        const filaBarra = (l, h, r) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px;"><span style="color:#ff5577;">${h}</span><span style="font-family:Inter,sans-serif; font-size:11px; font-weight:700; color:#cbd5e1;">${l}</span><span style="color:${sel ? muestra : '#94a3b8'};">${r}</span></div><div style="display:flex; gap:3px; height:7px; margin-top:4px; border-radius:4px; overflow:hidden;"><div style="flex:${h}; background:rgb(180,20,56);"></div><div style="flex:${r}; background:${muestra};"></div></div></div>`;
+        m.innerHTML = `<div style="background:linear-gradient(145deg,#111827,#0f172a); border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:16px; width:100%; max-width:360px; max-height:88vh; overflow-y:auto;">
+            <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px; color:#fff;">🎨 COLOR · ${ctxEsc(String(eq.nombre).toUpperCase())}</div>
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:4px 0 12px;">El visor pintará con este color sus barras (estadísticas del partido, cara a cara, medias, Modo TV y resumen). El Hergar sigue siempre en rojo.</div>
+            <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:8px;">${muestras}</div>
+            <label style="display:flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; font-weight:700; color:#cbd5e1;">Otro color: <input type="color" value="${libre ? sel : '#2563eb'}" onchange="elegirColorEquipo(this.value)" style="width:52px; height:36px; border:${libre ? '3px solid #fff' : '1px solid rgba(255,255,255,.2)'}; border-radius:8px; background:none; padding:0;"></label>
+            ${colorPareceRojoHergar(sel) ? `<div style="margin-top:10px; font-size:11.5px; line-height:1.45; color:#f5a623; background:rgba(245,166,35,.1); border:1px solid rgba(245,166,35,.4); border-radius:9px; padding:8px 10px;">⚠️ Este color se parece mucho al rojo del Hergar: en las barras no se distinguirían bien. Puedes guardarlo igualmente.</div>` : ''}
+            <div style="margin-top:12px; background:rgba(0,0,0,.25); border-radius:12px; padding:10px 12px;">
+                <div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px;"><span style="color:#ff5577;">HERGAR</span><span style="color:${sel ? muestra : '#94a3b8'};">${ctxEsc(String(eq.abrev || eq.nombre).toUpperCase())}</span></div>
+                ${filaBarra('Disparos', 9, 4)}${filaBarra('Córners', 6, 3)}
+                <div style="font-size:10px; color:#64748b; margin-top:6px;">Así se verá (datos de ejemplo).</div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+                <button type="button" onclick="cerrarColorEquipo()" style="flex:1; min-height:44px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); color:#e2e8f0; font-weight:800; font-family:'Montserrat',sans-serif;">Cancelar</button>
+                <button type="button" onclick="guardarColorEquipo()" style="flex:1; min-height:44px; border-radius:10px; border:none; background:linear-gradient(135deg,#2ed573,#27ae60); color:#0a0e14; font-weight:900; font-family:'Montserrat',sans-serif;">Guardar</button>
+            </div>
+        </div>`;
+    }
+    function elegirColorEquipo(v) { colorEquipoTmp.color = v || ''; pintarColorEquipo(); }
+    function cerrarColorEquipo() { const m = document.getElementById('colorEquipoModal'); if (m) m.style.display = 'none'; }
+    function guardarColorEquipo() {
+        const liga = getLiga();
+        const eq = liga.equipos.find(e => e.id === colorEquipoTmp.id);
+        if (!eq) { cerrarColorEquipo(); return; }
+        if (colorEquipoTmp.color) eq.color = colorEquipoTmp.color; else delete eq.color;
+        saveLiga(liga); // se publica con la Liga
+        cerrarColorEquipo();
+        renderLigaEquipos();
     }
 
     // ── v89 · PRONÓSTICO DE LA LIGA (v90: el partido que interesa pesa lo probable de cada resultado · v91: lo que necesitas, calendario y nivel) (mismo código en app y visor) ──
@@ -23212,6 +23286,269 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     { const det = $('vozApodosDet'); if (det) det.addEventListener('toggle', () => { if (det.open) pintarApodos(); }); }
 
     pintarTira();
+})();
+</script>
+
+<!-- ── v230 · 🏆 PREMIOS DE LA VUELTA: se calculan solos, Javi los revisa (cambiar ganador, elegir el gol) y los publica en el visor ── -->
+<style>
+    #pmModal { display: none; position: fixed; inset: 0; z-index: 9500; background: #0a0e14; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #pmModal .pm-wrap { max-width: 480px; margin: 0 auto; padding: 14px 14px 40px; display: flex; flex-direction: column; gap: 12px; }
+    .pm-card { background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; }
+    .pm-h { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px; }
+    .pm-row { display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.06); align-items: start; }
+    .pm-row:first-of-type { border-top: none; }
+    .pm-row .e { font-size: 18px; line-height: 1.2; }
+    .pm-row .t { font-size: 12.5px; font-weight: 700; color: #e2e8f0; }
+    .pm-row .g { font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 14px; color: #fff; margin-top: 2px; }
+    .pm-row .d { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+    .pm-row .g.off { color: #64748b; font-weight: 700; font-size: 12px; }
+    .pm-sel { width: 100%; min-height: 38px; margin-top: 6px; border-radius: 9px; background: #0f172a; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12); padding: 0 8px; font-size: 12px; }
+    .pm-gol { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 10px; background: #0f151f; margin-top: 6px; cursor: pointer; font-size: 12px; }
+    .pm-gol input { width: 20px; height: 20px; accent-color: #2ed573; margin: 0; flex-shrink: 0; }
+    .pm-gol a { margin-left: auto; color: #5dade2; font-weight: 700; text-decoration: none; font-size: 12px; padding: 6px; }
+    .pm-btn { min-height: 46px; border-radius: 12px; border: none; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px; }
+</style>
+<div id="pmModal" role="dialog" aria-label="Premios de la vuelta">
+    <div class="pm-wrap" id="pmContenido"></div>
+</div>
+<script>
+(function () {
+    const PM_KEY = 'hergar_F11_premios';
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const f1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',').replace('-0,0', '0,0');
+    const sg = v => (v > 0 ? '+' : '') + f1(v);
+    const VUELTAS = [['1', '1.ª vuelta'], ['2', '2.ª vuelta'], ['3', '3.ª vuelta'], ['T', 'temporada']];
+    const PM_EVO_R = { gol: .75, asist: .40, dp: .30, df: .10, pal: .30, pc: .25, pa: .15, reg: .10, def: .30, defC: 1.00, par: .30, parD: 1.00, fj: -.05 }; // como «Sus acciones» del visor
+    const PM_B2B_N = 4, PM_B2B_T = 6;
+
+    function leer() { try { return JSON.parse(localStorage.getItem(PM_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    function guardar(d) { try { localStorage.setItem(PM_KEY, JSON.stringify(d)); } catch (e) {} }
+    // Lo que va al visor con la temporada (lista de premios publicados)
+    window.premiosPublicados = function () { const d = leer(); return Array.isArray(d.publicados) && d.publicados.length ? d.publicados : null; };
+
+    function nombre(t, id) { const j = (t.jugadores || {})[id] || (typeof playersData !== 'undefined' ? playersData[id] : null); return j ? String(j.name || '').split(' ')[0] : '¿?'; }
+    function hist(j, p) { return (j.historial || []).find(x => x.fecha === p.fecha && x.rival === p.rival) || null; }
+    function susAcc(h) { // «sus acciones» del niño en un partido (sin la parte de equipo); null si el partido no tiene detalle
+        if (!h) return null;
+        if (h.accImp !== undefined && h.accImp !== null) return Number(h.accImp) || 0;
+        if (!h.acc) return null;
+        let s = (h.goles || 0) * PM_EVO_R.gol + (h.asistencias || 0) * PM_EVO_R.asist;
+        ['dp', 'df', 'pal', 'pc', 'pa', 'reg', 'def', 'defC', 'par', 'parD', 'fj'].forEach(k => s += (Number(h.acc[k]) || 0) * PM_EVO_R[k]);
+        return s;
+    }
+    function b2b(h) {
+        if (!h || h.acc === undefined || h.acc === null) return 0;
+        const a = h.acc || {}, g = Number(h.goles) || 0, n = k => Number(a[k]) || 0;
+        const at = 2 * g + 2 * (Number(h.asistencias) || 0) + n('pc') + n('pa') + n('reg') + Math.max(0, n('dp') - g);
+        const de = n('def') + n('defC');
+        return at >= PM_B2B_T && de >= PM_B2B_T ? 2 : at >= PM_B2B_N && de >= PM_B2B_N ? 1 : 0;
+    }
+    function rango(t, d) {
+        const n = (t.partidos || []).length;
+        const desde = Math.max(0, Math.min(n, (Number(d.desde) || 1) - 1));
+        return { desde, hasta: n, ps: (t.partidos || []).slice(desde) };
+    }
+
+    // ── Cálculo de los premios (cada uno con su ranking: el 1.º gana, el resto sale en el podio o para cambiarlo) ──
+    function calcular(t, liga, d) {
+        const R0 = rango(t, d), ps = R0.ps, js = Object.values(t.jugadores || {});
+        const P = {};
+        const durDe = p => { try { return mmDuracion(p, proFilas(t, p)); } catch (e) { return 70; } };
+        let posibles = 0; ps.forEach(p => { if (!p.manual) posibles += durDe(p); });
+        // por niño y partido
+        const fila = js.map(j => {
+            const L = ps.map(p => ({ p, h: hist(j, p) })).filter(x => x.h && (x.h.mins || 0) > 0);
+            const mins = L.reduce((s, x) => s + (Number(x.h.mins) || 0), 0);
+            let sa = 0, saMin = 0; L.forEach(x => { const v = susAcc(x.h); if (v != null) { sa += v; saMin += Number(x.h.mins) || 0; } });
+            const nMvp = ps.filter(p => p.mvpId != null && String(p.mvpId) === String(j.id)).length;
+            const goles = L.reduce((s, x) => s + (Number(x.h.goles) || 0), 0), asis = L.reduce((s, x) => s + (Number(x.h.asistencias) || 0), 0);
+            const par = L.reduce((s, x) => s + (x.h.acc ? (Number(x.h.acc.par) || 0) + (Number(x.h.acc.parD) || 0) : 0), 0);
+            const nb = L.filter(x => b2b(x.h) >= 1).length, nbT = L.filter(x => b2b(x.h) === 2).length;
+            const per = L.map(x => ({ v: susAcc(x.h), m: Number(x.h.mins) || 0 })).filter(x => x.v != null && x.m >= 20).map(x => x.v / x.m * 70);
+            return { j, id: String(j.id), L, mins, sa, saMin, nMvp, goles, asis, par, nb, nbT, per, pj: L.length };
+        }).filter(x => x.pj > 0);
+        const top = (arr, f, filt, ord) => arr.filter(filt || (() => true)).map(x => Object.assign({ v: f(x) }, x)).filter(x => x.v != null).sort(ord || ((a, b) => b.v - a.v));
+
+        // ⭐ MVP: sus acciones por 70', con la mitad de los minutos posibles como mínimo; desempatan las veces MVP
+        const minMvp = Math.round(posibles * 0.5);
+        P.mvp = top(fila, x => x.saMin > 0 ? x.sa / x.saMin * 70 : null, x => x.saMin >= minMvp && x.saMin > 0, (a, b) => b.v - a.v || b.nMvp - a.nMvp)
+            .map(x => ({ ids: [x.id], v: x.v, dato: sg(x.v), lab: "sus acciones por 70'", extras: [[x.mins + "'", 'minutos'], [String(x.nMvp), x.nMvp === 1 ? 'vez MVP' : 'veces MVP']], txt: `El que más ha hecho con sus acciones por cada 70 minutos (goles, pases, regates, defensas…). Jugó ${x.pj} de ${ps.length} partidos.` }));
+        // 🎯 Pichichi · 🅰️ El asistente · 🧤 El muro
+        P.pichichi = top(fila, x => x.goles, x => x.goles > 0, (a, b) => b.v - a.v || a.mins - b.mins)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'gol' : 'goles', extras: [[String(x.asis), x.asis === 1 ? 'asistencia' : 'asistencias'], [String(x.pj), 'partidos']], txt: `El máximo goleador de la ${d.nombre}.` }));
+        P.asistente = top(fila, x => x.asis, x => x.asis > 0, (a, b) => b.v - a.v || a.mins - b.mins)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'asistencia' : 'asistencias', extras: [[String(x.goles), x.goles === 1 ? 'gol' : 'goles'], [String(x.pj), 'partidos']], txt: 'El que más goles ha dado a sus compañeros.' }));
+        P.muro = top(fila, x => x.par, x => x.par > 0)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: 'paradas', extras: [[x.mins + "'", 'minutos'], [String(x.pj), 'partidos']], txt: 'Bajo palos, el que más balones ha sacado.' }));
+        // 🧩 El pegamento: con cuántos compañeros forma pareja rodada en toda la vuelta
+        try {
+            const R = qmTemporada(t), ven = {}, mj = {};
+            for (let k = R0.desde; k < R0.hasta; k++) { Object.entries(R.porPartido[k] || {}).forEach(([c, m]) => { ven[c] = (ven[c] || 0) + m; }); Object.entries(R.minsJug[k] || {}).forEach(([id, m]) => { mj[id] = (mj[id] || 0) + m; }); }
+            const ids = Object.keys(mj).filter(id => mj[id] > 0), soc = {};
+            ids.forEach(id => { soc[id] = 0; });
+            for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) {
+                const m = ven[qmClave(ids[a], ids[b])] || 0, den = Math.max(QM_MIN_BASE, Math.min(mj[ids[a]], mj[ids[b]]));
+                if (m / den >= 0.65) { soc[ids[a]]++; soc[ids[b]]++; }
+            }
+            P.pegamento = ids.filter(id => soc[id] > 0).map(id => ({ ids: [id], v: soc[id], dato: String(soc[id]), lab: 'compañeros con los que está rodado', extras: [[mj[id] + "'", 'minutos']], txt: 'El que más une al equipo: el que más parejas rodadas forma con sus compañeros.' })).sort((a, b) => b.v - a.v);
+            // 🔗 La pareja de la vuelta: la pareja de vecinos (en la pizarra) que más minutos ha jugado junta
+            const vec = new Set();
+            for (let k = Math.max(1, R0.desde); k < R0.hasta; k++) { const r = R.partidos[k]; if (r && r.tramos) r.tramos.forEach(tr => tr.enlaces.forEach(e => vec.add(qmClave(e.a, e.b)))); }
+            P.pareja = [...vec].map(c => ({ c, m: ven[c] || 0 })).filter(x => x.m > 0).sort((a, b) => b.m - a.m)
+                .map(x => { const [a, b] = x.c.split('|'); return { ids: [a, b], v: x.m, dato: Math.round(x.m) + "'", lab: 'jugando juntos', extras: [], txt: 'La pareja de compañeros vecinos en el campo que más minutos ha compartido.' }; });
+        } catch (e) { console.error('Premios · química:', e); P.pegamento = P.pegamento || []; P.pareja = P.pareja || []; }
+        // 🔥 Se crece en los grandes (peso en el equipo contra los 4 rivales de más Elo, frente al resto)
+        try {
+            const t2 = Object.assign({}, t, { partidos: ps });
+            const G = grandesTemporada(t2, liga);
+            P.grandes = G.jug.filter(x => x.ok && x.dif != null && x.dif > 0.05).sort((a, b) => b.dif - a.dif)
+                .map(x => ({ ids: [String(x.j.id)], v: x.dif, dato: sg(x.dif), lab: 'más peso en el equipo en los grandes', extras: [[String(x.ng), x.ng === 1 ? 'partido grande' : 'partidos grandes']], txt: 'Contra los 4 rivales de más Elo, el que más sube su peso en el equipo.' }));
+        } catch (e) { console.error('Premios · grandes:', e); P.grandes = []; }
+        // 📈 El que más ha mejorado: sus acciones por 70' del último tercio de sus partidos frente al primero
+        P.mejorado = fila.filter(x => x.per.length >= 6).map(x => {
+            const n = Math.floor(x.per.length / 3), a = x.per.slice(0, n), b = x.per.slice(-n);
+            const m = L => L.reduce((s, v) => s + v, 0) / L.length;
+            return { ids: [x.id], v: m(b) - m(a), ini: m(a), fin: m(b), n };
+        }).filter(x => x.v > 0.05).sort((a, b) => b.v - a.v)
+            .map(x => ({ ids: x.ids, v: x.v, dato: sg(x.v), lab: "más en sus acciones por 70'", extras: [[f1(x.ini), `sus ${x.n} primeros`], [f1(x.fin), `sus ${x.n} últimos`]], txt: `Comparando sus ${x.n} últimos partidos con sus ${x.n} primeros, el que más ha crecido.` }));
+        // 📦 Rey del box-to-box
+        P.b2b = top(fila, x => x.nb, x => x.nb > 0, (a, b) => b.v - a.v || b.nbT - a.nbT)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'partido box-to-box' : 'partidos box-to-box', extras: x.nbT ? [[String(x.nbT), 'box-to-box total']] : [], txt: 'El que más partidos ha llegado a todo: 4 o más puntos atacando y 4 o más defendiendo.' }));
+        // 🏟️ El partido de la vuelta: la victoria (o si no, el empate) contra el rival más fuerte por Elo de hoy
+        try {
+            const E = eloLiga(liga), otros = E ? E.equipos.filter(x => !x.e.esHergar) : [];
+            P.partido = ps.map((p, k) => {
+                const rv = proRivalLiga(liga, p), pos = otros.findIndex(x => x.i === rv.i);
+                return { p, k: R0.desde + k, pos, res: p.resultado, gf: Number(p.golesLocal) || 0, gc: Number(p.golesRival) || 0 };
+            }).filter(x => x.res === 'V' || x.res === 'E').sort((a, b) => (a.res === b.res ? 0 : a.res === 'V' ? -1 : 1) || (a.pos < 0 ? 99 : a.pos) - (b.pos < 0 ? 99 : b.pos) || (b.gf - b.gc) - (a.gf - a.gc))
+                .map(x => ({ ids: [], partido: x.k, v: x.pos, dato: `${x.gf}-${x.gc}`, lab: `${x.res === 'V' ? 'victoria' : 'empate'} ante ${x.p.rival}`, extras: [[`J${x.k + 1}`, 'jornada']].concat(x.pos >= 0 ? [[`${x.pos + 1}.º`, 'rival más fuerte']] : []), txt: x.pos >= 0 ? `${x.res === 'V' ? 'La victoria' : 'El empate'} con más mérito: contra el ${x.pos + 1}.º rival más fuerte de la Liga por Elo.` : 'El mejor resultado de la vuelta.', nom: `J${x.k + 1} · vs ${x.p.rival}` }));
+        } catch (e) { console.error('Premios · partido:', e); P.partido = []; }
+        return { P, ps, R0, posibles };
+    }
+    const LISTA = [
+        ['mvp', '⭐', 'MVP de la vuelta'], ['pichichi', '🎯', 'Pichichi'], ['asistente', '🅰️', 'El asistente'], ['muro', '🧤', 'El muro'],
+        ['pegamento', '🧩', 'El pegamento'], ['grandes', '🔥', 'Se crece en los grandes'], ['mejorado', '📈', 'El que más ha mejorado'],
+        ['b2b', '📦', 'Rey del box-to-box'], ['pareja', '🔗', 'La pareja de la vuelta'], ['partido', '🏟️', 'El partido de la vuelta']
+    ];
+    function nomOpc(t, o) { return o.nom || o.ids.map(id => nombre(t, id)).join(' + '); }
+    function golesConVideo(t, R0) {
+        const out = [];
+        R0.ps.forEach((p, k) => (Array.isArray(p.goles) ? p.goles : []).forEach((g, gi) => {
+            if (!g || g.equipo === 'rival' || !g.video || g.videoOculto) return;
+            if (g.jugadorId != null && typeof permisoVideo === 'function' && !permisoVideo(g.jugadorId)) return;
+            out.push({ i: R0.desde + k, k: gi, p, g });
+        }));
+        return out;
+    }
+
+    let estado = null; // { t, liga, d, C }
+    function render() {
+        const box = document.getElementById('pmContenido');
+        const t = getTemporada(), liga = getLiga(), d = leer();
+        d.vuelta = d.vuelta || '1'; d.desde = d.desde || 1; d.ov = d.ov || {};
+        d.nombre = (VUELTAS.find(x => x[0] === d.vuelta) || VUELTAS[0])[1];
+        const n = (t.partidos || []).length;
+        if (!n) { box.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px;">🏆 Premios</div><button type="button" class="pm-btn" style="background:#1f2a3a; color:#fff; padding:0 16px;" onclick="cerrarPremios()">Cerrar</button></div><div class="pm-card">Aún no hay partidos en la temporada.</div>`; return; }
+        const C = calcular(t, liga, d);
+        estado = { t, liga, d, C };
+        const ov = d.ov[d.vuelta] || {};
+        const publicado = (d.publicados || []).find(x => x.vuelta === d.vuelta);
+        const filas = LISTA.map(([k, e, tit]) => {
+            const L = (C.P[k] || []).slice(0, 8), sel = ov[k];
+            let elegido = sel === 'no' ? null : (sel != null ? L.find(o => nomOpc(t, o) === sel) : null) || (sel === 'no' ? null : L[0]);
+            const opts = L.map(o => `<option value="${esc(nomOpc(t, o))}"${elegido && nomOpc(t, elegido) === nomOpc(t, o) ? ' selected' : ''}>${esc(nomOpc(t, o))} · ${esc(o.dato)} ${esc(o.lab)}</option>`).join('');
+            return `<div class="pm-row"><span class="e">${e}</span><div><div class="t">${esc(tit)}</div>
+                ${elegido ? `<div class="g">${esc(nomOpc(t, elegido))}</div><div class="d">${esc(elegido.dato)} ${esc(elegido.lab)}</div>` : `<div class="g off">${L.length ? 'No se da este premio' : 'Nadie cumple todavía'}</div>`}
+                ${L.length ? `<select class="pm-sel" onchange="premiosCambiar('${k}', this.value)"><option value="no"${!elegido ? ' selected' : ''}>— No dar este premio —</option>${opts}</select>` : ''}</div></div>`;
+        }).join('');
+        const goles = golesConVideo(t, C.R0), gsel = ov.gol;
+        const golesHTML = goles.length ? goles.map(x => {
+            const v = x.i + ':' + x.k;
+            return `<label class="pm-gol"><input type="radio" name="pmGol" value="${v}"${gsel === v ? ' checked' : ''} onchange="premiosCambiar('gol', this.value)">
+                <div><b style="color:#fff;">${esc(x.g.jugadorId != null ? nombre(t, x.g.jugadorId) : 'Gol')}</b> · J${x.i + 1}${x.g.min != null ? ` · ${x.g.min}'` : ''}<br><span style="color:#94a3b8; font-size:11px;">vs ${esc(x.p.rival)}${x.g.origen ? ' · ' + esc(x.g.origen) : ''}</span></div>
+                ${typeof urlVideoGol === 'function' ? `<a href="${esc(urlVideoGol(x.g.video))}" target="_blank" rel="noopener" onclick="event.stopPropagation();">▶ Ver</a>` : ''}</label>`;
+        }).join('') + `<label class="pm-gol"><input type="radio" name="pmGol" value=""${!gsel ? ' checked' : ''} onchange="premiosCambiar('gol', '')"><div style="color:#94a3b8;">Sin gol de la vuelta</div></label>`
+            : `<div style="font-size:12px; color:#94a3b8;">No hay goles con vídeo en estos partidos.</div>`;
+        const avisoOk = typeof oneSignalKey === 'function' && !!oneSignalKey();
+        box.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <div><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px; color:#fff;">🏆 Premios de la ${esc(d.nombre)}</div>
+                <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">Se calculan solos. Puedes cambiar el ganador de cualquiera.</div></div>
+                <button type="button" class="pm-btn" style="background:#1f2a3a; color:#fff; padding:0 16px; flex:none;" onclick="cerrarPremios()">Cerrar</button>
+            </div>
+            <div class="pm-card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <select class="pm-sel" style="margin:0; flex:1; min-width:130px;" onchange="premiosVuelta(this.value)">${VUELTAS.map(([v, l]) => `<option value="${v}"${v === d.vuelta ? ' selected' : ''}>Premios de la ${l}</option>`).join('')}</select>
+                <label style="font-size:12px; color:#cbd5e1; display:flex; align-items:center; gap:6px;">desde la J<input type="number" min="1" max="${n}" value="${C.R0.desde + 1}" onchange="premiosDesde(this.value)" style="width:56px; min-height:38px; border-radius:9px; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,0.12); padding:0 6px;"></label>
+                <div style="width:100%; font-size:11px; color:#94a3b8;">Cuentan ${C.ps.length} ${C.ps.length === 1 ? 'partido' : 'partidos'} (J${C.R0.desde + 1}–J${C.R0.hasta}). Para el MVP hace falta jugar ${Math.round(C.posibles * 0.5)}' como poco (la mitad).</div>
+            </div>
+            ${publicado ? `<div class="pm-card" style="border-color:rgba(46,213,115,.45); font-size:12px; color:#cbd5e1;">✅ Publicados en el visor el ${new Date(publicado.ts).toLocaleDateString('es-ES')}. Si los vuelves a publicar, se sustituyen. <button type="button" onclick="premiosQuitar()" style="margin-left:4px; background:none; border:none; color:#ff6b7a; font-weight:700; font-size:12px; text-decoration:underline;">Quitar del visor</button></div>` : ''}
+            <div class="pm-card"><div class="pm-h">PREMIOS CALCULADOS</div>${filas}</div>
+            <div class="pm-card"><div class="pm-h">⚽ GOL DE LA VUELTA · LO ELIGES TÚ</div>${golesHTML}</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:${avisoOk ? '#e2e8f0' : '#64748b'}; min-height:40px;"><input type="checkbox" id="pmAviso" ${avisoOk ? 'checked' : 'disabled'} style="width:20px; height:20px; accent-color:#2ed573;"> Mandar aviso a las familias${avisoOk ? '' : ' (falta la clave de OneSignal en Ajustes)'}</label>
+            <button type="button" class="pm-btn" style="background:rgb(180,20,56); color:#fff;" onclick="premiosPublicar()">📢 ${publicado ? 'Volver a publicar' : 'Publicar en el visor'}</button>
+            <div id="pmEstado" style="font-size:12px; color:#94a3b8; text-align:center; min-height:16px;"></div>`;
+    }
+    window.premiosCambiar = function (k, v) { const d = leer(); d.vuelta = d.vuelta || '1'; d.ov = d.ov || {}; d.ov[d.vuelta] = d.ov[d.vuelta] || {}; d.ov[d.vuelta][k] = v; guardar(d); render(); };
+    window.premiosVuelta = function (v) { const d = leer(); d.vuelta = v; const pub = (d.publicados || []).find(x => x.vuelta === v); if (pub) d.desde = pub.desde + 1; else if (v === '1' || v === 'T') d.desde = 1; else { const ant = (d.publicados || []).filter(x => x.vuelta !== 'T').sort((a, b) => b.hasta - a.hasta)[0]; d.desde = ant ? ant.hasta + 1 : 1; } guardar(d); render(); };
+    window.premiosDesde = function (v) { const d = leer(); d.desde = Math.max(1, Number(v) || 1); guardar(d); render(); };
+
+    // Foto fija de los premios: el visor solo los enseña (no los recalcula al seguir la temporada)
+    function construir() {
+        const { t, d, C } = estado, ov = (d.ov || {})[d.vuelta] || {};
+        const premios = [];
+        LISTA.forEach(([k, e, tit]) => {
+            const L = C.P[k] || []; const sel = ov[k];
+            if (sel === 'no' || !L.length) return;
+            const g = (sel != null ? L.find(o => nomOpc(t, o) === sel) : null) || L[0];
+            const podio = L.filter(o => o !== g).slice(0, 2);
+            premios.push({ k, e, t: k === 'mvp' ? `MVP de la ${d.nombre}` : k === 'pareja' ? `La pareja de la ${d.nombre}` : k === 'partido' ? `El partido de la ${d.nombre}` : tit,
+                ids: g.ids.map(String), nombre: nomOpc(t, g), dato: g.dato, lab: g.lab, extras: g.extras || [], txt: g.txt || '', partido: g.partido != null ? g.partido : null,
+                podio: [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) });
+        });
+        let gol = null;
+        if (ov.gol) {
+            const [i, k] = String(ov.gol).split(':').map(Number), p = (t.partidos || [])[i], g = p && p.goles && p.goles[k];
+            if (g) gol = { i, k, id: g.jugadorId != null ? String(g.jugadorId) : null, nombre: g.jugadorId != null ? nombre(t, g.jugadorId) : 'Gol', rival: p.rival, fecha: p.fecha, min: g.min != null ? g.min : null, origen: g.origen || null, video: g.video };
+        }
+        const ps = C.ps, v = ps.filter(p => p.resultado === 'V').length, e = ps.filter(p => p.resultado === 'E').length, dd = ps.filter(p => p.resultado === 'D').length;
+        const gf = ps.reduce((s, p) => s + (Number(p.golesLocal) || 0), 0), gc = ps.reduce((s, p) => s + (Number(p.golesRival) || 0), 0);
+        return { vuelta: d.vuelta, nombre: d.nombre, ts: Date.now(), desde: C.R0.desde, hasta: C.R0.hasta, balance: { pj: ps.length, v, e, d: dd, gf, gc, pts: v * 3 + e }, premios, gol };
+    }
+    window.premiosPublicar = async function () {
+        if (!estado) return;
+        const snap = construir();
+        if (!snap.premios.length && !snap.gol) { alert('No hay ningún premio que publicar.'); return; }
+        const d = leer();
+        d.publicados = (d.publicados || []).filter(x => x.vuelta !== snap.vuelta).concat([snap]);
+        guardar(d);
+        const st = document.getElementById('pmEstado'); if (st) { st.style.color = '#94a3b8'; st.textContent = 'Publicando…'; }
+        const aviso = document.getElementById('pmAviso'), conAviso = aviso && aviso.checked;
+        let res = null;
+        try { res = await publicarTemporadaFirebase(getTemporada()); } catch (e) { res = { ok: false, error: String(e) }; }
+        if (!(res && res.ok)) { if (st) { st.style.color = '#ff4757'; st.textContent = '⚠️ No se pudo publicar: ' + ((res && res.error) || 'error'); } return; }
+        if (conAviso) {
+            try {
+                await fetch('https://api.onesignal.com/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${oneSignalKey()}` },
+                    body: JSON.stringify({ app_id: ONESIGNAL_APP_ID, included_segments: ['Subscribed Users'], headings: { en: `🏆 Premios de la ${snap.nombre}` }, contents: { en: `Ya están los premios de la ${snap.nombre} del Hergar. ¡Entra a verlos!` }, url: LIVE_VIEWER_BASE_URL + '?premios=1' }) });
+            } catch (e) { console.error('Aviso de premios:', e); }
+        }
+        render();
+        const st2 = document.getElementById('pmEstado'); if (st2) { st2.style.color = '#2ed573'; st2.textContent = `✅ Publicados en el visor${conAviso ? ' y aviso enviado' : ''}.`; }
+    };
+    window.premiosQuitar = async function () {
+        const d = leer(); if (!confirm(`¿Quitar del visor los premios de la ${d.nombre || 'vuelta'}?`)) return;
+        d.publicados = (d.publicados || []).filter(x => x.vuelta !== (d.vuelta || '1')); guardar(d);
+        try { await publicarTemporadaFirebase(getTemporada()); } catch (e) {}
+        render();
+    };
+    window.abrirPremios = function () {
+        try { cerrarMasSheet(); } catch (e) {}
+        const m = document.getElementById('pmModal'); m.style.display = 'block'; m.scrollTop = 0;
+        try { render(); } catch (e) { console.error('Premios:', e); document.getElementById('pmContenido').innerHTML = `<div class="pm-card">No se han podido calcular los premios: ${esc(e.message || e)} <button type="button" onclick="cerrarPremios()">Cerrar</button></div>`; }
+    };
+    window.cerrarPremios = function () { document.getElementById('pmModal').style.display = 'none'; };
+    const sheet = document.getElementById('masSheet');
+    if (sheet) sheet.insertAdjacentHTML('afterbegin', '<button class="mas-item" id="masPremiosBtn" onclick="abrirPremios()"><span class="ic">🏆</span>Premios de la vuelta</button>');
 })();
 </script>
 
