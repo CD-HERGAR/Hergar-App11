@@ -1809,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v231</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v232</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4836,7 +4836,7 @@
       if (!t) return null;
       if (qmCache.has(t)) return qmCache.get(t);
       const ps = t.partidos || [];
-      const acum = {}, porPartido = [], durs = [], minsJug = [];
+      const acum = {}, porPartido = [], durs = [], minsJug = [], porVecinos = [], minsVec = []; // v232: minutos juntos como vecinos de la pizarra (para el pegamento)
       const partidos = ps.map((p, i) => {
         let res = null;
         const form = p.formacion, E = QM_ENLACES[form];
@@ -4873,11 +4873,22 @@
             if (f > s) { const k = qmClave(tr[a].id, tr[b].id); mio[k] = (mio[k] || 0) + (f - s); acum[k] = (acum[k] || 0) + (f - s); }
           }
         } catch (e) { console.error('Química · minutos juntos:', e); }
+        // v232 · minutos como vecinos en la pizarra (enlaces de la química), tramo a tramo, también en el primer partido
+        if (E && tit && tit.length === 11 && !p.manual) {
+          try {
+            const vec = {}, mv = {};
+            const TR = (res && res.tramos) ? res.tramos.map(x => ({ ini: x.ini, fin: x.fin, ids: x.tit, form: x.form })) : qmTramosPartido(t, p, tit, form, dur, filas);
+            TR.forEach(x => { const d = x.fin - x.ini; if (!(d > 0)) return; const EE = QM_ENLACES[x.form] || E;
+              x.ids.forEach(id => { if (id) mv[id] = (mv[id] || 0) + d; });
+              EE.forEach(([a, b]) => { const A = x.ids[a], B = x.ids[b]; if (A && B) { const k = qmClave(A, B); vec[k] = (vec[k] || 0) + d; } }); });
+            porVecinos[i] = vec; minsVec[i] = mv;
+          } catch (e) { console.error('Pegamento · vecinos:', e); }
+        }
         porPartido[i] = mio; durs[i] = filas.length ? dur : 0;
         const mm = {}; filas.forEach(f => { mm[String(f.j.id)] = (mm[String(f.j.id)] || 0) + (Number(f.mins) || 0); }); minsJug[i] = mm;
         return res;
       });
-      const R = { partidos, acum, porPartido, minsJug };
+      const R = { partidos, acum, porPartido, minsJug, porVecinos, minsVec };
       qmCache.set(t, R);
       return R;
     }
@@ -23381,16 +23392,18 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         P.muro = top(fila, x => x.par, x => x.par > 0)
             .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: 'paradas', extras: [[x.mins + "'", 'minutos'], [String(x.pj), 'partidos']], txt: 'Bajo palos, el que más balones ha sacado.' }));
         // 🧩 El pegamento: con cuántos compañeros forma pareja rodada en toda la vuelta
+        //  v232: solo minutos como VECINOS en la pizarra (enlaces de la química); antes el portero salía rodado con todos
         try {
-            const R = qmTemporada(t), ven = {}, mj = {};
-            for (let k = R0.desde; k < R0.hasta; k++) { Object.entries(R.porPartido[k] || {}).forEach(([c, m]) => { ven[c] = (ven[c] || 0) + m; }); Object.entries(R.minsJug[k] || {}).forEach(([id, m]) => { mj[id] = (mj[id] || 0) + m; }); }
-            const ids = Object.keys(mj).filter(id => mj[id] > 0), soc = {};
+            const R = qmTemporada(t), ven = {}, mj = {}, vv = {}, mv = {};
+            for (let k = R0.desde; k < R0.hasta; k++) { Object.entries(R.porPartido[k] || {}).forEach(([c, m]) => { ven[c] = (ven[c] || 0) + m; }); Object.entries(R.minsJug[k] || {}).forEach(([id, m]) => { mj[id] = (mj[id] || 0) + m; });
+                Object.entries(R.porVecinos[k] || {}).forEach(([c, m]) => { vv[c] = (vv[c] || 0) + m; }); Object.entries(R.minsVec[k] || {}).forEach(([id, m]) => { mv[id] = (mv[id] || 0) + m; }); }
+            const ids = Object.keys(mv).filter(id => mv[id] > 0), soc = {};
             ids.forEach(id => { soc[id] = 0; });
             for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) {
-                const m = ven[qmClave(ids[a], ids[b])] || 0, den = Math.max(QM_MIN_BASE, Math.min(mj[ids[a]], mj[ids[b]]));
+                const m = vv[qmClave(ids[a], ids[b])] || 0, den = Math.max(QM_MIN_BASE, Math.min(mv[ids[a]], mv[ids[b]]));
                 if (m / den >= 0.65) { soc[ids[a]]++; soc[ids[b]]++; }
             }
-            P.pegamento = ids.filter(id => soc[id] > 0).map(id => ({ ids: [id], v: soc[id], dato: String(soc[id]), lab: 'compañeros con los que está rodado', extras: [[mj[id] + "'", 'minutos']], txt: 'El que más une al equipo: el que más parejas rodadas forma con sus compañeros.' })).sort((a, b) => b.v - a.v);
+            P.pegamento = ids.filter(id => soc[id] > 0).map(id => ({ ids: [id], v: soc[id], dato: String(soc[id]), lab: 'compañeros con los que está rodado', extras: [[mj[id] + "'", 'minutos']], txt: 'El que más une al equipo: el que más parejas rodadas forma con los compañeros que juegan a su lado.' })).sort((a, b) => b.v - a.v);
             // 🔗 La pareja de la vuelta: la pareja de vecinos (en la pizarra) que más minutos ha jugado junta
             const vec = new Set();
             for (let k = Math.max(1, R0.desde); k < R0.hasta; k++) { const r = R.partidos[k]; if (r && r.tramos) r.tramos.forEach(tr => tr.enlaces.forEach(e => vec.add(qmClave(e.a, e.b)))); }
