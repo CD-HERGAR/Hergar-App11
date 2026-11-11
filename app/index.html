@@ -1499,7 +1499,7 @@
     <!-- ═══ HERGAR LIVE · Módulo de sincronización Firebase ═══ -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
-        import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js";
+        import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBtCX0v3z5GTCv-X_5VBtWzXMSGQubL7O8",
@@ -1526,6 +1526,11 @@
             get(ref(fbDb, path))
                 .then(snap => ({ ok: true, val: snap.exists() ? snap.val() : null }))
                 .catch(err => { console.error("Firebase get error:", err); return { ok: false, error: (err && err.message) ? err.message : String(err) }; });
+        // v238: escucha en directo (audiencia del visor). Devuelve la función para dejar de escuchar.
+        window.__hergarFirebaseOn = (path, cb, onErr) => {
+            try { return onValue(ref(fbDb, path), snap => { try { cb(snap.exists() ? snap.val() : null); } catch (e) { console.error(e); } }, err => { console.warn("Firebase on error:", err); if (onErr) { try { onErr(err); } catch (e) {} } }); }
+            catch (e) { console.warn("Firebase on error:", e); return () => {}; }
+        };
     </script>
 </head>
 <body>
@@ -1809,7 +1814,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v237</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v238</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -22584,7 +22589,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                     + '<div style="font-size:11px; line-height:1.45; color:#94a3b8; padding:0 2px;">Un gol marcado «No se grabó» queda igual que con «Sin vídeo» en Editar partido: el visor no espera su vídeo.</div>' : ''}
             </div>`;
         }
-        cont.innerHTML = html + espacioBloque;
+        cont.innerHTML = html + (typeof window.visEntradaHTML === 'function' ? window.visEntradaHTML() : '') + espacioBloque; // v238: entrada a Visitas al visor
         pintarIndicadores(vivos, imps);
     }
     window.pendAccion = (id) => { const f = pendAcciones[id]; if (f) f(); };
@@ -23662,6 +23667,420 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     window.cerrarPremios = function () { document.getElementById('pmModal').style.display = 'none'; };
     const sheet = document.getElementById('masSheet');
     if (sheet) sheet.insertAdjacentHTML('afterbegin', '<button class="mas-item" id="masPremiosBtn" onclick="abrirPremios()"><span class="ic">🏆</span>Premios de la vuelta</button>');
+})();
+</script>
+
+<!-- ── v238 · 👥 VISITAS AL VISOR: contador propio (lo apunta el visor v237 en visitas/…) y audiencia del directo ── -->
+<style>
+    #visModal { display: none; position: fixed; inset: 0; z-index: 9600; background: #0a0e14; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #visModal .vis-wrap { max-width: 480px; margin: 0 auto; padding: 14px 14px 40px; display: flex; flex-direction: column; gap: 14px; font-family: 'Inter', sans-serif; }
+    .vis-card { background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .vis-tit { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 14px; color: #fff; }
+    .vis-tit small { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 11.5px; color: #94a3b8; }
+    .vis-kpi { flex: 1; min-width: 0; background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .vis-kpi .et { font-family: 'Montserrat', sans-serif; font-size: 10.5px; font-weight: 800; letter-spacing: 1px; color: #94a3b8; }
+    .vis-kpi .n { font-family: 'Montserrat', sans-serif; font-size: 34px; font-weight: 900; line-height: 1; color: #fff; }
+    .vis-kpi .s { font-size: 12px; color: #cbd5e1; }
+    .vis-fila { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: #cbd5e1; }
+    .vis-fila b { color: #fff; font-weight: 800; text-align: right; }
+    .vis-nota { font-size: 11.5px; line-height: 1.45; color: #94a3b8; }
+    .vis-barra { height: 10px; border-radius: 5px; background: rgba(255,255,255,0.08); overflow: hidden; }
+    .vis-barra > i { display: block; height: 10px; border-radius: 5px; }
+    .vis-chip { min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #cbd5e1; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; }
+    .vis-chip.on { border-color: #e11d48; background: rgba(180,20,56,0.35); color: #fff; }
+    .vis-btn { min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: #e2e8f0; font-family: 'Montserrat', sans-serif; font-size: 12.5px; font-weight: 700; text-decoration: none; display: flex; align-items: center; justify-content: center; text-align: center; }
+    .vis-graf { display: flex; align-items: flex-end; gap: 4px; height: 150px; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    .vis-col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 2px; padding: 0; border: none; background: transparent; color: #94a3b8; font-size: 9.5px; font-weight: 700; }
+    .vis-col > i { display: block; border-radius: 4px 4px 0 0; min-height: 2px; }
+    .vis-col.sel > i { outline: 2px solid #fff; outline-offset: 1px; }
+    .vis-ejes { display: flex; gap: 4px; font-size: 9.5px; font-weight: 700; color: #94a3b8; text-align: center; }
+    .vis-ejes > span { flex: 1; min-width: 0; line-height: 1.25; }
+    .vis-ley { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11.5px; color: #cbd5e1; }
+    .vis-ley span { display: flex; align-items: center; gap: 5px; }
+    .vis-ley i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+    .vis-pre { margin: 0; padding: 10px; border-radius: 10px; background: #0a0e14; border: 1px solid rgba(255,255,255,0.12); color: #e2e8f0; font-family: monospace; font-size: 11.5px; line-height: 1.5; white-space: pre; overflow-x: auto; }
+    #audPill { display: none; position: absolute; top: -9px; left: 50%; transform: translateX(-50%); align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; background: #0f2a1c; border: 1px solid rgba(46,213,115,0.5); color: #2ed573; font-family: 'Montserrat', sans-serif; font-size: 10.5px; font-weight: 800; white-space: nowrap; z-index: 2; pointer-events: none; }
+    #audPill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #2ed573; }
+</style>
+<div id="visModal" role="dialog" aria-label="Visitas al visor">
+    <div class="vis-wrap" id="visContenido"></div>
+</div>
+<script>
+(function () {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pl = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const deIso = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+    const masDias = (s, n) => { const d = deIso(s); d.setDate(d.getDate() + n); return iso(d); };
+    const DSEM = ['D', 'L', 'M', 'X', 'J', 'V', 'S'], DSEML = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const fechaCorta = (s) => { const d = deIso(s); return `${DSEML[d.getDay()]} ${d.getDate()} ${MES[d.getMonth()]}`; };
+    const VISOR_URL = (typeof LIVE_VIEWER_BASE_URL !== 'undefined' ? LIVE_VIEWER_BASE_URL : 'https://javigarblanc-blip.github.io/Hergar-Live/');
+    const REGLAS = '"visitas": {\n  ".read": true,\n  "dias": { "$dia": { "$id": { ".write": true } } },\n  "vivo": { "$id": { ".write": true } },\n  "curvas": { "$partido": { ".write": true } }\n}';
+
+    // ════════ AUDIENCIA DEL DIRECTO: cuántos móviles tienen el visor abierto mientras se juega ════════
+    // El visor deja su presencia en visitas/vivo/<id> (con latido cada minuto). La app la cuenta, enseña la píldora junto
+    // al marcador y guarda el máximo de cada minuto en visitas/curvas/<código del partido>.
+    const AUD_KEY = 'hergar_F11_audiencia';
+    let audUnsub = null, audSnap = null, audUltMin = -1;
+    function audLeer() { try { return JSON.parse(localStorage.getItem(AUD_KEY) || 'null'); } catch (e) { return null; } }
+    function audGuardar(a) { try { localStorage.setItem(AUD_KEY, JSON.stringify(a)); } catch (e) {} }
+    function audEnJuego() {
+        try { return !!(compartirEnVivo && matchShareCode && partidoEmpezado && !matchFinished && !esPartidoPruebaDelegado()); } catch (e) { return false; }
+    }
+    function audPintar(n) {
+        let el = document.getElementById('audPill');
+        if (!el) {
+            const fila = document.querySelector('.match-header .scoreboard-row'); if (!fila) return;
+            el = document.createElement('div'); el.id = 'audPill'; el.setAttribute('aria-live', 'off'); fila.appendChild(el);
+        }
+        if (n == null) { el.style.display = 'none'; return; }
+        el.textContent = n === 1 ? '1 viéndolo' : n + ' viéndolo';
+        el.setAttribute('aria-label', pl(n, 'móvil viendo el partido en el visor', 'móviles viendo el partido en el visor'));
+        el.style.display = 'flex';
+    }
+    function audDatosPartido(a) {
+        try {
+            a.rival = (document.getElementById('rivalNameInput') || {}).value || 'RIVAL';
+            a.gl = goalsLocal; a.gr = goalsRival;
+            const gs = golesDesdeCronologia();
+            if (Array.isArray(gs)) a.g = gs.filter(g => g && g.min != null).map(g => ({ m: Number(g.min) || 0, e: g.equipo === 'rival' ? 'C' : 'F' }));
+        } catch (e) {}
+    }
+    function audPublicar(fin) {
+        const a = audLeer(); if (!a || !a.code || !window.__hergarFirebaseSet) return;
+        if (fin) { a.fin = true; audGuardar(a); }
+        const datos = { t: Date.now(), fecha: a.fecha || iso(new Date()), rival: a.rival || 'RIVAL', gl: a.gl || 0, gr: a.gr || 0, c: a.c || {}, pico: a.pico || 0, picoMin: a.picoMin || 0, u: Object.keys(a.v || {}).length, fin: !!a.fin };
+        if (a.g && a.g.length) datos.g = a.g;
+        try { window.__hergarFirebaseSet('visitas/curvas/' + a.code, datos); } catch (e) {}
+    }
+    function audMuestra() {
+        if (!audSnap) return;
+        const a = audLeer(); if (!a) return;
+        const ahora = Date.now(); let n = 0;
+        Object.keys(audSnap).forEach(id => {
+            const v = audSnap[id]; if (!v || typeof v !== 'object') return;
+            if (v.c && v.c !== a.code) return; // está viendo otro partido
+            if (ahora - (Number(v.t) || 0) > 150000) return; // sin latido desde hace 2,5 min: ya no está
+            n++; a.v[id] = 1;
+        });
+        const min = Math.max(0, Math.floor(getElapsedSeconds() / 60));
+        const k = 'm' + min;
+        if (!(a.c[k] >= n)) a.c[k] = n;
+        if (n > (a.pico || 0)) { a.pico = n; a.picoMin = min; }
+        audDatosPartido(a);
+        audGuardar(a);
+        audPintar(n);
+        if (min !== audUltMin) { audUltMin = min; audPublicar(false); }
+    }
+    function audTick() {
+        try {
+            const on = audEnJuego();
+            if (on && !audUnsub && window.__hergarFirebaseOn) {
+                const a = audLeer();
+                if (!a || a.code !== matchShareCode) audGuardar({ code: matchShareCode, fecha: iso(new Date()), c: {}, pico: 0, picoMin: 0, v: {} });
+                audUltMin = -1;
+                audUnsub = window.__hergarFirebaseOn('visitas/vivo', (val) => { audSnap = val || {}; try { if (audEnJuego()) audMuestra(); } catch (e) {} }, () => { audSnap = null; audPintar(null); });
+            } else if (!on && audUnsub) {
+                try { audUnsub(); } catch (e) {}
+                audUnsub = null; audSnap = null; audPintar(null);
+                const a = audLeer();
+                if (a && matchFinished && !a.fin) { try { if (a.code === matchShareCode || a.code === localStorage.getItem('hergar_F11_matchShareCode')) { audDatosPartido(a); audGuardar(a); } } catch (e) {} audPublicar(true); }
+            } else if (on) {
+                audMuestra();
+            } else {
+                // la app se reabrió con el partido ya acabado: se cierra la curva guardada
+                const a = audLeer();
+                if (a && !a.fin && a.code && typeof matchFinished !== 'undefined' && matchFinished && Object.keys(a.c || {}).length) audPublicar(true);
+            }
+        } catch (e) { console.warn('Audiencia:', e); }
+    }
+    setInterval(audTick, 15000);
+    setTimeout(audTick, 3000);
+
+    // ════════ PANTALLA «VISITAS AL VISOR» ════════
+    const SECCIONES = {
+        video: 'Vídeos de los goles', resumen: 'Resumen del partido', informe: 'Informe IA (desplegado)', acta: 'Acta PDF', tv: 'Modo TV', premios: 'Premios', semana: 'La semana del Hergar', fichaPartido: 'Ficha de un niño en un partido',
+        subRanking: 'Ranking', subPartidos: 'Partidos', subPlantilla: 'Plantilla', subRecords: 'Récords', subMapaGoles: 'Mapa de goles', subVideos: 'Goles en vídeo (galería)', subMinutos: 'Minutos', subCadenas: 'Cadenas de gol',
+        subOnceIdeal: 'Once ideal', subComparativa: 'Comparativa', subSinergias: 'Sinergias', subBanquillo: 'Banquillo', subPrime: 'Prime', subMapaCalor: 'Mapa de calor', subGrandes: 'Grandes', subMedias: 'Medias',
+        subRachas: 'Rachas', subContexto: 'Contexto', subSuerte: 'Suerte y nivel', subAdn: 'ADN del equipo', subQuimica: 'Química',
+        subLigaClasif: 'Liga · Clasificación', subLigaPartidos: 'Liga · Partidos', subLigaEvol: 'Liga · Evolución', subLigaPron: 'Liga · Pronóstico', subLigaEquipos: 'Liga · Equipos'
+    };
+    const PESTANAS = [['partido', 'Partido'], ['mihijo', 'Mi hijo'], ['liga', 'Liga'], ['temporada', 'Temporada'], ['envivo', 'En vivo']];
+    let V = null, vModo = '14', vSel = null, vTodas = false, vCurva = 0, vCargando = false;
+
+    function partidosFechas() {
+        const s = new Set();
+        try { (getTemporada().partidos || []).forEach(p => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(p.fecha || '')); if (m) s.add(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`); }); } catch (e) {}
+        (V && V.curvas ? V.curvas : []).forEach(c => { if (c.fecha) s.add(c.fecha); });
+        return s;
+    }
+    function vidsDe(dias, desde, hasta) { // móviles distintos entre dos días (incluidos)
+        const s = new Set();
+        Object.keys(dias).forEach(d => { if (d >= desde && d <= hasta) Object.keys(dias[d] || {}).forEach(v => s.add(v)); });
+        return s;
+    }
+    function nDia(dias, d) { return Object.keys(dias[d] || {}).length; }
+
+    function cabecera() {
+        return `<div style="display:flex; align-items:center; gap:10px;">
+                <button type="button" onclick="cerrarVisitas()" aria-label="Volver" style="width:44px; height:44px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#e2e8f0; font-size:18px; font-weight:800;">‹</button>
+                <div style="flex:1; font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; letter-spacing:2px; color:#fff;">👥 VISITAS AL VISOR</div>
+                <button type="button" onclick="abrirVisitas(true)" aria-label="Actualizar" style="width:44px; height:44px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#e2e8f0; font-size:17px;">↻</button>
+            </div>`;
+    }
+    function reglasHTML(titulo, texto) {
+        return `<div class="vis-card" style="border-color:rgba(245,166,35,0.55);">
+                <div class="vis-tit" style="color:#f5a623;">${titulo}</div>
+                <div style="font-size:12.5px; line-height:1.5; color:#cbd5e1;">${texto}</div>
+                <pre class="vis-pre" id="visReglas">${esc(REGLAS)}</pre>
+                <button type="button" class="vis-btn" onclick="visCopiarReglas(this)">Copiar el bloque</button>
+                <div class="vis-nota">Consola de Firebase → Realtime Database → Reglas. Se pega dentro de «rules», al lado de las otras rutas (matches, temporada, liga…), separado por una coma, y se pulsa Publicar. Solo abre la ruta visitas: lo demás sigue protegido.</div>
+            </div>`;
+    }
+    function noContarHTML() {
+        return `<div class="vis-card">
+                <div class="vis-tit">Que tu móvil no cuente</div>
+                <div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">Abre este enlace una vez en cada móvil o navegador tuyo donde mires el visor. A partir de ahí ese móvil no suma visitas.</div>
+                <a class="vis-btn" href="${esc(VISOR_URL)}?nocontar=1" target="_blank" rel="noopener">Abrir el visor sin contar este móvil ›</a>
+                <div class="vis-nota">Para volver a contarlo: el mismo enlace acabado en nocontar=0.</div>
+            </div>`;
+    }
+
+    function bloqueResumen(dias, hoy) {
+        const d = deIso(hoy), dl = (d.getDay() + 6) % 7; // días desde el lunes
+        const lun = masDias(hoy, -dl);
+        const sem = vidsDe(dias, lun, hoy).size, ant = vidsDe(dias, masDias(lun, -7), masDias(hoy, -7)).size;
+        const dif = sem - ant;
+        const hayAnt = Object.keys(dias).some(k => k < lun);
+        const cmp = !hayAnt ? 'primera semana con datos' : dif > 0 ? `<span style="color:#2ed573;">▲ ${dif} más</span> que la pasada a estas alturas` : dif < 0 ? `<span style="color:#f5a623;">▼ ${-dif} menos</span> que la pasada a estas alturas` : 'igual que la pasada a estas alturas';
+        return `<div style="display:flex; gap:10px;">
+                <div class="vis-kpi"><div class="et">HOY</div><div class="n">${nDia(dias, hoy)}</div><div class="s">${nDia(dias, hoy) === 1 ? 'móvil distinto' : 'móviles distintos'}</div></div>
+                <div class="vis-kpi"><div class="et">ESTA SEMANA</div><div class="n">${sem}</div><div class="s">${cmp}</div></div>
+            </div>`;
+    }
+    function bloqueGrafico(dias, hoy, fp) {
+        let cols = [];
+        if (vModo === '14') {
+            for (let i = 13; i >= 0; i--) { const k = masDias(hoy, -i), dd = deIso(k); cols.push({ k, n: nDia(dias, k), partido: fp.has(k), hoy: i === 0, e1: DSEM[dd.getDay()], e2: dd.getDate() }); }
+        } else {
+            const claves = Object.keys(dias).sort(); const ini = claves[0] || hoy;
+            const d0 = deIso(ini), l0 = masDias(ini, -((d0.getDay() + 6) % 7));
+            for (let l = l0; l <= hoy; l = masDias(l, 7)) {
+                const fin = masDias(l, 6), dd = deIso(l); let part = false; fp.forEach(f => { if (f >= l && f <= fin) part = true; });
+                cols.push({ k: l, n: vidsDe(dias, l, fin).size, partido: part, hoy: hoy >= l && hoy <= fin, e1: dd.getDate(), e2: MES[dd.getMonth()], semana: true });
+            }
+            if (cols.length > 26) cols = cols.slice(-26);
+        }
+        const max = Math.max(1, ...cols.map(c => c.n));
+        const cada = cols.length > 16 ? 2 : 1;
+        const barras = cols.map(c => `<button type="button" class="vis-col${vSel === c.k ? ' sel' : ''}" onclick="visSel('${c.k}')" aria-label="${c.semana ? 'Semana del ' + fechaCorta(c.k) : fechaCorta(c.k)}: ${pl(c.n, 'móvil', 'móviles')}"><span aria-hidden="true">${c.n || ''}</span><i style="height:${Math.round(c.n / max * 118)}px; background:${c.hoy ? '#f1f5f9' : c.partido ? '#e11d48' : '#475569'};"></i></button>`).join('');
+        const ejes = cols.map((c, i) => `<span>${(cols.length - 1 - i) % cada === 0 ? `${c.e1}<br>${c.e2}` : ''}</span>`).join('');
+        let det = '';
+        const cs = cols.find(c => c.k === vSel);
+        if (cs && !cs.semana) {
+            const reg = dias[cs.k] || {}, horas = new Array(24).fill(0);
+            Object.values(reg).forEach(v => Object.keys((v && v.h) || {}).forEach(h => { const n = Number(h); if (n >= 0 && n < 24) horas[n]++; }));
+            const mh = Math.max(...horas), hTop = horas.indexOf(mh);
+            det = `<div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
+                    <div class="vis-fila"><span><b style="text-align:left;">${esc(fechaCorta(cs.k))}</b>${cs.partido ? ' · día de partido' : ''}</span><b>${pl(cs.n, 'móvil', 'móviles')}</b></div>
+                    ${mh > 0 ? `<div role="img" aria-label="Entradas por hora del día" style="display:flex; align-items:flex-end; gap:2px; height:44px;">${horas.map(n => `<i style="flex:1; display:block; height:${n ? Math.max(3, Math.round(n / mh * 44)) : 1}px; background:${n === mh ? '#f5a623' : '#475569'}; border-radius:2px 2px 0 0;"></i>`).join('')}</div>
+                    <div style="display:flex; justify-content:space-between; font-size:9.5px; font-weight:700; color:#94a3b8;"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>23 h</span></div>
+                    <div class="vis-nota">Cuando más gente entró: sobre las <b style="color:#fff;">${hTop} h</b> (${pl(mh, 'móvil', 'móviles')}).</div>` : '<div class="vis-nota">Sin visitas ese día.</div>'}
+                </div>`;
+        } else if (cs) {
+            det = `<div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:10px 12px;"><div class="vis-fila"><span>Semana del <b>${esc(fechaCorta(cs.k))}</b></span><b>${pl(cs.n, 'móvil distinto', 'móviles distintos')}</b></div></div>`;
+        }
+        return `<div class="vis-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div class="vis-tit">${vModo === '14' ? 'Visitantes por día' : 'Visitantes por semana'}</div>
+                    <div style="display:flex; gap:6px;"><button type="button" class="vis-chip${vModo === '14' ? ' on' : ''}" onclick="visModo('14')">14 días</button><button type="button" class="vis-chip${vModo === 'temp' ? ' on' : ''}" onclick="visModo('temp')">Temporada</button></div>
+                </div>
+                <div class="vis-graf">${barras}</div>
+                <div class="vis-ejes">${ejes}</div>
+                <div class="vis-ley"><span><i style="background:#e11d48;"></i>${vModo === '14' ? 'Día de partido' : 'Semana con partido'}</span><span><i style="background:#475569;"></i>${vModo === '14' ? 'Otro día' : 'Sin partido'}</span><span><i style="background:#f1f5f9;"></i>${vModo === '14' ? 'Hoy' : 'Esta semana'}</span></div>
+                ${det || `<div class="vis-nota">Toca una barra para ver ${vModo === '14' ? 'ese día y a qué hora entraron más' : 'esa semana'}.</div>`}
+            </div>`;
+    }
+    function bloqueRecords(dias, hoy, fp) {
+        const claves = Object.keys(dias).sort();
+        let top = null; claves.forEach(k => { const n = nDia(dias, k); if (!top || n > top.n) top = { k, n }; });
+        let pico = null; (V.curvas || []).forEach(c => { if (c.pico && (!pico || c.pico > pico.pico)) pico = c; });
+        let suma = 0, nd = 0;
+        if (claves.length) for (let k = claves[0]; k <= hoy; k = masDias(k, 1)) { if (!fp.has(k)) { suma += nDia(dias, k); nd++; } }
+        const tot = vidsDe(dias, '0000', '9999').size;
+        return `<div class="vis-card">
+                <div class="vis-tit">Récords de audiencia</div>
+                <div class="vis-fila"><span>Día con más visitas</span><b>${top ? `${top.n} · ${esc(fechaCorta(top.k))}` : '—'}</b></div>
+                <div class="vis-fila"><span>Más gente a la vez en directo</span><b>${pico ? `${pico.pico} · min ${pico.picoMin} vs ${esc(pico.rival)}` : 'aún sin directos'}</b></div>
+                <div class="vis-fila"><span>Media un día sin partido</span><b>${nd ? (Math.round(suma / nd * 10) / 10).toLocaleString('es-ES') : '—'}</b></div>
+                <div class="vis-fila"><span>Móviles distintos desde que se cuenta</span><b>${tot}</b></div>
+                ${claves.length ? `<div class="vis-nota">Se cuenta desde el ${esc(fechaCorta(claves[0]))}.</div>` : ''}
+            </div>`;
+    }
+    function ultimos30(dias, hoy) { // por móvil: su último registro · y todos los «móvil-día»
+        const desde = masDias(hoy, -29), ult = {}, md = [];
+        Object.keys(dias).sort().forEach(d => { if (d < desde || d > hoy) return; Object.keys(dias[d] || {}).forEach(v => { const r = dias[d][v]; if (!r || typeof r !== 'object') return; ult[v] = r; md.push(r); }); });
+        return { ult: Object.values(ult), md };
+    }
+    function filaBarra(txt, n, tot, color) {
+        return `<div style="display:flex; flex-direction:column; gap:5px;"><div class="vis-fila"><span>${txt}</span><b>${n}</b></div><div class="vis-barra"><i style="width:${tot ? Math.round(n / tot * 100) : 0}%; background:${color};"></i></div></div>`;
+    }
+    function bloqueComo(U) {
+        const tot = U.ult.length, c = (f) => U.ult.filter(f).length;
+        return `<div class="vis-card">
+                <div class="vis-tit">Cómo entran <small>· ${pl(tot, 'móvil', 'móviles')} en 30 días</small></div>
+                ${filaBarra('Visor instalado como app', c(r => r.a), tot, '#e11d48')}
+                ${filaBarra('Por el enlace (navegador)', c(r => !r.a), tot, '#94a3b8')}
+                ${filaBarra('Con «Mi hijo» elegido', c(r => r.mh), tot, '#f5a623')}
+                ${filaBarra('Con avisos de gol activados', c(r => r.n), tot, '#2ed573')}
+                <div class="vis-nota">Se sabe cuántos tienen «Mi hijo» elegido, nunca qué niño.</div>
+            </div>`;
+    }
+    function bloqueQueSeMira(U) {
+        const D = U.md.length;
+        const cuenta = (tipo, k) => U.md.filter(r => r[tipo] && r[tipo][k]).length;
+        const pest = PESTANAS.map(([k, t]) => ({ t, n: cuenta('p', k) }));
+        const secs = Object.keys(SECCIONES).map(k => ({ k, t: SECCIONES[k], n: cuenta('s', k) })).sort((a, b) => b.n - a.n);
+        const con = secs.filter(s => s.n > 0);
+        const lista = (vTodas ? secs : con.slice(0, 6)).map((s, i) => `<div class="vis-fila"><span><b style="color:#94a3b8; display:inline-block; min-width:20px; text-align:left;">${i + 1}</b>${esc(s.t)}</span><b>${s.n}</b></div>`).join('');
+        const poco = D >= 20 ? secs.filter(s => s.k.indexOf('sub') === 0).slice().sort((a, b) => a.n - b.n).slice(0, 5) : [];
+        const fichas = cuenta('s', 'ficha'), fd = cuenta('s', 'ficha_datos'), fe = cuenta('s', 'ficha_estilo'), fv = cuenta('s', 'ficha_evo');
+        return `<div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:13px; letter-spacing:1.5px; color:#94a3b8; padding:6px 2px 0;">🔎 QUÉ SE MIRA · ÚLTIMOS 30 DÍAS</div>
+            <div class="vis-card">
+                <div class="vis-tit">Las 5 pestañas <small>· de cada 100 visitas</small></div>
+                ${pest.map(p => filaBarra(esc(p.t), D ? Math.round(p.n / D * 100) : 0, 100, '#e11d48')).join('')}
+                <div class="vis-nota">Una visita = un móvil en un día (${D} en total). «Mi hijo» solo la tiene quien ha elegido niño.</div>
+            </div>
+            <div class="vis-card">
+                <div class="vis-tit" style="color:#2ed573;">${vTodas ? 'Todos los apartados' : 'Lo más visto por dentro'}</div>
+                ${lista || '<div class="vis-nota">Aún no hay datos de apartados.</div>'}
+                ${con.length > 6 || vTodas ? `<button type="button" class="vis-btn" onclick="visTodas()">${vTodas ? 'Ver solo los 6 primeros' : `Ver los ${secs.length} apartados ›`}</button>` : ''}
+                <div class="vis-nota">Veces = móviles que lo abrieron, contando una por móvil y día.</div>
+            </div>
+            ${poco.length ? `<div class="vis-card">
+                <div class="vis-tit" style="color:#f5a623;">Casi nadie lo abre</div>
+                ${poco.map(s => `<div class="vis-fila"><span>${esc(s.t)}</span><b>${s.n}</b></div>`).join('')}
+                <div class="vis-nota">Sirve para decidir qué subir de sitio, qué explicar mejor o qué esconder.</div>
+            </div>` : ''}
+            <div class="vis-card">
+                <div class="vis-tit">Fichas de los niños</div>
+                <div class="vis-fila"><span>Móviles-día que abrieron alguna ficha</span><b>${fichas}</b></div>
+                <div class="vis-fila"><span>Pestaña Datos</span><b>${fd}</b></div>
+                <div class="vis-fila"><span>Pestaña Estilo</span><b>${fe}</b></div>
+                <div class="vis-fila"><span>Pestaña Evolución</span><b>${fv}</b></div>
+                <div class="vis-nota">No se guarda de qué niño es la ficha, para que no haya un ranking de «el más mirado».</div>
+            </div>`;
+    }
+    function bloqueDirecto(dias) {
+        const cs = V.curvas || [];
+        let h = `<div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:13px; letter-spacing:1.5px; color:#94a3b8; padding:6px 2px 0;">📡 AUDIENCIA DEL DIRECTO</div>`;
+        if (!cs.length) return h + `<div class="vis-card"><div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">Aún no hay ningún directo medido. En el próximo partido verás junto al marcador cuánta gente lo está viendo y aquí quedará la curva minuto a minuto.</div></div>`;
+        if (vCurva >= cs.length) vCurva = 0;
+        const c = cs[vCurva];
+        const pts = Object.keys(c.c || {}).map(k => [Number(String(k).replace('m', '')), Number(c.c[k]) || 0]).filter(p => !isNaN(p[0])).sort((a, b) => a[0] - b[0]);
+        const maxMin = Math.max(70, ...pts.map(p => p[0])), maxN = Math.max(1, c.pico || 0, ...pts.map(p => p[1]));
+        const X = (m) => Math.round(m / maxMin * 330 * 10) / 10, Y = (n) => Math.round((140 - n / maxN * 126) * 10) / 10;
+        const nEn = (m) => { let v = 0; pts.forEach(p => { if (p[0] <= m) v = p[1]; }); return v; };
+        let svg = '';
+        if (pts.length) {
+            const linea = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p[0])},${Y(p[1])}`).join(' ');
+            const goles = (Array.isArray(c.g) ? c.g : Object.values(c.g || {})).map(g => `<circle cx="${X(Math.min(maxMin, g.m))}" cy="${Y(nEn(g.m))}" r="5" fill="${g.e === 'C' ? '#f5a623' : '#f1f5f9'}" stroke="#111827" stroke-width="1.5"></circle>`).join('');
+            svg = `<svg role="img" aria-label="Móviles conectados minuto a minuto. Pico de ${c.pico} en el minuto ${c.picoMin}" viewBox="0 0 330 150" style="width:100%; height:150px; overflow:visible;">
+                    <line x1="0" y1="141" x2="330" y2="141" stroke="rgba(255,255,255,.2)" stroke-width="1"></line>
+                    <line x1="${X(35)}" y1="6" x2="${X(35)}" y2="141" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="4 4"></line>
+                    <path d="${linea} L${X(pts[pts.length - 1][0])},141 L${X(pts[0][0])},141 Z" fill="rgba(225,29,72,.22)"></path>
+                    <path d="${linea}" fill="none" stroke="#fb7185" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>${goles}
+                </svg>
+                <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:700; color:#94a3b8;"><span>Inicio</span><span>Descanso (35')</span><span>${maxMin}'</span></div>
+                <div class="vis-ley"><span><i style="background:#f1f5f9; border-radius:50%;"></i>Gol del Hergar</span><span><i style="background:#f5a623; border-radius:50%;"></i>Gol rival</span></div>`;
+        } else svg = '<div class="vis-nota">Sin muestras de este partido.</div>';
+        // Después del partido: desde ese día hasta la víspera del siguiente (7 días como mucho)
+        const sig = cs.filter(x => x.fecha > c.fecha).map(x => x.fecha).sort()[0];
+        let hasta = masDias(c.fecha, 6); if (sig && masDias(sig, -1) < hasta) hasta = masDias(sig, -1);
+        const uni = (k) => { const s = new Set(); Object.keys(dias).forEach(d => { if (d < c.fecha || d > hasta) return; Object.keys(dias[d] || {}).forEach(v => { const r = dias[d][v]; if (r && r.s && r.s[k]) s.add(v); }); }); return s.size; };
+        let sigu = c.u || 0; if (!sigu) { const s = new Set(); Object.keys(dias).forEach(d => Object.keys(dias[d] || {}).forEach(v => { const r = dias[d][v]; if (r && r.d && r.d[c.code]) s.add(v); })); sigu = s.size; }
+        h += `<div class="vis-card">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <button type="button" class="vis-chip" onclick="visCurva(1)" aria-label="Partido anterior" ${vCurva >= cs.length - 1 ? 'disabled style="opacity:.35;"' : ''}>‹</button>
+                    <div style="text-align:center; min-width:0;"><div class="vis-tit">Hergar ${c.gl || 0} – ${c.gr || 0} ${esc(c.rival || 'Rival')}</div><div class="vis-nota">${esc(fechaCorta(c.fecha))}${c.fin ? '' : ' · en juego o sin cerrar'}</div></div>
+                    <button type="button" class="vis-chip" onclick="visCurva(-1)" aria-label="Partido siguiente" ${vCurva <= 0 ? 'disabled style="opacity:.35;"' : ''}>›</button>
+                </div>
+                ${svg}
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div class="vis-kpi"><div class="et">PICO</div><div class="n">${c.pico || 0}</div><div class="s">a la vez, min ${c.picoMin || 0}</div></div>
+                <div class="vis-kpi"><div class="et">LO SIGUIERON</div><div class="n">${sigu}</div><div class="s">${sigu === 1 ? 'móvil en algún momento' : 'móviles en algún momento'}</div></div>
+            </div>
+            <div class="vis-card">
+                <div class="vis-tit">Después del partido <small>· hasta el ${esc(fechaCorta(hasta))}</small></div>
+                <div class="vis-fila"><span>Vieron el resumen tipo tele</span><b>${uni('resumen')}</b></div>
+                <div class="vis-fila"><span>Vieron algún vídeo de gol</span><b>${uni('video')}</b></div>
+                <div class="vis-fila"><span>Desplegaron el informe IA</span><b>${uni('informe')}</b></div>
+                <div class="vis-fila"><span>Descargaron el acta PDF</span><b>${uni('acta')}</b></div>
+                <div class="vis-nota">El informe solo se cuenta cuando hay que desplegarlo (con el próximo partido ya publicado); si sale abierto no se puede saber quién lo lee.</div>
+            </div>`;
+        return h;
+    }
+
+    function render() {
+        const cont = document.getElementById('visContenido'); if (!cont) return;
+        let html = cabecera();
+        if (vCargando && !V) { cont.innerHTML = html + '<div class="vis-card"><div class="vis-nota" style="font-size:13px;">Cargando las visitas…</div></div>'; return; }
+        if (!V) { cont.innerHTML = html; return; }
+        if (V.error) {
+            const perm = /permission|denied/i.test(V.error);
+            cont.innerHTML = html + (perm ? reglasHTML('Falta abrir la ruta en Firebase', 'La app no puede leer las visitas porque las reglas de Firebase todavía no tienen la ruta <b>visitas</b>. Hay que añadir este bloque una sola vez:')
+                : `<div class="vis-card"><div class="vis-tit" style="color:#f5a623;">No se han podido cargar</div><div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">${esc(V.error)}</div><button type="button" class="vis-btn" onclick="abrirVisitas(true)">Reintentar</button></div>`) + noContarHTML();
+            return;
+        }
+        const dias = V.dias, hoy = iso(new Date());
+        if (!Object.keys(dias).length) {
+            cont.innerHTML = html + `<div class="vis-card"><div class="vis-tit">Aún no hay visitas apuntadas</div><div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">En cuanto alguien abra el visor nuevo (v237) aparecerá aquí. Si pasan los días y sigue vacío, comprueba que el visor está subido a GitHub y que las reglas de Firebase tienen la ruta visitas.</div></div>`
+                + reglasHTML('Las reglas de Firebase', 'Este es el bloque que tiene que estar en las reglas para que el visor pueda apuntar las visitas:') + bloqueDirecto(dias) + noContarHTML();
+            return;
+        }
+        const fp = partidosFechas(), U = ultimos30(dias, hoy);
+        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueComo(U) + bloqueQueSeMira(U) + bloqueDirecto(dias);
+        html += `<div style="border:1px dashed rgba(255,255,255,0.2); border-radius:14px; padding:12px 14px; font-size:12px; line-height:1.5; color:#cbd5e1;">Cuenta móviles, no personas: quien entra con el móvil y con la tableta cuenta dos veces, y si alguien borra los datos del navegador cuenta como nuevo. Todo es anónimo: no se guarda ningún nombre.</div>` + noContarHTML();
+        cont.innerHTML = html;
+    }
+    async function cargar() {
+        if (!window.__hergarFirebaseGet) { V = { error: 'Sin conexión con Firebase.' }; render(); return; }
+        vCargando = true; render();
+        try {
+            const [a, b] = await Promise.all([window.__hergarFirebaseGet('visitas/dias'), window.__hergarFirebaseGet('visitas/curvas')]);
+            if (!a.ok) V = { error: a.error || 'Error desconocido' };
+            else {
+                const cur = (b && b.ok && b.val && typeof b.val === 'object') ? b.val : {};
+                const curvas = Object.keys(cur).map(k => Object.assign({ code: k }, cur[k])).filter(c => c && c.fecha).sort((x, y) => (y.t || 0) - (x.t || 0));
+                V = { dias: (a.val && typeof a.val === 'object') ? a.val : {}, curvas };
+            }
+        } catch (e) { V = { error: (e && e.message) || String(e) }; }
+        vCargando = false; render();
+    }
+    window.abrirVisitas = function (recargar) {
+        try { cerrarMasSheet(); } catch (e) {}
+        const m = document.getElementById('visModal');
+        if (m.style.display !== 'block') { m.style.display = 'block'; m.scrollTop = 0; vSel = null; vTodas = false; vCurva = 0; }
+        if (recargar === true || !V || V.error || !V.cuando || Date.now() - V.cuando > 60000) { cargar().then(() => { if (V) V.cuando = Date.now(); }); } else render();
+    };
+    window.cerrarVisitas = function () { document.getElementById('visModal').style.display = 'none'; };
+    window.visModo = (m) => { vModo = m; vSel = null; render(); };
+    window.visSel = (k) => { vSel = vSel === k ? null : k; render(); };
+    window.visTodas = () => { vTodas = !vTodas; render(); };
+    window.visCurva = (d) => { const n = (V && V.curvas ? V.curvas.length : 0); vCurva = Math.max(0, Math.min(n - 1, vCurva + d)); render(); };
+    window.visCopiarReglas = (btn) => {
+        const fin = (ok) => { if (btn) { btn.textContent = ok ? '✓ Copiado' : 'Mantén pulsado el texto para copiarlo'; setTimeout(() => { btn.textContent = 'Copiar el bloque'; }, 2500); } };
+        try { navigator.clipboard.writeText(REGLAS).then(() => fin(true), () => fin(false)); } catch (e) { fin(false); }
+    };
+    // Entrada en el menú Más (debajo de Pendientes) y al final de la pantalla Pendientes
+    window.visEntradaHTML = () => `<button type="button" onclick="cerrarPend(); abrirVisitas();" style="min-height:56px; width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 14px; border-radius:14px; border:1px solid rgba(255,255,255,0.12); background:#111827; color:#fff; font-family:'Montserrat',sans-serif; font-weight:800; font-size:13.5px; text-align:left;"><span>👥 Visitas al visor</span><span style="color:#94a3b8;">›</span></button>`;
+    const sheet = document.getElementById('masSheet');
+    if (sheet) {
+        const b = document.createElement('button'); b.className = 'mas-item'; b.id = 'masVisitasBtn'; b.innerHTML = '<span class="ic">👥</span>Visitas al visor'; b.onclick = () => window.abrirVisitas();
+        const pend = document.getElementById('masPendBtn');
+        if (pend && pend.parentNode === sheet) pend.insertAdjacentElement('afterend', b); else sheet.appendChild(b);
+    }
 })();
 </script>
 
