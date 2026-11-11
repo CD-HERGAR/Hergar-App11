@@ -1823,7 +1823,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v239</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v241</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -3099,6 +3099,16 @@
         Object.keys(mp).forEach(k => { if ((mp[k] || 0) > max) { max = mp[k] || 0; mejor = k; } });
         return mejor === 'portero';
     }
+    // v240 · 🧤 jugador de campo que un partido hace de portero: ese partido no cuenta en las estadísticas de campo
+    // (peso en el equipo, cuota de acciones y medias del estilo). Lo mismo que el visor v239.
+    function minsPorteroPartido(h) {
+        if (!h) return 0;
+        if (h.puestos && Object.keys(h.puestos).length) return Number(h.puestos.POR) || 0;
+        if (h.lineas && Object.keys(h.lineas).length) return Number(h.lineas.portero) || 0;
+        return 0;
+    }
+    function jugoDePortero(h) { const m = Number(h && h.mins) || 0; return m > 0 && minsPorteroPartido(h) * 2 >= m; }
+    function partidoPorteroDeCampo(j, h) { return !!(j && h) && jugoDePortero(h) && !pesoEsPortero(j); }
     function pesoAccionesDe(h) {
         const a = h.acc || {};
         return (h.goles || 0) + (h.asistencias || 0) + PESO_ACC.reduce((s, k) => s + (Number(a[k]) || 0), 0);
@@ -3115,11 +3125,12 @@
             if (!minsEq) return;
             const media = filas.reduce((s, f) => s + f.imp, 0) / minsEq * 70;
             // cuota: solo si el partido tiene el detalle de acciones (en directo) y sin contar porteros
-            const conDetalle = filas.filter(f => f.h.acc !== undefined && !res[f.j.id].esPortero);
+            const conDetalle = filas.filter(f => f.h.acc !== undefined && !res[f.j.id].esPortero && !jugoDePortero(f.h)); // v240
             const accEq = conDetalle.reduce((s, f) => s + pesoAccionesDe(f.h), 0);
             const minsAccEq = conDetalle.reduce((s, f) => s + f.mins, 0);
             filas.forEach(f => {
                 const r = res[f.j.id];
+                if (partidoPorteroDeCampo(f.j, f.h)) { r.dePortero = (r.dePortero || 0) + 1; return; } // v240
                 const p70 = f.imp / f.mins * 70;
                 const dif = p70 - media;
                 r.sumDif += dif * f.mins; r.mins += f.mins;
@@ -5796,7 +5807,19 @@
     }
     function estTiros(j) { return (j.disparosPuerta || 0) + (j.disparosFuera || 0); }
     function estGolesTiro(j) { const g = j.golesConTiros !== undefined ? (j.golesConTiros || 0) : (j.goles || 0); return Math.min(g, estTiros(j)); }
+    function estSinPartidosPortero(j) { // v240 · totales sin los partidos en que hizo de portero
+      if (!j || estEsPortero(j) || pesoEsPortero(j)) return j;
+      const hs = (j.historial || []).filter(h => partidoPorteroDeCampo(j, h));
+      if (!hs.length) return j;
+      const o = Object.assign({}, j), menos = (k, v) => { if (o[k] !== undefined) o[k] = Math.max(0, (Number(o[k]) || 0) - (Number(v) || 0)); };
+      hs.forEach(h => { const a = h.acc || {};
+        menos('minutos', h.mins); menos('goles', h.goles); menos('golesConTiros', h.goles); menos('asistencias', h.asistencias);
+        menos('disparosPuerta', a.dp); menos('disparosFuera', a.df); menos('pasesClave', a.pc); menos('pasesArea', a.pa);
+        menos('regates', a.reg); menos('accionesDef', a.def); menos('accionesDefClave', a.defC); });
+      return o;
+    }
     function estValores(j) {
+      j = estSinPartidosPortero(j); // v240
       const m = (j.minutos || 0) / 70, ti = estTiros(j);
       return {
         pun: ti >= ESTILO_MIN_TIROS ? estGolesTiro(j) / ti : null,
@@ -23585,12 +23608,29 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             }).filter(x => x.res === 'V' || x.res === 'E').sort((a, b) => (a.res === b.res ? 0 : a.res === 'V' ? -1 : 1) || (a.pos < 0 ? 99 : a.pos) - (b.pos < 0 ? 99 : b.pos) || (b.gf - b.gc) - (a.gf - a.gc))
                 .map(x => ({ ids: [], partido: x.k, v: x.pos, dato: `${x.gf}-${x.gc}`, lab: `${x.res === 'V' ? 'victoria' : 'empate'} ante ${x.p.rival}`, extras: [[`J${x.k + 1}`, 'jornada']].concat(x.pos >= 0 ? [[`${x.pos + 1}.º`, 'rival más fuerte']] : []), txt: x.pos >= 0 ? `${x.res === 'V' ? 'La victoria' : 'El empate'} con más mérito: contra el ${x.pos + 1}.º rival más fuerte de la Liga por Elo.` : 'El mejor resultado de la vuelta.', nom: `J${x.k + 1} · vs ${x.p.rival}` }));
         } catch (e) { console.error('Premios · partido:', e); P.partido = []; }
+        // 🔄 El comodín (v241): el más polivalente de la vuelta. Un puesto o una línea cuenta con 35' o más en la vuelta;
+        //   hace falta 3 puestos en 2 líneas, o 3 líneas. Gana quien toca más líneas y, a igualdad, más puestos (como el visor).
+        try {
+            const PU_LIN = { POR: 'portero', LI: 'defensa', DFC: 'defensa', LD: 'defensa', MCD: 'centrocampista', MC: 'centrocampista', MI: 'centrocampista', MD: 'centrocampista', MP: 'centrocampista', EI: 'delantero', ED: 'delantero', DC: 'delantero' };
+            const LIN_C = { portero: 'POR', defensa: 'DEF', centrocampista: 'MED', delantero: 'DEL' };
+            P.comodin = fila.map(x => {
+                const pu = {}, li = {};
+                x.L.forEach(({ h }) => {
+                    const hp = h.puestos && Object.keys(h.puestos).length ? h.puestos : null;
+                    if (hp) Object.keys(hp).forEach(k => { const m = Number(hp[k]) || 0; if (!m) return; pu[k] = (pu[k] || 0) + m; const l = PU_LIN[k]; if (l) li[l] = (li[l] || 0) + m; });
+                    else if (h.lineas) Object.keys(h.lineas).forEach(l => { const m = Number(h.lineas[l]) || 0; if (m && LIN_C[l]) li[l] = (li[l] || 0) + m; });
+                });
+                const pus = Object.keys(pu).filter(k => pu[k] >= 35), lin = Object.keys(li).filter(l => LIN_C[l] && li[l] >= 35);
+                return { x, np: Math.max(pus.length, lin.length), nl: lin.length, pus, lin };
+            }).filter(r => (r.nl >= 2 && r.np >= 3) || r.nl >= 3).sort((a, b) => b.nl - a.nl || b.np - a.np || b.x.mins - a.x.mins)
+                .map(r => ({ ids: [r.x.id], v: r.nl * 100 + r.np, dato: `${r.np} puestos`, lab: `en ${r.nl} líneas`, extras: [[r.pus.length ? r.pus.join(' · ') : r.lin.map(l => LIN_C[l]).join(' · '), 'donde ha jugado']], txt: 'El más polivalente: el que ha jugado en más líneas y más puestos distintos (35 minutos o más en cada uno).' }));
+        } catch (e) { console.error('Premios · comodín:', e); P.comodin = []; }
         return { P, ps, R0, posibles };
     }
     const LISTA = [
         ['mvp', '⭐', 'MVP de la vuelta'], ['pichichi', '🎯', 'Pichichi'], ['asistente', '🅰️', 'El asistente'], ['muro', '🧤', 'El muro'],
         ['pegamento', '🧩', 'El pegamento'], ['grandes', '🔥', 'Se crece en los grandes'], ['mejorado', '📈', 'El que más ha mejorado'],
-        ['b2b', '📦', 'Rey del box-to-box'], ['pareja', '🔗', 'La pareja de la vuelta'], ['partido', '🏟️', 'El partido de la vuelta']
+        ['b2b', '📦', 'Rey del box-to-box'], ['comodin', '🔄', 'El comodín'], ['pareja', '🔗', 'La pareja de la vuelta'], ['partido', '🏟️', 'El partido de la vuelta']
     ];
     function nomOpc(t, o) { return o.nom || o.ids.map(id => nombre(t, id)).join(' + '); }
     function golesConVideo(t, R0) {
@@ -23845,7 +23885,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     const SECCIONES = {
         video: 'Vídeos de los goles', resumen: 'Resumen del partido', informe: 'Informe IA (desplegado)', acta: 'Acta PDF', tv: 'Modo TV', premios: 'Premios', semana: 'La semana del Hergar', fichaPartido: 'Ficha de un niño en un partido',
         subRanking: 'Ranking', subPartidos: 'Partidos', subPlantilla: 'Plantilla', subRecords: 'Récords', subMapaGoles: 'Mapa de goles', subVideos: 'Goles en vídeo (galería)', subMinutos: 'Minutos', subCadenas: 'Cadenas de gol',
-        subOnceIdeal: 'Once ideal', subComparativa: 'Comparativa', subSinergias: 'Sinergias', subBanquillo: 'Banquillo', subPrime: 'Prime', subMapaCalor: 'Mapa de calor', subGrandes: 'Grandes', subMedias: 'Medias',
+        subOnceIdeal: 'Once ideal', subComparativa: 'Comparativa', subSinergias: 'Sinergias', subBanquillo: 'Banquillo', subPrime: 'Prime', subMapaCalor: 'Mapa de calor', subGrandes: 'Grandes', subComodines: 'Los comodines', subMedias: 'Medias',
         subRachas: 'Rachas', subContexto: 'Contexto', subSuerte: 'Suerte y nivel', subAdn: 'ADN del equipo', subQuimica: 'Química',
         subLigaClasif: 'Liga · Clasificación', subLigaPartidos: 'Liga · Partidos', subLigaEvol: 'Liga · Evolución', subLigaPron: 'Liga · Pronóstico', subLigaEquipos: 'Liga · Equipos'
     };
