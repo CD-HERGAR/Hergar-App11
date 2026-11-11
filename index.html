@@ -4,7 +4,7 @@
   ║           HERGAR FUT11 — Control Táctico Fútbol 11          ║
   ╠══════════════════════════════════════════════════════════════╣
   ║  Autor:      Javi García Blanco                             ║
-  ║  Versión:    219                                            ║
+  ║  Versión:    224                                            ║
   ║  Temporada:  2026–27                                        ║
   ║  Licencia:   Creative Commons BY-NC-SA 4.0                  ║
   ║              https://creativecommons.org/licenses/by-nc-sa/4.0/
@@ -1592,6 +1592,8 @@
                 <div class="controls-row" style="flex-wrap:nowrap;"><!-- v205 -->
                     <button id="golPropiaRivalBtn" class="btn-favor" style="flex:1.4;"><span class="icn">⚽</span>GOL EN PROPIA DEL RIVAL</button>
                     <button id="paloRivalBtn" class="btn-contra"><span class="icn">🪵</span>PALO RIV<span class="badge" id="lsb_palR">0</span></button>
+                    <button id="amarillaRivalBtn" class="btn-contra"><span class="icn">🟨</span>TA RIV<span class="badge" id="lsb_taR">0</span></button><!-- v220 -->
+                    <button id="rojaRivalBtn" class="btn-contra"><span class="icn">🟥</span>TR RIV<span class="badge" id="lsb_trR">0</span></button>
                 </div>
                 <div class="controls-row" style="flex-wrap:nowrap;">
                     <button id="undoBtn" class="undo-btn" style="flex:0 0 46px;">↩</button>
@@ -1807,7 +1809,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v219</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v237</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2275,6 +2277,12 @@
         <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">🟨🟥 TARJETAS POR JUGADOR — corrige amarillas y rojas de este partido</label>
         <div id="editPartidoTarjetasList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:6px;"></div>
         <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">Se ajustan el total de la temporada, la ficha del jugador y el detalle del partido. Las tarjetas no cambian el impacto. No se modifican las sanciones ya aplicadas.</div>
+
+        <!-- v220 · tarjetas del rival -->
+        <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">🟨🟥 TARJETAS DEL RIVAL — con su minuto si lo sabes</label>
+        <div id="editPartidoTarjRivList" style="display:flex; flex-direction:column; gap:6px; margin-bottom:6px;"></div>
+        <button type="button" id="editPartidoAddTarjRivBtn" style="width:100%; padding:8px; background:rgba(245,197,24,0.07); color:#f5c518; border:1px dashed rgba(245,197,24,0.45); border-radius:9px; font-weight:800; font-size:12px; margin-bottom:6px;">+ Añadir tarjeta del rival</button>
+        <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">No cambian el impacto de nadie. Una segunda amarilla al mismo jugador, apúntala como 🟥. Con el minuto de la roja se calcula cuánto jugamos con uno más y cómo fue el marcador en ese rato.</div>
 
         <label style="display:block; font-size:10px; color:#64748b; font-weight:700; margin-bottom:6px;">⏱ GOLES CON MINUTO — para la lista de Partidos, los Récords y el 🎯 Mapa de goles del visor</label>
         <div id="egMapaResumen" style="font-size:11px; line-height:1.45; margin-bottom:6px; min-height:14px;"></div>
@@ -3433,6 +3441,157 @@
         };
         return { ini, fin, estado };
     }
+    // ── v224 · SINERGIAS: PUNTOS JUNTOS FRENTE A PAREJAS DEL MISMO TIPO ─────
+    // Solo parejas que juegan CERCA (por el puesto de cada uno en ese partido). El número es medible y entran todas,
+    // también las que juegan siempre juntas: puntos de las ACCIONES de los dos (sin la parte de equipo: ni bonus por
+    // gol, ni goles/tiros del rival, ni portería a cero) por cada 70' que coinciden en el campo, MENOS la media de
+    // todas las parejas del mismo tipo de puestos (p. ej. MCD-MCD, DEF-DEF, MED-DEL) en esos mismos minutos.
+    // Desde el 17 oct (v145), minuto a minuto; antes, las acciones del partido se reparten por igual entre sus minutos.
+    // Debajo, cuando hay minutos para comparar, las acciones de cada uno con el otro y sin él.
+    const SIN_MIN_JUNTOS = 60, SIN_MIN_SIN = 30;
+    const SIN_CAT = { POR: 'POR', LI: 'DEF', DFC: 'DEF', LD: 'DEF', MCD: 'MCD', MC: 'MED', MI: 'MED', MD: 'MED', MP: 'MED', EI: 'DEL', DC: 'DEL', ED: 'DEL' };
+    const SIN_CAT_ORD = ['POR', 'DEF', 'MCD', 'MED', 'DEL'];
+    function sinTipo(pa, pb) { const a = SIN_CAT[(pa || [])[0]] || '?', b = SIN_CAT[(pb || [])[0]] || '?'; return [a, b].sort((x, y) => SIN_CAT_ORD.indexOf(x) - SIN_CAT_ORD.indexOf(y)).join('-'); }
+    // Solo cuentan las parejas que juegan CERCA (como las parejas de la pizarra): nada de delantero con central.
+    // Se mira el puesto de cada uno EN ESE PARTIDO (h.puestos); si el partido no lo tiene, su puesto habitual.
+    const SIN_VECINOS = {
+        POR: ['LI', 'DFC', 'LD'],
+        LI: ['DFC', 'MCD', 'MI', 'MC', 'EI'],
+        DFC: ['DFC', 'LD', 'MCD', 'MC'],
+        LD: ['MCD', 'MC', 'MD', 'ED'],
+        MCD: ['MCD', 'MC', 'MI', 'MD', 'MP'],
+        MC: ['MC', 'MI', 'MD', 'MP', 'EI', 'ED', 'DC'],
+        MI: ['MP', 'EI', 'DC'],
+        MD: ['MP', 'ED', 'DC'],
+        MP: ['EI', 'ED', 'DC'],
+        EI: ['DC'],
+        DC: ['DC', 'ED']
+    };
+    function sinCerca(pa, pb) { return pa.some(a => pb.some(b => (SIN_VECINOS[a] || []).includes(b) || (SIN_VECINOS[b] || []).includes(a))); }
+    function sinPuestosDe(j, h) {
+        const pick = (o, mins) => { const ks = Object.keys(o || {}).filter(k => o[k] > 0); if (!ks.length) return null; const mx = Math.max(...ks.map(k => o[k])); return ks.filter(k => o[k] === mx || o[k] >= Math.max(10, (mins || 0) * 0.25)); };
+        const L2P = { portero: 'POR', defensa: 'DFC', centrocampista: 'MC', delantero: 'DC' };
+        let r = pick(h.puestos, h.mins); if (r) return r;
+        const hab = pick(j.minutosPorPuesto, 0);
+        const lin = h.lineas && Object.keys(h.lineas).length ? Object.keys(h.lineas).sort((a, b) => h.lineas[b] - h.lineas[a])[0] : null;
+        const linDe = pu => ({ POR: 'portero', LI: 'defensa', DFC: 'defensa', LD: 'defensa', MCD: 'centrocampista', MC: 'centrocampista', MI: 'centrocampista', MD: 'centrocampista', MP: 'centrocampista', EI: 'delantero', ED: 'delantero', DC: 'delantero' })[pu];
+        if (hab) { const h2 = lin ? hab.filter(pu => linDe(pu) === lin) : hab; if (h2.length) return h2; }
+        if (lin && L2P[lin]) return [L2P[lin]];
+        return hab || [];
+    }
+    // Presencia (fracción de cada minuto en el campo) y acciones por minuto (ac = null si no hay acciones) de cada niño.
+    function sinMinutosPartido(p, filas, dur, tit) {
+        const out = {};
+        const M = p && p.minutos && Number(p.minutos.v) === 1 && p.minutos.j ? p.minutos : null;
+        if (M) {
+            const lee = s => String(s || '').split(',').map(x => x === '' ? 0 : (Number(x) || 0));
+            const ini = Math.max(0, Number(M.ini) || 0);
+            filas.forEach(f => {
+                const r = M.j[String(f.j.id)]; if (!r) return;
+                const c = lee(r.c), a = lee(r.a), n = Math.max(c.length, a.length);
+                const pr = [], ac = [];
+                for (let k = 0; k < n; k++) { pr[k] = k < ini ? 0 : Math.min(1, (c[k] || 0) / 60); ac[k] = k < ini ? 0 : (a[k] || 0); }
+                if (pr.some(v => v > 0)) out[f.j.id] = { pr, ac, exacto: true };
+            });
+            if (Object.keys(out).length) return out;
+        }
+        filas.forEach(f => {
+            const tr = muroTramo(p, f.h, dur, tit, f.j.id); if (!tr) return;
+            const acc = accionesPartidoDe(p, f.j, f.h);
+            const n = Math.ceil(dur), pr = [], mins = Math.max(1e-9, tr.fin - tr.ini);
+            for (let k = 0; k < n; k++) pr[k] = Math.max(0, Math.min(k + 1, tr.fin) - Math.max(k, tr.ini));
+            out[f.j.id] = { pr, ac: acc == null ? null : pr.map(v => acc * v / mins), exacto: false };
+        });
+        return out;
+    }
+    function sinergiasV221(t) {
+        const ps = (t && t.partidos) || [], js = Object.values((t && t.jugadores) || {});
+        const par = {}, tipos = {}; let usados = 0, exactos = 0;
+        const P = (a, b) => { const k = clavePareja(Number(a), Number(b)); const [x, y] = k.split('_').map(Number); return par[k] || (par[k] = { clave: k, a: x, b: y, min: 0, pj: 0, acc: 0, T: {}, X: { [x]: { wA: 0, oA: 0, oM: 0 }, [y]: { wA: 0, oA: 0, oM: 0 } } }); };
+        ps.forEach(p => {
+            const filas = [];
+            js.forEach(j => { const h = ptsHistDe(j, p); if (h && (h.mins || 0) > 0) filas.push({ j, h, mins: h.mins }); });
+            if (!filas.length) return;
+            const dur = mmDuracion(p, filas);
+            const tit = Array.isArray(p.titulares) && p.titulares.length ? p.titulares.map(String) : null;
+            const pu = {}; filas.forEach(f => { pu[f.j.id] = sinPuestosDe(f.j, f.h); });
+            const MM = sinMinutosPartido(p, filas, dur, tit), ids = Object.keys(MM).filter(id => MM[id].ac);
+            if (!ids.length) return;
+            usados++; if (MM[ids[0]].exacto) exactos++;
+            for (let x = 0; x < ids.length; x++) for (let y = x + 1; y < ids.length; y++) {
+                const ia = ids[x], ib = ids[y], A = MM[ia], B = MM[ib];
+                if (!sinCerca(pu[ia] || [], pu[ib] || [])) continue;
+                const n = Math.max(A.pr.length, B.pr.length);
+                let J = 0, acc = 0; const w = { [ia]: { wA: 0, oA: 0, oM: 0 }, [ib]: { wA: 0, oA: 0, oM: 0 } };
+                for (let k = 0; k < n; k++) {
+                    const pa = A.pr[k] || 0, pb = B.pr[k] || 0, jj = Math.min(pa, pb); J += jj;
+                    [[ia, pa, A.ac[k] || 0], [ib, pb, B.ac[k] || 0]].forEach(([id, pp, aa]) => {
+                        const f = pp > 0 ? jj / pp : 0;
+                        w[id].wA += aa * f; w[id].oA += aa * (1 - f); w[id].oM += pp - jj; acc += aa * f;
+                    });
+                }
+                if (J <= 0) continue;
+                const tipo = sinTipo(pu[ia], pu[ib]);
+                const r = P(ia, ib); r.min += J; r.pj++; r.acc += acc;
+                const rt = r.T[tipo] || (r.T[tipo] = { min: 0, acc: 0 }); rt.min += J; rt.acc += acc;
+                const tt = tipos[tipo] || (tipos[tipo] = { min: 0, acc: 0, pares: new Set() }); tt.min += J; tt.acc += acc; tt.pares.add(r.clave);
+                [ia, ib].forEach(id => { const q = r.X[id]; q.wA += w[id].wA; q.oA += w[id].oA; q.oM += w[id].oM; });
+            }
+        });
+        const media = tp => { const q = tipos[tp]; return q && q.min ? q.acc / q.min * 70 : 0; };
+        const pares = Object.values(par).map(x => {
+            const juntos = x.acc / x.min * 70;
+            const esperado = Object.entries(x.T).reduce((s, [tp, q]) => s + media(tp) * q.min, 0) / x.min; // media de su tipo, en sus minutos
+            const tipo = Object.entries(x.T).sort((a, b) => b[1].min - a[1].min)[0][0];
+            const solos = (tipos[tipo] && tipos[tipo].pares.size) || 1;
+            const det = [x.a, x.b].map(id => { const q = x.X[id]; return { id, con: q.wA / x.min * 70, sin: q.oM >= SIN_MIN_SIN ? q.oA / q.oM * 70 : null, minSin: q.oM }; });
+            return Object.assign(x, { juntos, esperado, val: juntos - esperado, tipo, solos, det, entra: x.min >= SIN_MIN_JUNTOS });
+        });
+        return { pares, usados, exactos, total: ps.length, tipos };
+    }
+    function htmlSinergiasV221(S, nombres) {
+        const f1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+        const sg = v => (v > 0.05 ? '+' : v < -0.05 ? '−' : '') + Math.abs(Math.round(v * 10) / 10).toFixed(1).replace('.', ',');
+        const nom = id => nombres[id] || `ID${id}`, corto = id => nom(id).replace(/^#\d+ /, '');
+        const col = v => v >= 0.3 ? '#2ed573' : v <= -0.3 ? '#ff6b7a' : '#8da499';
+        let html = `<p style="margin:0 0 6px; font-size:11px; line-height:1.5; color:#94a3b8;">Parejas que juegan cerca. El número son los <b style="color:#cdd6e0">puntos de las acciones de los dos por cada 70' juntos</b> (tiros, pases, regates, defensa, paradas, goles y asistencias; sin lo que suma o resta el marcador), <b style="color:#cdd6e0">comparados con la media de las parejas de los mismos puestos</b>. +0,6 = entre los dos hacen 0,6 puntos más por 70' que una pareja normal de esos puestos. Entran con ${SIN_MIN_JUNTOS}' juntos.</p>`;
+        html += `<p style="margin:0 0 10px; font-size:10.5px; color:#52665c;">Datos de ${S.usados} de ${S.total} partidos (${S.exactos} minuto a minuto; en los demás, las acciones de cada partido se reparten entre sus minutos).</p>`;
+        if (!S.pares.length) return html + '<p style="color:#52665c; font-size:12px; padding:10px;">Sin datos aún.</p>';
+        const medidas = S.pares.filter(d => d.entra).sort((a, b) => b.val - a.val || b.min - a.min);
+        const observ = S.pares.filter(d => !d.entra).sort((a, b) => b.min - a.min);
+        if (!medidas.length) html += `<p style="color:#52665c; font-size:12px; padding:6px 0 10px;">Aún ninguna pareja llega a ${SIN_MIN_JUNTOS}' juntos.</p>`;
+        else {
+            const maxAbs = Math.max(...medidas.map(d => Math.abs(d.val)), 0.01);
+            html += medidas.map(d => {
+                const pct = Math.round(Math.abs(d.val) / maxAbs * 50), c = col(d.val);
+                const barra = d.val >= 0
+                    ? `<div style="position:absolute; left:50%; width:${pct}%; height:100%; background:${c}; border-radius:0 3px 3px 0;"></div>`
+                    : `<div style="position:absolute; right:50%; width:${pct}%; height:100%; background:${c}; border-radius:3px 0 0 3px;"></div>`;
+                const cs = d.det.map(q => `${corto(q.id)} ${f1(q.con)}${q.sin != null ? ' con / ' + f1(q.sin) + ' sin' : ' (siempre con él)'}`).join(' · ');
+                return `<div style="background:#112a1e; border-radius:8px; padding:10px 12px; margin-bottom:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+                        <span style="font-size:11px; font-weight:700; color:#cdd6e0;">${nom(d.a)} <span style="color:#52665c;">↔</span> ${nom(d.b)}</span>
+                        <span style="font-size:14px; font-weight:900; color:${c}; font-family:monospace;">${sg(d.val)}</span>
+                    </div>
+                    <div style="position:relative; background:#0d1f17; border-radius:3px; height:5px; margin-bottom:7px;"><div style="position:absolute; left:50%; top:-2px; width:1px; height:9px; background:#52665c;"></div>${barra}</div>
+                    <div style="font-size:11px; color:#94a3b8; font-family:monospace; margin-bottom:3px;">${f1(d.juntos)} juntos · media ${d.tipo} ${f1(d.esperado)}${d.solos <= 1 ? ' (única pareja así)' : ''}</div>
+                    <div style="font-size:10.5px; color:#8da499; line-height:1.4; margin-bottom:2px;">${cs}</div>
+                    <div style="font-size:10px; color:#52665c;">${Math.round(d.min)}' juntos · ${d.pj} PJ</div>
+                </div>`;
+            }).join('');
+        }
+        if (observ.length) {
+            html += `<div style="margin-top:12px; padding:10px 12px; border:1px dashed rgba(255,255,255,0.18); border-radius:12px;">
+                <div style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px; letter-spacing:.08em; color:#e2e8f0;">EN OBSERVACIÓN</div>
+                <div style="font-size:10.5px; line-height:1.4; color:#94a3b8; margin:2px 0 6px;">Menos de ${SIN_MIN_JUNTOS}' juntos: muestra demasiado corta.</div>
+                ${observ.map(d => `<div style="display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid rgba(255,255,255,0.06); font-size:11.5px; color:#cbd5e1;">
+                    <span>${nom(d.a)} <span style="color:#52665c;">↔</span> ${nom(d.b)}</span>
+                    <span style="color:#94a3b8; font-family:monospace; white-space:nowrap;">${Math.round(d.min)}' · ${sg(d.val)}</span>
+                </div>`).join('')}
+            </div>`;
+        }
+        return html;
+    }
     // El muro: parejas y tríos de defensas con menos goles en contra por 70' jugando juntos
     function muroTemporada(t) {
         const ps = (t && t.partidos) || [];
@@ -3806,7 +3965,7 @@
             const sub = k === 'jug' ? `${x.pts} ${x.pts === 1 ? 'pt' : 'pts'} · ${difFmt1(x.ajust)} con calendario medio` : `${x.rq.length} ${x.rq.length === 1 ? 'partido' : 'partidos'} por jugar`;
             return `<div style="display:grid; grid-template-columns:20px 1fr 84px 42px; gap:8px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:${n ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12.5px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}">
                 <span style="font-family:'Montserrat',sans-serif; font-weight:800; color:#94a3b8; text-align:center;">${n + 1}</span>
-                <span style="min-width:0; color:${me ? '#ff8fa3' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}<div style="font-size:10.5px; color:#94a3b8; font-weight:400;">${sub}</div></span>
+                <span style="min-width:0; color:${me ? '#ff5577' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}<div style="font-size:10.5px; color:#94a3b8; font-weight:400;">${sub}</div></span>
                 <div style="position:relative; height:8px; background:rgba(255,255,255,.06); border-radius:4px;"><span style="position:absolute; left:50%; top:-3px; width:1px; height:14px; background:#64748b;"></span><i style="position:absolute; top:0; bottom:0; ${barra} background:${col}; border-radius:4px;"></i></div>
                 <span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px; text-align:right; color:${col};">${Math.round(d)}</span>
             </div>`;
@@ -3829,7 +3988,7 @@
             const ordQ = Dd.T.filter(x => x.dQ != null).sort((a, b) => b.dQ - a.dQ), pQ = ordQ.indexOf(h) + 1;
             const caja = (v, c, txt) => `<div style="background:rgba(255,255,255,.05); border-radius:10px; padding:9px 10px;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:21px; color:${c};">${v}</div><div style="font-size:10.5px; line-height:1.35; color:#94a3b8; margin-top:2px;">${txt}</div></div>`;
             cab = `<div style="background:rgba(180,20,56,.14); border:1px solid rgba(255,85,119,.4); border-radius:12px; padding:11px 12px; margin-bottom:12px;">
-                <div style="font-size:12.5px; line-height:1.55; color:#e2e8f0;">El Hergar ha tenido el <b style="color:#ff8fa3;">${pJ}.º calendario más duro</b> de los ${ordJ.length} hasta ahora. Con un calendario medio llevaría <b style="color:#ff8fa3;">${difFmt1(h.ajust)} puntos</b> en vez de ${h.pts}.</div>
+                <div style="font-size:12.5px; line-height:1.55; color:#e2e8f0;">El Hergar ha tenido el <b style="color:#ff5577;">${pJ}.º calendario más duro</b> de los ${ordJ.length} hasta ahora. Con un calendario medio llevaría <b style="color:#ff5577;">${difFmt1(h.ajust)} puntos</b> en vez de ${h.pts}.</div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
                     ${caja(Math.round(h.dJ), h.dJ >= Dd.media ? '#ff6b7a' : '#2ed573', `Elo medio de los rivales ya jugados (Liga: ${Math.round(Dd.media)})`)}
                     ${h.dQ != null ? caja(Math.round(h.dQ), h.dQ >= Dd.media ? '#ff6b7a' : '#2ed573', `Elo medio de lo que queda · ${pQ}.º más duro`) : caja('—', '#64748b', 'Ya no quedan partidos')}
@@ -3865,7 +4024,7 @@
                 const me = !!x.e.esHergar, d = (c != null && f != null) ? c - f : null;
                 const col = d == null ? '#64748b' : d > 0.05 ? '#2ed573' : d < -0.05 ? '#ff6b7a' : '#f5a623';
                 const num = v => v == null ? '—' : difFmt1(v);
-                return `<div style="display:grid; grid-template-columns:1fr 50px 50px 44px; gap:6px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:${n ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><span style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:${me ? '#ff8fa3' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(c)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(f)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:900; color:${col};">${d == null ? '—' : Math.abs(d) < 0.05 ? '0,0' : (d > 0 ? '+' : '−') + difFmt1(Math.abs(d))}</span></div>`;
+                return `<div style="display:grid; grid-template-columns:1fr 50px 50px 44px; gap:6px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:${n ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><span style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:${me ? '#ff5577' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(c)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(f)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:900; color:${col};">${d == null ? '—' : Math.abs(d) < 0.05 ? '0,0' : (d > 0 ? '+' : '−') + difFmt1(Math.abs(d))}</span></div>`;
             }).join('');
         return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">🏠 Lo que vale jugar en casa</summary>
             <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0 10px;">Cómo les va a los locales en esta Liga y cuánto pesa eso en el Elo.</div>
@@ -3874,7 +4033,7 @@
             <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:10.5px; color:#94a3b8; margin-top:6px;"><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#2ed573; margin-right:4px;"></i>Gana el local ${C.V}</span><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#94a3b8; margin-right:4px;"></i>Empate ${C.E}</span><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#ff6b7a; margin-right:4px;"></i>Gana el visitante ${C.D}</span></div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
                 ${caja(`${difFmt1(C.gl / N)} <span style="color:#64748b; font-size:15px;">–</span> ${difFmt1(C.gv / N)}`, '#e2e8f0', 'goles por partido del local y del visitante')}
-                ${caja(`${hc == null ? '—' : difFmt1(hc)} / ${hf == null ? '—' : difFmt1(hf)}`, '#ff8fa3', 'puntos por partido del Hergar en casa / fuera')}
+                ${caja(`${hc == null ? '—' : difFmt1(hc)} / ${hf == null ? '—' : difFmt1(hf)}`, '#ff5577', 'puntos por partido del Hergar en casa / fuera')}
             </div>
             <div style="margin-top:12px; background:rgba(255,255,255,.04); border-radius:12px; padding:12px;">
                 <div style="font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Ventaja de casa en el Elo</div>
@@ -4160,14 +4319,14 @@
                     <div style="flex:1; background:rgba(255,255,255,.04); border-radius:10px; padding:9px; text-align:center;"><div style="font-size:11px; color:#94a3b8;">🛡️ Defensa</div><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:20px; color:${snColor(N.md)};">${snSig(N.md)}</div><div style="font-size:10.5px; color:#94a3b8;">goles de menos</div></div>
                 </div>`
                 + `<div style="margin-top:12px; font-size:12px; color:#e2e8f0;">⭐ Mejor partido: <b>${best.gf}-${best.gc} vs ${esc(best.p.rival)}</b> <span style="font-family:'Montserrat',sans-serif; font-weight:900; color:${snColor(best.t)};">${snSig(best.t)}</span></div>`
-                + (sorpresa ? `<div style="display:inline-block; margin-top:8px; font-size:11px; font-weight:700; padding:5px 10px; border-radius:14px; background:rgba(180,20,56,.2); color:#ff8fa3; line-height:1.4;">💡 Perdimos ${sorpresa.gf}-${sorpresa.gc} con ${esc(sorpresa.p.rival)}, pero jugamos por encima de lo esperado (${snSig(sorpresa.t)})</div>` : '')
+                + (sorpresa ? `<div style="display:inline-block; margin-top:8px; font-size:11px; font-weight:700; padding:5px 10px; border-radius:14px; background:rgba(180,20,56,.2); color:#ff5577; line-height:1.4;">💡 Perdimos ${sorpresa.gf}-${sorpresa.gc} con ${esc(sorpresa.p.rival)}, pero jugamos por encima de lo esperado (${snSig(sorpresa.t)})</div>` : '')
                 + `<div style="font-size:11px; font-weight:700; color:#cbd5e1; margin:12px 0 2px;">Partido a partido <span style="font-weight:400; color:#94a3b8;">(toca uno para ver qué se esperaba)</span></div>${filas}`
                 + graf
                 + ((N.sinLiga || N.pendientes) ? `<div style="font-size:10.5px; color:#94a3b8; margin-top:6px;">${[N.sinLiga ? `${N.sinLiga} ${N.sinLiga === 1 ? 'partido no es' : 'partidos no son'} contra equipos de la Liga` : '', N.pendientes ? `${N.pendientes} sin resultados del rival todavía` : ''].filter(Boolean).join(' · ')}: no cuenta${N.sinLiga + N.pendientes === 1 ? '' : 'n'}.</div>` : ''));
         }
         // ── RESTO DE LA LIGA ──
         if (C.R && C.R.length) {
-            const filas = C.R.map((x, k) => { const me = !!x.e.esHergar; return `<div style="display:grid; grid-template-columns:20px 1fr auto; gap:8px; align-items:center; padding:7px ${me ? '6px' : '0'}; border-top:${k ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12.5px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><span style="font-family:'Montserrat',sans-serif; font-weight:800; color:#94a3b8; text-align:center;">${k + 1}</span><span style="min-width:0; color:${me ? '#ff8fa3' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}<div style="font-size:10.5px; color:#94a3b8; font-weight:400;">⚽ ${snSig(x.a)} · 🛡️ ${snSig(x.d)}</div></span><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; color:${snColor(x.t)};">${snSig(x.t)}</span></div>`; }).join('');
+            const filas = C.R.map((x, k) => { const me = !!x.e.esHergar; return `<div style="display:grid; grid-template-columns:20px 1fr auto; gap:8px; align-items:center; padding:7px ${me ? '6px' : '0'}; border-top:${k ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12.5px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><span style="font-family:'Montserrat',sans-serif; font-weight:800; color:#94a3b8; text-align:center;">${k + 1}</span><span style="min-width:0; color:${me ? '#ff5577' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}<div style="font-size:10.5px; color:#94a3b8; font-weight:400;">⚽ ${snSig(x.a)} · 🛡️ ${snSig(x.d)}</div></span><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; color:${snColor(x.t)};">${snSig(x.t)}</span></div>`; }).join('');
             h += snCaja(snTitulo('🏆 EL RESTO DE LA LIGA', acento)
                 + `<div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin-bottom:6px;">El mismo cálculo para todos los equipos, con los resultados de la Liga. Media por partido.${C.R.maxPj < 4 ? ' Con tan pocas jornadas aún es poco fiable.' : ''}</div>${filas}`);
         }
@@ -4469,6 +4628,460 @@
         } catch (e) { console.error('v207 defensa:', e); }
     }
     setTimeout(migrarDefensaV207, 4600);
+    // ── v225 · MC → MCD EN LOS PARTIDOS QUE EMPEZARON CON 1-4-2-3-1 ──
+    // El 1-4-2-3-1 no tiene MC: los minutos de MC de esos partidos son restos de cambios de formación al principio.
+    // Se pasan a MCD (el MC sigue existiendo para otros sistemas) y se recalcula lo que vale distinto en el pivote:
+    //  · acción defensiva 0,35 en vez de 0,30 y defensiva clave 1,10 en vez de 1,00 (por los minutos de MC, como en la v207);
+    //  · portería a cero +0,60 en vez de +0,30, solo en los partidos desde la v190 (25 oct 2026): antes, el MC ya llevaba +0,60.
+    const MCMCD_DESDE_V190 = '2026-10-25';
+    function mcmcdFechaISO(f) { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(f || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; }
+    function mcmcdCambios(t) {
+        const out = [];
+        (t.partidos || []).forEach((p, i) => {
+            if (p.formacion !== '4-2-3-1' || p.mcmcd225) return;
+            Object.values(t.jugadores || {}).forEach(j => {
+                const k = (j.historial || []).findIndex(h => h.fecha === p.fecha && h.rival === p.rival);
+                if (k < 0) return;
+                const h = j.historial[k];
+                const mMC = Number((h.puestos || {}).MC) || 0;
+                if (!mMC) return;
+                const tot = Object.values(h.puestos).reduce((s, v) => s + (Number(v) || 0), 0) || 1, f = mMC / tot;
+                const a = h.acc || {}, defC = Number(a.defC) || 0, def = Math.max(0, (Number(a.def) || 0) - defC);
+                const extraDef = f * (def * (valorDefensaV207(false, 'MCD') - valorDefensaV207(false, 'MC')) + defC * (valorDefensaV207(true, 'MCD') - valorDefensaV207(true, 'MC')));
+                let extra = extraDef;
+                const pcu = REGLAS_IMPACTO.porteriaCeroPuesto || {};
+                const sinEncajar = h.gcCampo !== undefined ? (Number(h.gcCampo) || 0) === 0 : (Number(p.golesRival) || 0) === 0;
+                if (sinEncajar && mcmcdFechaISO(p.fecha) >= MCMCD_DESDE_V190) extra += ((pcu.MCD || 0) - (pcu.MC || 0)) * Math.min(1, mMC / 70);
+                out.push({ i, p, j, k, mMC, extra, extraDef });
+            });
+        });
+        return out;
+    }
+    function aplicarMcMcd(x) {
+        const j = x.j, h = j.historial[x.k], r2 = (n) => Math.round(n * 100) / 100;
+        ['minutosPorPuesto', 'impactoPorPuesto', 'partidosPorPuesto'].forEach(c => { if (!j[c]) j[c] = {}; });
+        const puViejo = puestoPrincipal(h.puestos, lineaPrincipal(lineasDesdePuestos(h.puestos)));
+        const ipMC = (h.impPuestos || {}).MC !== undefined ? Number(h.impPuestos.MC) || 0 : 0;
+        // 1) los minutos y el impacto de MC pasan a MCD
+        h.puestos.MCD = (Number(h.puestos.MCD) || 0) + x.mMC; delete h.puestos.MC;
+        if (h.impPuestos) { h.impPuestos.MCD = r2((Number(h.impPuestos.MCD) || 0) + ipMC); delete h.impPuestos.MC; }
+        j.minutosPorPuesto.MC = Math.max(0, (j.minutosPorPuesto.MC || 0) - x.mMC); j.minutosPorPuesto.MCD = (j.minutosPorPuesto.MCD || 0) + x.mMC;
+        j.impactoPorPuesto.MC = (j.impactoPorPuesto.MC || 0) - ipMC; j.impactoPorPuesto.MCD = (j.impactoPorPuesto.MCD || 0) + ipMC;
+        const puNuevo = puestoPrincipal(h.puestos, lineaPrincipal(lineasDesdePuestos(h.puestos)));
+        if (puViejo !== puNuevo) {
+            if (puViejo) j.partidosPorPuesto[puViejo] = Math.max(0, (j.partidosPorPuesto[puViejo] || 0) - 1);
+            if (puNuevo) j.partidosPorPuesto[puNuevo] = (j.partidosPorPuesto[puNuevo] || 0) + 1;
+        }
+        if (!(j.minutosPorPuesto.MC > 0) && !(j.partidosPorPuesto.MC > 0)) { delete j.minutosPorPuesto.MC; delete j.partidosPorPuesto.MC; if (Math.abs(j.impactoPorPuesto.MC || 0) < 0.01) delete j.impactoPorPuesto.MC; }
+        // 2) lo que gana por jugar de pivote (va a MCD y a la línea de centrocampista)
+        if (Math.abs(x.extra) >= 1e-9) aplicarExtraDefensaV207(j, x.k, { total: x.extra, porPuesto: { MCD: x.extra } });
+        if (Math.abs(x.extraDef) >= 1e-9 && h.accImp !== undefined && h.accImp !== null) h.accImp = r2((Number(h.accImp) || 0) + x.extraDef); // «sus acciones»: solo lo de la defensa
+        h.mcmcd225 = true;
+    }
+    function migrarMcMcdV225() {
+        try {
+            const t = getTemporada();
+            if (!t || t.mcmcdRegla === 225) return;
+            const cambios = mcmcdCambios(t);
+            const marcar = () => { (t.partidos || []).forEach(p => { if (p.formacion === '4-2-3-1') p.mcmcd225 = true; }); t.mcmcdRegla = 225; };
+            if (!cambios.length) { marcar(); saveTemporada(t); return; }
+            const porNino = {};
+            cambios.forEach(x => { const r = porNino[x.j.id] || (porNino[x.j.id] = { j: x.j, min: 0, extra: 0, ps: [] }); r.min += x.mMC; r.extra += x.extra; r.ps.push(`J${x.i + 1}`); });
+            const f2 = (n) => (n >= 0 ? '+' : '−') + Math.abs(n).toFixed(2).replace('.', ',');
+            const lista = Object.values(porNino).sort((a, b) => b.extra - a.extra).map(r => `#${r.j.dorsal} ${(r.j.name || '').split(' ')[0]}: ${r.min}' de MC (${r.ps.join(', ')}) → impacto ${f2(r.extra)}`).join('\n');
+            if (!confirm(`🔁 v225 · MC → MCD en los partidos que empezaron con 1-4-2-3-1\n\nEse sistema no tiene MC: esos minutos pasan a MCD (pivote). El MC sigue existiendo para otros sistemas.\n\nLo que cambia en cada niño:\n${lista}\n\nGanan por jugar de pivote: acción defensiva 0,35 (antes 0,30), defensiva clave 1,10 (antes 1,00) y portería a cero +0,60 (antes +0,30, solo desde el 25 oct).\n\n¿Recalcular ahora? (Si cancelas, te lo vuelve a preguntar la próxima vez que abras la app.)`)) return;
+            cambios.forEach(aplicarMcMcd);
+            const mvp = recalcularMvpTemporada(t);
+            marcar();
+            saveTemporada(t);
+            setTimeout(() => { try { publicarTemporadaFirebase(getTemporada()); } catch (e) {} }, 4000);
+            try { renderPartidos(); renderRanking(); } catch (e) {}
+            alert(`✅ Recalculado: MC → MCD en ${new Set(cambios.map(x => x.i)).size} ${new Set(cambios.map(x => x.i)).size === 1 ? 'partido' : 'partidos'}.${mvp.length ? '\n\nCambia el MVP:\n' + mvp.join('\n') : '\n\nNo cambia ningún MVP.'}\n\nSe envía al visor en unos segundos; si no aparece, usa "Sincronizar temporada con el visor".`);
+        } catch (e) { console.error('v225 MC → MCD:', e); }
+    }
+    setTimeout(migrarMcMcdV225, 5800);
+    // ── v227 · QUÍMICA DEL ONCE Y PARTIDOS GRANDES (copia de las funciones del visor, para la IA) ──
+    // QUÍMICA (v224): cuánto se conocían los que estaban en el campo. Cada jugador se enlaza con sus vecinos en la pizarra
+    //  (21 enlaces en el 1-4-2-3-1). Cada enlace vale de 0 a 10 según los minutos que esa pareja jugó junta en los
+    //  QM_VENTANA partidos anteriores, sobre los minutos de esos partidos (4 partidos = 280'). Se calcula POR TRAMOS: en cada
+    //  cambio el que entra ocupa el hueco del que sale, y la química del partido es la media de los tramos según sus minutos.
+    //  Los cambios salen de los guardados con el partido (v139) o se deducen de los minutos de cada uno.
+    //  Solo partidos con los 11 titulares en el orden de la pizarra (los cargados a mano no; sí cuentan sus minutos juntos).
+    const QM_VENTANA = 4, QM_MIN_BASE = 140; // v226: cada pareja, sobre los minutos del que menos jugó de los dos (nunca menos de 140')
+    const QM_ENLACES = {
+      '4-2-3-1': [[0, 2], [0, 3], [2, 3], [1, 2], [3, 4], [1, 5], [4, 6], [2, 5], [3, 6], [5, 6], [5, 8], [6, 8], [1, 7], [4, 9], [7, 8], [9, 8], [8, 10], [5, 7], [6, 9], [7, 10], [9, 10]],
+      '4-3-3': [[0, 2], [0, 3], [2, 3], [1, 2], [3, 4], [2, 5], [3, 5], [1, 6], [4, 7], [5, 6], [5, 7], [6, 8], [7, 10], [6, 9], [7, 9], [8, 9], [10, 9], [1, 8], [4, 10]],
+      '4-4-2': [[0, 2], [0, 3], [2, 3], [1, 2], [3, 4], [1, 5], [4, 8], [2, 6], [3, 7], [5, 6], [6, 7], [7, 8], [6, 9], [7, 10], [9, 10], [5, 9], [8, 10]],
+      '3-5-2': [[0, 1], [0, 2], [0, 3], [1, 2], [2, 3], [1, 4], [3, 8], [1, 5], [3, 7], [2, 5], [2, 7], [4, 5], [7, 8], [5, 6], [7, 6], [6, 9], [6, 10], [9, 10], [4, 9], [8, 10]],
+      '3-4-3': [[0, 1], [0, 2], [0, 3], [1, 2], [2, 3], [1, 4], [3, 7], [1, 5], [3, 6], [2, 5], [2, 6], [4, 5], [5, 6], [6, 7], [4, 8], [7, 10], [5, 9], [6, 9], [8, 9], [10, 9]]
+    };
+    const qmCache = new WeakMap();
+    function qmClave(a, b) { a = String(a); b = String(b); return a < b ? a + '|' + b : b + '|' + a; }
+    // Cambios del partido: [{ min, entra: id, sale: id|null }]
+    function qmCambios(t, p) {
+      const js = Object.values(t.jugadores || {});
+      const porDorsal = d => { const j = js.find(x => String(x.dorsal) === String(d).replace(/^#/, '')); return j ? String(j.id) : null; };
+      const A = p.acta || {};
+      if (Array.isArray(A.cambios) && A.cambios.length) {
+        return A.cambios.map(c => ({ min: Number(c.min) || 0, entra: porDorsal(c.entraD), sale: porDorsal(c.saleD) })).filter(c => c.entra).sort((a, b) => a.min - b.min);
+      }
+      let inf = null; try { inf = bqPartidoInfo(t, p); } catch (e) { inf = null; }
+      if (!inf) return [];
+      const sal = inf.sal.slice().sort((a, b) => a.min - b.min), usadas = new Set();
+      return inf.ent.slice().sort((a, b) => a.min - b.min).map(e => {
+        let k = -1, mejor = 99;
+        sal.forEach((s, si) => { if (usadas.has(si)) return; const d = Math.abs(s.min - e.min); if (d < mejor) { mejor = d; k = si; } });
+        const s = (k >= 0 && mejor <= 2) ? sal[k] : null; if (s) usadas.add(k);
+        return { min: e.min, entra: String(e.j.id), sale: s ? String(s.j.id) : null };
+      });
+    }
+    // v227 · Pizarra de cada tramo: [{ ini, fin, form, ids:[11 ids o null por hueco] }]
+    //  · Partidos desde la app v226: la app guarda la pizarra entera cada vez que cambia (p.pizarra), con su minuto.
+    //  · Partidos anteriores: con los cambios y los puestos donde jugó cada niño (h.puestos). La recolocación se hace
+    //    justo después de los cambios: el titular sigue en su puesto de inicio los minutos que jugó ahí y después pasa
+    //    a su otro puesto (ese momento se lleva al cambio más cercano); el que entra empieza en el puesto del que sale.
+    const QM_LINEA_PU = { POR: 'P', LI: 'D', DFC: 'D', LD: 'D', MCD: 'M', MC: 'M', MI: 'M', MD: 'M', MP: 'M', EI: 'A', ED: 'A', DC: 'A' };
+    function qmColocar(ids, puesto, form, prev) {
+      // reparte a los niños (con su puesto) en los huecos de la formación; prev = huecos del tramo anterior (para no bailar)
+      const PU = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[form]) || [];
+      const sl = new Array(11).fill(null), pend = ids.slice();
+      const quitar = id => { const k = pend.indexOf(id); if (k >= 0) pend.splice(k, 1); };
+      // 1) se queda en su hueco si sigue en ese mismo puesto
+      if (prev) prev.forEach((id, k) => { if (id && pend.includes(id) && puesto[id] && puesto[id] === PU[k]) { sl[k] = id; quitar(id); } });
+      // 2) a un hueco libre de su puesto
+      pend.slice().forEach(id => { const k = PU.findIndex((pu, kk) => !sl[kk] && pu === puesto[id]); if (k >= 0) { sl[k] = id; quitar(id); } });
+      // 3) a un hueco libre de su línea, 4) si no, a su hueco de antes o al primero libre
+      pend.slice().forEach(id => { const L = QM_LINEA_PU[puesto[id]]; const k = PU.findIndex((pu, kk) => !sl[kk] && L && QM_LINEA_PU[pu] === L); if (k >= 0) { sl[k] = id; quitar(id); } });
+      pend.slice().forEach(id => { let k = prev ? prev.indexOf(id) : -1; if (k < 0 || sl[k]) k = sl.findIndex(x => !x); if (k >= 0) { sl[k] = id; quitar(id); } });
+      return sl;
+    }
+    function qmTramosPartido(t, p, tit, form, dur, filas) {
+      // 1) con la pizarra guardada por la app
+      if (Array.isArray(p.pizarra) && p.pizarra.length) {
+        const L = p.pizarra.map(x => ({ m: Number(x.m) || 0, f: x.f || form, ids: (Array.isArray(x.ids) ? x.ids : String(x.ids || '').split(',')).map(v => v === '' || v == null ? null : String(v)) })).sort((a, b) => a.m - b.m);
+        const out = []; let prev = null;
+        L.forEach((x, k) => {
+          let sl;
+          if (x.ids.length === 11) sl = x.ids.slice();
+          else { // con un expulsado la app quita su hueco: se mantiene a cada uno donde estaba
+            sl = prev ? prev.map(id => (id && x.ids.includes(id)) ? id : null) : new Array(11).fill(null);
+            x.ids.filter(id => id && !sl.includes(id)).forEach(id => { const h = sl.findIndex(v => !v); if (h >= 0) sl[h] = id; });
+          }
+          const ini = k === 0 ? 0 : Math.min(dur, x.m), fin = k === L.length - 1 ? dur : Math.min(dur, Math.max(ini, L[k + 1].m));
+          if (fin > ini) out.push({ ini, fin, form: QM_ENLACES[x.f] ? x.f : form, ids: sl });
+          prev = sl;
+        });
+        if (out.length) return out;
+      }
+      // 2) partido anterior: cambios + puestos
+      const PU0 = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[form]) || [];
+      const cambios = qmCambios(t, p);
+      const mins = cambios.map(c => Math.min(dur, Math.max(0, c.min)));
+      const snap = (m) => { let best = m, d = 6; mins.forEach(c => { if (Math.abs(c - m) < d) { d = Math.abs(c - m); best = c; } }); return best; };
+      const conPuestos = filas.some(f => f.h.puestos && Object.keys(f.h.puestos).length);
+      const seg = {}; // id → [{ ini, fin, pu }]
+      const salePu = {}; // puesto final de cada titular (para el que entra por él)
+      filas.forEach(f => {
+        const id = String(f.j.id), tr = muroTramo(p, f.h, dur, tit, f.j.id);
+        if (!tr) return;
+        const pz = f.h.puestos || {}, keys = Object.keys(pz).filter(k => (Number(pz[k]) || 0) > 0);
+        const k0 = tit.indexOf(id);
+        const L = [];
+        if (k0 >= 0) { // titular: primero su puesto de inicio
+          const P0 = PU0[k0];
+          if (keys.length > 1 && keys.includes(P0)) {
+            const corte = snap(tr.ini + (Number(pz[P0]) || 0));
+            L.push({ ini: tr.ini, fin: corte, pu: P0 });
+            const resto = keys.filter(k => k !== P0).sort((a, b) => pz[b] - pz[a]);
+            L.push({ ini: corte, fin: tr.fin, pu: resto[0] });
+          } else L.push({ ini: tr.ini, fin: tr.fin, pu: keys.length === 1 ? keys[0] : P0 });
+        } else L.push({ ini: tr.ini, fin: tr.fin, pu: null, keys, pz }); // suplente: se completa con el que sale
+        seg[id] = L;
+      });
+      Object.keys(seg).forEach(id => { const L = seg[id]; if (tit.includes(id)) salePu[id] = L[L.length - 1].pu; });
+      cambios.forEach(c => {
+        const L = c.entra && seg[c.entra]; if (!L || L[0].pu) return;
+        const x = L[0], Ps = c.sale ? salePu[c.sale] : null;
+        if (x.keys.length > 1 && Ps && x.keys.includes(Ps)) {
+          const corte = snap(x.ini + (Number(x.pz[Ps]) || 0));
+          const otro = x.keys.filter(k => k !== Ps).sort((a, b) => x.pz[b] - x.pz[a])[0];
+          seg[c.entra] = [{ ini: x.ini, fin: corte, pu: Ps }, { ini: corte, fin: x.fin, pu: otro }];
+        } else x.pu = x.keys.length === 1 ? x.keys[0] : (Ps || x.keys.sort((a, b) => x.pz[b] - x.pz[a])[0] || null);
+        salePu[c.entra] = seg[c.entra][seg[c.entra].length - 1].pu;
+      });
+      Object.values(seg).forEach(L => L.forEach(x => { if (!x.pu) x.pu = (x.keys || []).sort((a, b) => x.pz[b] - x.pz[a])[0] || null; }));
+      const cortes = new Set([0, dur]);
+      mins.forEach(m => cortes.add(m));
+      Object.values(seg).forEach(L => L.forEach(x => { cortes.add(Math.max(0, Math.min(dur, x.ini))); cortes.add(Math.max(0, Math.min(dur, x.fin))); }));
+      const C = [...cortes].sort((a, b) => a - b);
+      const out = []; let prev = tit.slice();
+      for (let k = 0; k < C.length - 1; k++) {
+        const a = C[k], b = C[k + 1]; if (b - a < 0.5) continue;
+        const mid = (a + b) / 2, puesto = {}, ids = [];
+        Object.entries(seg).forEach(([id, L]) => { const x = L.find(s => s.ini <= mid && mid < s.fin); if (x) { ids.push(id); puesto[id] = x.pu; } });
+        if (!ids.length) continue;
+        let sl;
+        if (!conPuestos) { // sin puestos: el que entra ocupa el hueco del que sale
+          sl = prev.map(id => ids.includes(id) ? id : null);
+          ids.filter(id => !sl.includes(id)).forEach(id => { const c = cambios.find(cc => cc.entra === id); let h = c && c.sale ? prev.indexOf(c.sale) : -1; if (h < 0 || sl[h]) h = sl.findIndex(v => !v); if (h >= 0) sl[h] = id; });
+        } else sl = qmColocar(ids, puesto, form, prev);
+        const last = out[out.length - 1];
+        if (last && last.ids.join(',') === sl.join(',')) last.fin = b;
+        else out.push({ ini: a, fin: b, form, ids: sl });
+        prev = sl;
+      }
+      return out.length ? out : [{ ini: 0, fin: dur, form, ids: tit.slice() }];
+    }
+    function qmTemporada(t) {
+      if (!t) return null;
+      if (qmCache.has(t)) return qmCache.get(t);
+      const ps = t.partidos || [];
+      const acum = {}, porPartido = [], durs = [], minsJug = [], porVecinos = [], minsVec = [], minsPuesto = [], vecPuestos = []; // v232: minutos juntos como vecinos de la pizarra (para el pegamento)
+      const partidos = ps.map((p, i) => {
+        let res = null;
+        const form = p.formacion, E = QM_ENLACES[form];
+        const tit = Array.isArray(p.titulares) ? p.titulares.map(String) : null;
+        let filas = [], dur = 70;
+        try { filas = proFilas(t, p); dur = mmDuracion(p, filas); } catch (e) {}
+        if (E && tit && tit.length === 11 && !p.manual) {
+          if (i === 0) res = { q: null, primero: true, form, tit };
+          else {
+            // minutos juntos de los QM_VENTANA partidos anteriores
+            const desde = Math.max(0, i - QM_VENTANA), ven = {}, mj = {}; let base = 0;
+            for (let k = desde; k < i; k++) { base += durs[k] || 0; Object.entries(porPartido[k] || {}).forEach(([c, m]) => { ven[c] = (ven[c] || 0) + m; }); Object.entries(minsJug[k] || {}).forEach(([id, m]) => { mj[id] = (mj[id] || 0) + m; }); }
+            const once = (sl, f) => {
+              const EE = QM_ENLACES[f] || E, PU = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[f]) || [];
+              const enlaces = EE.filter(([x, y]) => sl[x] && sl[y]).map(([x, y]) => {
+                const m = ven[qmClave(sl[x], sl[y])] || 0, den = Math.max(QM_MIN_BASE, Math.min(mj[sl[x]] || 0, mj[sl[y]] || 0));
+                return { x, y, a: sl[x], b: sl[y], pa: PU[x] || '', pb: PU[y] || '', min: Math.round(m), den: Math.round(den), v: Math.min(1, m / den) * 10 };
+              });
+              return { q: enlaces.length ? enlaces.reduce((s2, e) => s2 + e.v, 0) / enlaces.length : 0, enlaces, tit: sl.slice(), form: f };
+            };
+            // tramos con la pizarra de cada momento (v227: guardada por la app, o deducida de cambios y puestos)
+            const tramos = qmTramosPartido(t, p, tit, form, dur, filas).map(x => Object.assign({ ini: x.ini, fin: x.fin }, once(x.ids, x.form)));
+            const tot = tramos.reduce((s, x) => s + (x.fin - x.ini), 0);
+            const q = tot ? tramos.reduce((s, x) => s + x.q * (x.fin - x.ini), 0) / tot : tramos[0].q;
+            res = { q, tramos, form, tit, base, nPrevios: i - desde, enlaces: tramos[0].enlaces };
+          }
+        }
+        // los minutos juntos de este partido (para los siguientes)
+        const mio = {};
+        try {
+          const tr = filas.map(f => ({ id: String(f.j.id), t: muroTramo(p, f.h, dur, tit, f.j.id) })).filter(x => x.t);
+          for (let a = 0; a < tr.length; a++) for (let b = a + 1; b < tr.length; b++) {
+            const s = Math.max(tr[a].t.ini, tr[b].t.ini), f = Math.min(tr[a].t.fin, tr[b].t.fin);
+            if (f > s) { const k = qmClave(tr[a].id, tr[b].id); mio[k] = (mio[k] || 0) + (f - s); acum[k] = (acum[k] || 0) + (f - s); }
+          }
+        } catch (e) { console.error('Química · minutos juntos:', e); }
+        // v232 · minutos como vecinos en la pizarra (enlaces de la química), tramo a tramo, también en el primer partido
+        if (E && tit && tit.length === 11 && !p.manual) {
+          try {
+            const vec = {}, mv = {}, pu = {}, vp = {}; // v235/v233: minutos de cada niño en cada puesto y puestos en que fue vecino de cada compañero
+            const TR = (res && res.tramos) ? res.tramos.map(x => ({ ini: x.ini, fin: x.fin, ids: x.tit, form: x.form })) : qmTramosPartido(t, p, tit, form, dur, filas);
+            TR.forEach(x => { const d = x.fin - x.ini; if (!(d > 0)) return; const EE = QM_ENLACES[x.form] || E;
+              const PU = (typeof ACTA_PUESTOS_FORM !== 'undefined' && ACTA_PUESTOS_FORM[x.form]) || [], puDe = h => PU[h] || ('h' + h);
+              x.ids.forEach((id, h) => { if (!id) return; mv[id] = (mv[id] || 0) + d; const q = pu[id] || (pu[id] = {}); q[puDe(h)] = (q[puDe(h)] || 0) + d; });
+              EE.forEach(([a, b]) => { const A = x.ids[a], B = x.ids[b]; if (A && B) { const k = qmClave(A, B); vec[k] = (vec[k] || 0) + d;
+                const z = vp[k] || (vp[k] = {}); (z[A] || (z[A] = {}))[puDe(a)] = 1; (z[B] || (z[B] = {}))[puDe(b)] = 1; } }); });
+            porVecinos[i] = vec; minsVec[i] = mv; minsPuesto[i] = pu; vecPuestos[i] = vp;
+          } catch (e) { console.error('Pegamento · vecinos:', e); }
+        }
+        porPartido[i] = mio; durs[i] = filas.length ? dur : 0;
+        const mm = {}; filas.forEach(f => { mm[String(f.j.id)] = (mm[String(f.j.id)] || 0) + (Number(f.mins) || 0); }); minsJug[i] = mm;
+        return res;
+      });
+      const R = { partidos, acum, porPartido, minsJug, porVecinos, minsVec, minsPuesto, vecPuestos };
+      qmCache.set(t, R);
+      return R;
+    }
+    // PEGAMENTO POR ZONA (visor v235 / app v233): cada pareja de vecinos se mide sobre los minutos que jugó cada uno EN LOS PUESTOS
+      //  donde fue vecino del otro (no sobre todo lo que jugó). Así quien reparte minutos entre dos puestos (lateral y MCD)
+      //  sale rodado con los compañeros de las dos zonas. Rodada: 65 % o más de los minutos del que menos jugó ahí (mínimo 140').
+      function pgParejas(R, desde, hasta) {
+        const vv = {}, mpu = {}, vp = {}, mv = {}; let nV = 0;
+        for (let k = desde; k < hasta; k++) {
+          if (!R.minsVec || !R.minsVec[k]) continue; nV++;
+          Object.entries(R.porVecinos[k] || {}).forEach(([c, m]) => { vv[c] = (vv[c] || 0) + m; });
+          Object.entries(R.minsVec[k] || {}).forEach(([id, m]) => { mv[id] = (mv[id] || 0) + m; });
+          Object.entries(R.minsPuesto[k] || {}).forEach(([id, o]) => { const q = mpu[id] || (mpu[id] = {}); Object.entries(o).forEach(([u, m]) => { q[u] = (q[u] || 0) + m; }); });
+          Object.entries(R.vecPuestos[k] || {}).forEach(([c, o]) => { const z = vp[c] || (vp[c] = {}); Object.entries(o).forEach(([id, us]) => { const w = z[id] || (z[id] = {}); Object.keys(us).forEach(u => { w[u] = 1; }); }); });
+        }
+        const socios = {}; Object.keys(mv).forEach(id => { socios[id] = []; });
+        Object.entries(vv).forEach(([c, m]) => {
+          const [a, b] = c.split('|'); if (!socios[a] || !socios[b]) return;
+          const zona = id => Object.keys((vp[c] || {})[id] || {}).reduce((s2, u) => s2 + ((mpu[id] || {})[u] || 0), 0);
+          const den = Math.max(QM_MIN_BASE, Math.min(zona(a), zona(b)));
+          if (m / den >= QM_RODADA / 10) { const r = Math.round(m), dd = Math.round(den); socios[a].push({ id: b, m: r, den: dd }); socios[b].push({ id: a, m: r, den: dd }); }
+        });
+        Object.values(socios).forEach(L => L.sort((x, y) => y.m - x.m));
+        return { socios, mv, nV };
+      }
+    function qmDe(t, p) { const R = qmTemporada(t); if (!R) return null; const i = (t.partidos || []).indexOf(p); return i >= 0 ? R.partidos[i] : null; }
+    // GRANDES: partido grande = contra uno de los GR_TOP rivales con más Elo el día del partido (sin contar al Hergar; Elo de antes de esa jornada).
+    //  Se compara el peso en el equipo de cada niño (frente a sus compañeros del mismo partido) en los grandes y en el resto.
+    //  En el visor solo salen quienes se crecen (positivo). Mínimo GR_MIN minutos en grandes y en el resto.
+    const GR_MIN = 70, GR_FIABLE = 4, GR_TOP = 4; // v223: los 4 rivales con más Elo
+    function grPartidosGrandes(t, liga) {
+      const out = new Map();
+      if (!t || !liga || !liga.equipos || !liga.partidos || typeof pronPreparar !== 'function') return out;
+      const D = pronPreparar(liga);
+      if (D.H < 0) return out;
+      const casa = eloCasaUsada(liga);
+      const jug = D.P.filter(p => p.jugado).sort((a, b) => a.jg - b.jg);
+      const elo = Array(D.NT).fill(ELO_BASE), antes = {};
+      jug.forEach(p => {
+        if (!antes[p.jg]) antes[p.jg] = elo.slice();
+        const we = 1 / (1 + Math.pow(10, -(elo[p.l] + casa - elo[p.v]) / 400));
+        const w = p.gl > p.gv ? 1 : p.gl === p.gv ? 0.5 : 0;
+        const gd = Math.abs(p.gl - p.gv), G = gd <= 1 ? 1 : gd === 2 ? 1.5 : (11 + gd) / 8;
+        const d = ELO_K * G * (w - we); elo[p.l] += d; elo[p.v] -= d;
+      });
+      const nGrandes = GR_TOP, usados = new Set(), vistas = {};
+      (t.partidos || []).forEach((p, i) => {
+        const rv = proRivalLiga(liga, p);
+        if (rv.i < 0 || rv.i === D.H) return;
+        let lp = null;
+        const id = p.contexto && p.contexto.ligaId;
+        if (id != null) lp = jug.find(x => x.id === id) || null;
+        if (!lp) {
+          const n = vistas[rv.i] = (vistas[rv.i] || 0) + 1;
+          lp = jug.filter(x => (x.l === D.H && x.v === rv.i) || (x.v === D.H && x.l === rv.i))[n - 1] || null;
+        }
+        if (!lp || usados.has(lp.id)) return;
+        usados.add(lp.id);
+        const E = antes[lp.jg]; if (!E) return;
+        const otros = E.map((v, k) => ({ v, k })).filter(x => x.k !== D.H).sort((a, b) => b.v - a.v);
+        const pos = otros.findIndex(x => x.k === rv.i);
+        if (pos >= 0 && pos < nGrandes && E[rv.i] > ELO_BASE + 0.5) out.set(i, { i, p, elo: Math.round(E[rv.i]), puesto: pos + 1, nombre: liga.equipos[rv.i].nombre });
+      });
+      return out;
+    }
+    function grandesTemporada(t, liga) {
+      const G = grPartidosGrandes(t, liga);
+      const pesos = pesoEquipoTemporada(t);
+      const jug = Object.values(pesos).map(r => {
+        let gs = 0, gm = 0, rs = 0, rm = 0, ng = 0;
+        r.partidos.forEach(x => { if (G.has(x.i)) { gs += x.dif * x.mins; gm += x.mins; ng++; } else { rs += x.dif * x.mins; rm += x.mins; } });
+        const g = gm ? gs / gm : null, re = rm ? rs / rm : null;
+        return { j: r.j, g, re, gm, rm, ng, dif: g != null && re != null ? g - re : null, ok: gm >= GR_MIN && rm >= GR_MIN };
+      });
+      return { grandes: [...G.values()].sort((a, b) => a.i - b.i), jug };
+    }
+    // ── v227 · LA IA SABE LA QUÍMICA, SI ES PARTIDO GRANDE Y EL BOX-TO-BOX (mismos cálculos que el visor) ──
+    const QM_RODADA = 6.5, QM_CASI_NUEVA = 2.5;
+    function iaRivalTop4(liga, rivalIdx) { // ¿el rival está entre los 4 de más Elo (sin contar al Hergar)?
+        const E = eloLiga(liga); if (!E || !E.jugados || rivalIdx == null || rivalIdx < 0) return null;
+        const otros = E.equipos.filter(x => !x.e.esHergar);
+        const pos = otros.findIndex(x => x.i === rivalIdx);
+        return pos >= 0 ? { grande: pos < GR_TOP && otros[pos].elo > ELO_BASE + 0.5, puesto: pos + 1 } : null;
+    }
+    function iaSeCrecen(t, liga) {
+        try { return grandesTemporada(t, liga).jug.filter(x => x.ok && x.dif != null && x.dif > 0.05).sort((a, b) => b.dif - a.dif).slice(0, 3).map(x => String(x.j.name || '').split(' ')[0]); } catch (e) { return []; }
+    }
+    function iaQuimicaPartido(t) {
+        let r = null;
+        if (partidoYaTransferido) { const ps = t.partidos || []; r = ps.length ? qmDe(t, ps[ps.length - 1]) : null; }
+        else if (pizarraLog.length && (t.partidos || []).length) {
+            const sel = document.getElementById('formationSelector');
+            const p0 = { fecha: '__actual__', rival: '__actual__', formacion: formacionInicialPartido || (sel && sel.value) || '4-2-3-1', titulares: (pizarraLog[0].ids || []).map(String),
+                pizarra: pizarraLog.map(x => ({ m: x.m, f: x.f, ids: x.ids.join(',') })), duracion: formatTime(getElapsedSeconds()) };
+            const t2 = Object.assign({}, t, { partidos: (t.partidos || []).concat([p0]) });
+            r = qmDe(t2, p0);
+        }
+        if (!r || r.q == null) return '';
+        const f1 = v => v.toFixed(1).replace('.', ',');
+        const et = r.q >= 8.5 ? 'muy rodado' : r.q >= 6.5 ? 'bastante rodado' : r.q >= 4.5 ? 'a medio rodar' : 'con muchas parejas nuevas';
+        const qs = (t.partidos || []).map(p => qmDe(t, p)).filter(x => x && x.q != null && x !== r).map(x => x.q);
+        const media = qs.length ? qs.reduce((a, b) => a + b, 0) / qs.length : null;
+        const nom = id => { const j = (t.jugadores || {})[id] || playersData[id]; return j ? String(j.name || '').split(' ')[0] : '¿?'; };
+        const nuevas = r.tramos[0].enlaces.filter(e => e.v < QM_CASI_NUEVA).slice(0, 4).map(e => `${nom(e.a)}-${nom(e.b)} (${e.pa} y ${e.pb})`);
+        const T = r.tramos, fin = T[T.length - 1];
+        return `QUÍMICA DEL ONCE (cuánto habían jugado juntas las parejas de vecinos en los 4 partidos anteriores; 0-10): ${f1(r.q)}, once ${et}${media != null ? ` (media de la temporada ${f1(media)})` : ''}.`
+            + (nuevas.length ? ` Parejas casi nuevas en el once inicial: ${nuevas.join(', ')}.` : ' Todas las parejas del once inicial venían rodadas.')
+            + (T.length > 1 ? ` Once inicial ${f1(T[0].q)}; tras los cambios y recolocaciones, ${f1(fin.q)}.` : '');
+    }
+    function iaExtrasPartido() {
+        const L = [];
+        let t = null; try { t = getTemporada(); } catch (e) {}
+        if (!t) return '';
+        try { const q = iaQuimicaPartido(t); if (q) L.push(q); } catch (e) { console.error('IA química:', e); }
+        try {
+            const liga = getLiga();
+            if (liga && liga.equipos) {
+                const rv = proRivalLiga(liga, { rival: rivalName, contexto: {} });
+                const G = iaRivalTop4(liga, rv.i);
+                if (G && G.grande) { const c = iaSeCrecen(t, liga); L.push(`PARTIDO GRANDE: el rival es el ${G.puesto}.º de los rivales por Elo (uno de los 4 más fuertes).${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
+            }
+        } catch (e) { console.error('IA partido grande:', e); }
+        try {
+            const bb = Object.values(playersData).filter(p => p && p.convocado).map(p => ({ p, b: b2bPuntosDirecto(p) })).filter(x => x.b.at >= B2B_N && x.b.de >= B2B_N)
+                .map(x => `${String(x.p.name || '').split(' ')[0]}${x.b.at >= B2B_T && x.b.de >= B2B_T ? ' (BOX-TO-BOX TOTAL)' : ''} (ataque ${x.b.at}, defensa ${x.b.de})`);
+            if (bb.length) L.push(`BOX-TO-BOX (4 o más puntos de ataque y 4 o más de defensa en el partido: llegó a todo, arriba y abajo): ${bb.join(', ')}. Escríbelo tal cual, «box-to-box», sin traducirlo (nada de «de ida a ida» ni similares), y di en pocas palabras lo que significa: un partido muy completo, con 4 o más puntos atacando y 4 o más defendiendo.`);
+        } catch (e) { console.error('IA box-to-box:', e); }
+        return L.length ? L.join('\n') + '\n' : '';
+    }
+    function iaExtrasPrevia(liga, riv) {
+        const L = [];
+        let t = null; try { t = getTemporada(); } catch (e) {}
+        try {
+            const G = iaRivalTop4(liga, riv);
+            if (G && G.grande) { const c = t ? iaSeCrecen(t, liga) : []; L.push(`- Es un partido grande: el rival es uno de los 4 equipos con más Elo.${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
+        } catch (e) {}
+        try { // v228 · el box-to-box solo si alguien lo consiguió en el partido anterior
+            const ps = (t && t.partidos) || [], ult = ps[ps.length - 1];
+            if (ult) {
+                const L2 = [];
+                Object.values(t.jugadores || {}).forEach(j => {
+                    const h = (j.historial || []).find(x => x.fecha === ult.fecha && x.rival === ult.rival); if (!h || !h.acc) return;
+                    const a = h.acc, g = h.goles || 0;
+                    const at = 2 * g + 2 * (h.asistencias || 0) + (a.pc || 0) + (a.pa || 0) + (a.reg || 0) + Math.max(0, (a.dp || 0) - g), de = (a.def || 0) + (a.defC || 0);
+                    if (at >= B2B_N && de >= B2B_N) L2.push(`${String(j.name || '').split(' ')[0]}${at >= B2B_T && de >= B2B_T ? ' (box-to-box total)' : ''}`);
+                });
+                if (L2.length) L.push(`- En el partido anterior (contra ${ult.rival}) hizo un partido box-to-box (llegó a todo, en ataque y en defensa): ${L2.join(', ')}. Escríbelo tal cual, «box-to-box», sin traducirlo (nada de «de ida a ida» ni similares), y di en pocas palabras lo que significa: un partido muy completo, con 4 o más puntos atacando y 4 o más defendiendo.`);
+            }
+        } catch (e) {}
+        return L.join('\n');
+    }
+    // ── v225 · 📦 BOX-TO-BOX EN DIRECTO ──
+    // Ataque: gol 2 · asistencia 2 · pase clave 1 · pase al área 1 · regate 1 · tiro a puerta 1 (sin contar los que son gol).
+    // Defensa: acción defensiva 1 · defensiva clave 2 (accionesDef ya cuenta las clave). 4 y 4 = 📦; 6 y 6 = 📦📦 total.
+    // Al guardar el estado se mira quién cruza el umbral y en qué minuto (si se deshace la acción, se quita). Sale en el minuto a minuto.
+    const B2B_N = 4, B2B_T = 6;
+    function b2bPuntosDirecto(p) {
+        const g = p.goles || 0;
+        return { at: 2 * g + 2 * (p.asistencias || 0) + (p.pasesClave || 0) + (p.pasesArea || 0) + (p.regates || 0) + Math.max(0, (p.disparosPuerta || 0) - g), de: (p.accionesDef || 0) + (p.accionesDefClave || 0) };
+    }
+    function b2bRevisarDirecto() {
+        if (!partidoEmpezado && !matchFinished) return;
+        const min = matchFinished ? 'fin' : Math.floor(getElapsedSeconds() / 60);
+        Object.values(playersData).forEach(p => {
+            if (!p || !p.convocado) return;
+            const b = b2bPuntosDirecto(p);
+            if (b.at >= B2B_N && b.de >= B2B_N) { if (p.b2bN == null) p.b2bN = min; } else delete p.b2bN;
+            if (b.at >= B2B_T && b.de >= B2B_T) { if (p.b2bT == null) p.b2bT = min; } else delete p.b2bT;
+        });
+    }
+    const B2B_FRASES = {
+        n: ['¡Partido box-to-box de {J}!', '¡{J} llega a todo!', '¡{J}, de área a área!', '¡Box-to-box de {J}!'],
+        nx: ['Llega a todo, arriba y abajo.', 'Ataca y defiende sin parar.', 'Está en las dos áreas.', 'Arriba ayuda y abajo corta.'],
+        t: ['¡Box-to-box total de {J}!', '¡{J} firma un box-to-box total!'],
+        tx: ['Ataca y defiende como nadie: 6 y 6.', 'Un partidazo en las dos áreas.', 'Imposible estar en más sitios.']
+    };
+    function b2bNarracion(dur) {
+        const out = [];
+        Object.values(playersData).forEach(p => {
+            if (!p) return;
+            const J = String(p.name || '').split(' ')[0];
+            [['b2bN', 'b2b', 'n', 'nx', '📦'], ['b2bT', 'b2bT', 't', 'tx', '📦📦']].forEach(([campo, k, fh, fx, ic]) => {
+                if (p[campo] == null) return;
+                if (campo === 'b2bN' && p.b2bT != null && p.b2bT === p.b2bN) return; // si llega a las dos a la vez, solo el total
+                const m = p[campo] === 'fin' ? dur : Number(p[campo]) || 0;
+                const hsh = narrHash(J + k), h = B2B_FRASES[fh][hsh % B2B_FRASES[fh].length].replace('{J}', J), x = B2B_FRASES[fx][hsh % B2B_FRASES[fx].length];
+                out.push({ m, ic, k, j: J, h, x });
+            });
+        });
+        return out;
+    }
     // ── v160 · 📊 MEDIAS POR PARTIDO (misma función en la app y en el visor) ──
     // Cómo es un partido medio del Hergar, con filtro Temporada / Últimos 5 / Casa / Fuera.
     // Cada dato sale solo de los partidos que lo tienen: los cargados a mano solo tienen goles,
@@ -4493,13 +5106,13 @@
         const tnP = p => Math.max(mdNum(p.tirosNuestrosPuerta), mdNum(p.golesLocal));
         const trP = p => Math.max(mdNum(p.tirosRivalesPuerta), mdNum(p.golesRival));
         const tn = p => tnP(p) + mdNum(p.tirosNuestrosFuera), tr = p => trP(p) + mdNum(p.tirosRivalesFuera);
-        const conFj = live.filter(p => p.fuerasJuegoNuestros != null || p.fuerasJuegoRival != null);
+        const conFj = live.filter(p => (p.fuerasJuegoNuestros != null || p.fuerasJuegoRival != null) && !sinApuntar(p, 'fj')); // v236
+        const conFc = live.filter(p => !sinApuntar(p, 'fc')); // v236: sin los partidos del delegado que no las apuntaban
         const filas = live.length ? [
             ['Disparos', media(live, tn), media(live, tr), live.length],
             ['A puerta', media(live, tnP), media(live, trP), live.length],
-            ['Córners', media(live, p => mdNum(p.cornersFavor)), media(live, p => mdNum(p.cornersContra)), live.length],
-            ['Faltas cometidas', media(live, p => mdNum(p.faltasContra)), media(live, p => mdNum(p.faltasFavor)), live.length]
-        ] : [];
+            ['Córners', media(live, p => mdNum(p.cornersFavor)), media(live, p => mdNum(p.cornersContra)), live.length]
+        ].concat(conFc.length ? [['Faltas cometidas', media(conFc, p => mdNum(p.faltasContra)), media(conFc, p => mdNum(p.faltasFavor)), conFc.length]] : []) : [];
         if (conFj.length) filas.push(['Fueras de juego', media(conFj, p => mdNum(p.fuerasJuegoNuestros)), media(conFj, p => mdNum(p.fuerasJuegoRival)), conFj.length]);
         // tarjetas del Hergar: de los partidos con el detalle de acciones de cada niño
         const js = Object.values((t && t.jugadores) || {});
@@ -4509,6 +5122,9 @@
             js.forEach(j => { const h = ptsHistDe(j, p); if (h && h.acc) { hay = true; n += mdNum(h.acc.am) + mdNum(h.acc.ro); } });
             if (hay) { conTarj++; tarj += n; }
         });
+        { const conTR = S.filter(p => trLista(p) && trNuestras(t, p)); // v220 · tarjetas del rival
+          if (conTR.length) filas.push(['Tarjetas', media(conTR, p => { const x = trNuestras(t, p); return x.am + x.ro; }), media(conTR, p => { const x = trCuenta(p); return x.am + x.ro; }), conTR.length]); }
+        const sup = trTemporada(S); // v220
         // indicadores
         const sTn = sum(live, tn), sTr = sum(live, tr), sTrP = sum(live, trP);
         const sGl = sum(live, p => mdNum(p.golesLocal)), sGr = sum(live, p => mdNum(p.golesRival));
@@ -4531,7 +5147,7 @@
                 cf: (x, a) => a ? x.cf : x.cornersFavor };
             partes = { n: conP.length, filas: [['Goles a favor', 'gl'], ['Goles en contra', 'gr'], ['Disparos Hergar', 'tn'], ['Disparos rival', 'tr'], ['Córners a favor', 'cf']].map(([l, k]) => [l, m1(G[k]), Math.max(0, m2(G[k]))]) };
         }
-        return { pj, live: live.length, gf, gc, pts, filas, tarj: conTarj ? tarj / conTarj : null, conTarj, cuota, acierto, paradas, imp, nImp: impPart.length, partes };
+        return { pj, live: live.length, gf, gc, pts, filas, sup, tarj: conTarj ? tarj / conTarj : null, conTarj, cuota, acierto, paradas, imp, nImp: impPart.length, partes };
     }
     function mdFilaHTML(label, h, r, n, nLive) {
         const max = Math.max(h || 0, r || 0, 0.01);
@@ -4563,6 +5179,7 @@
             h += `<div style="font-size:10px; color:#64748b; text-align:center; margin-bottom:2px;">${mdNota(M.live)} con estadísticas</div>`;
             h += M.filas.map(([l, a, b, n]) => mdFilaHTML(l, a, b, n, M.live)).join('');
             if (M.tarj != null) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px;">🟨🟥 <b>${mdFmt(M.tarj)}</b> tarjetas del Hergar por partido <span style="color:#64748b;">(${mdNota(M.conTarj)})</span></div>`;
+            if (M.sup && (M.sup.mas || M.sup.menos)) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px; line-height:1.55;">${M.sup.mas ? `💪 <b>${Math.round(M.sup.mas)}'</b> con uno más en la temporada · goles en ese rato <b>${M.sup.gMas[0]}-${M.sup.gMas[1]}</b>` : ''}${M.sup.mas && M.sup.menos ? '<br>' : ''}${M.sup.menos ? `🛡️ <b>${Math.round(M.sup.menos)}'</b> con uno menos · goles en ese rato <b>${M.sup.gMenos[0]}-${M.sup.gMenos[1]}</b>` : ''}</div>`; // v220
         } else {
             h += `<div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Son partidos cargados a mano: no tienen tiros, córners ni faltas apuntados.</div>`;
         }
@@ -4646,6 +5263,49 @@
         });
         return { am, ro };
     }
+    // ── v220 · TARJETAS DEL RIVAL y SUPERIORIDAD NUMÉRICA (misma función en la app y en el visor) ──
+    // p.tarjetasRival = [{ min, tipo: 'A' | 'R' }] (una segunda amarilla del rival se apunta como roja).
+    // Superioridad: con el minuto de las rojas (del rival y nuestras, del acta) se sabe cuánto se jugó con uno más / uno menos.
+    function trLista(p) { return Array.isArray(p && p.tarjetasRival) ? p.tarjetasRival : null; }
+    function trCuenta(p) { const L = trLista(p); return L ? { am: L.filter(x => x && x.tipo === 'A').length, ro: L.filter(x => x && x.tipo === 'R').length } : null; }
+    function trNuestras(t, p) {
+        let am = 0, ro = 0, hay = false;
+        Object.values((t && t.jugadores) || {}).forEach(j => { const h = (j.historial || []).find(x => x.fecha === p.fecha && x.rival === p.rival); if (h && h.acc) { hay = true; am += Number(h.acc.am) || 0; ro += h.acc.ro ? 1 : 0; } });
+        return hay ? { am, ro } : null;
+    }
+    function trSuperioridad(p) {
+        const dur = parseInt(String((p && p.duracion) || ''), 10) || 70;
+        const exp = [];
+        (trLista(p) || []).forEach(x => { if (x && x.tipo === 'R' && x.min != null && x.min !== '') exp.push({ min: Number(x.min), d: 1 }); });
+        const A = p && p.acta && Array.isArray(p.acta.tarjetas) ? p.acta.tarjetas : [];
+        A.forEach(x => { if (x && !x.rival && (x.tipo === 'R' || x.tipo === 'AA') && x.min != null) exp.push({ min: Number(x.min), d: -1 }); });
+        if (!exp.length) return null;
+        exp.sort((a, b) => a.min - b.min);
+        const estadoEn = (m) => exp.reduce((s, e) => s + (e.min < m ? e.d : 0), 0);
+        const r = { mas: 0, menos: 0, gMas: [0, 0], gMenos: [0, 0], desdeMas: null, desdeMenos: null };
+        let dif = 0, desde = 0;
+        const tramo = (a, b) => { if (b <= a) return; if (dif > 0) r.mas += b - a; else if (dif < 0) r.menos += b - a; };
+        exp.forEach(e => { tramo(desde, e.min); dif += e.d; desde = e.min; if (e.d > 0 && r.desdeMas == null) r.desdeMas = e.min; if (e.d < 0 && r.desdeMenos == null) r.desdeMenos = e.min; });
+        tramo(desde, Math.max(desde, dur));
+        (Array.isArray(p.goles) ? p.goles : []).forEach(g => {
+            const m = g && (g.min != null ? g.min : g.minuto); if (m == null) return;
+            const d = estadoEn(Number(m)), k = g.equipo === 'rival' ? 1 : 0;
+            if (d > 0) r.gMas[k]++; else if (d < 0) r.gMenos[k]++;
+        });
+        return r;
+    }
+    function trSuperioridadHTML(p) {
+        const s = trSuperioridad(p); if (!s || (!s.mas && !s.menos)) return '';
+        const L = [];
+        if (s.mas) L.push(`💪 <b>${Math.round(s.mas)}'</b> con uno más (desde el ${s.desdeMas}') · en ese rato, <b>${s.gMas[0]}-${s.gMas[1]}</b>`);
+        if (s.menos) L.push(`🛡️ <b>${Math.round(s.menos)}'</b> con uno menos (desde el ${s.desdeMenos}') · en ese rato, <b>${s.gMenos[0]}-${s.gMenos[1]}</b>`);
+        return `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px; line-height:1.55;">${L.join('<br>')}</div>`;
+    }
+    function trTemporada(ps) {
+        const out = { mas: 0, menos: 0, gMas: [0, 0], gMenos: [0, 0], n: 0 };
+        (ps || []).forEach(p => { const s = trSuperioridad(p); if (!s) return; out.n++; out.mas += s.mas; out.menos += s.menos; out.gMas[0] += s.gMas[0]; out.gMas[1] += s.gMas[1]; out.gMenos[0] += s.gMenos[0]; out.gMenos[1] += s.gMenos[1]; });
+        return out;
+    }
     function estadisticasPartidoHTML(t, p, snCtx, plegado) {
         if (!p) return '';
         const n = v => Number(v) || 0;
@@ -4662,7 +5322,8 @@
                 ['Córners', n(p.cornersFavor), n(p.cornersContra)],
                 ['Faltas cometidas', n(p.faltasContra), n(p.faltasFavor)],
                 ['Fueras de juego', n(p.fuerasJuegoNuestros), n(p.fuerasJuegoRival)]
-            ].filter(([, a, b]) => a + b > 0);
+            ].concat((() => { const C = trCuenta(p), Nn = C ? trNuestras(t, p) : null; return C && Nn ? [['Amarillas', Nn.am, C.am], ['Rojas', Nn.ro, C.ro]] : []; })()) // v220
+            .filter(([, a, b]) => a + b > 0);
             h += `<div style="display:flex; justify-content:space-between; font-size:10.5px; font-weight:800; letter-spacing:.6px; margin-bottom:8px;"><span style="color:#ff5577;">HERGAR</span><span style="color:#94a3b8;">${momEsc(String(p.rival || 'RIVAL').toUpperCase())}</span></div>`;
             h += filas.map(([l, a, b]) => epFila(l, a, b)).join('');
             const acH = tn ? Math.round(gl / tn * 100) : null, acR = tr ? Math.round(gr / tr * 100) : null;
@@ -4696,6 +5357,7 @@
         // Tarjetas
         const T = epTarjetas(t, p);
         if (T.am.length || T.ro.length) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:10px; line-height:1.5;">${T.am.length ? `🟨 ${T.am.join(', ')}` : ''}${T.am.length && T.ro.length ? ' · ' : ''}${T.ro.length ? `🟥 ${T.ro.join(', ')}` : ''}</div>`;
+    { const C = trCuenta(p); if (C && (C.am || C.ro)) h += `<div style="font-size:11.5px; color:#cbd5e1; margin-top:6px;">Rival: ${C.am ? '🟨 ×' + C.am : ''}${C.am && C.ro ? ' · ' : ''}${C.ro ? '🟥 ×' + C.ro : ''}</div>`; h += trSuperioridadHTML(p); } // v220
         const cuerpo = `<div style="padding-top:8px;">${h}</div>`;
         if (!plegado) return `<div style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.06);"><div style="font-size:11px; font-weight:800; color:#f5a623; letter-spacing:.4px;">📊 ESTADÍSTICAS DEL PARTIDO</div>${cuerpo}</div>`;
         return `<details style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);"><summary style="color:#2ed573; font-size:11px; font-weight:800; cursor:pointer;">📊 Estadísticas del partido</summary>${cuerpo}</details>`;
@@ -5739,7 +6401,9 @@
             tarjetas = [];
             jugadores.forEach(x => { for (let k = 0; k < x.am; k++) tarjetas.push({ min: null, nombre: x.nombre, dorsal: x.dorsal, tipo: 'A' }); if (x.ro) tarjetas.push({ min: null, nombre: x.nombre, dorsal: x.dorsal, tipo: 'R' }); });
         }
-        // tiros y cuota
+            (trLista(p) || []).forEach(x => { if (x) tarjetas.push({ min: x.min != null && x.min !== '' ? Number(x.min) : null, nombre: 'Rival (' + (p.rival || '') + ')', dorsal: null, tipo: x.tipo === 'R' ? 'R' : 'A', rival: true }); }); // v220
+    tarjetas.sort((a, b) => (a.min == null ? 999 : a.min) - (b.min == null ? 999 : b.min));
+    // tiros y cuota
         const tN = (Number(p.tirosNuestrosPuerta) || 0) + (Number(p.tirosNuestrosFuera) || 0), tR = (Number(p.tirosRivalesPuerta) || 0) + (Number(p.tirosRivalesFuera) || 0);
         let cuota = null;
         if (p.tirosNuestrosPuerta != null && tN + tR > 0) {
@@ -5766,7 +6430,7 @@
                     n: otros.length,
                     gl: med(q => nn(q.golesLocal)), gr: med(q => nn(q.golesRival)),
                     tnP: med(q => nn(q.tirosNuestrosPuerta)), tnF: med(q => nn(q.tirosNuestrosFuera)), trP: med(q => nn(q.tirosRivalesPuerta)), trF: med(q => nn(q.tirosRivalesFuera)),
-                    cf: med(q => nn(q.cornersFavor)), cc: med(q => nn(q.cornersContra)), ff: med(q => nn(q.faltasFavor)), fc: med(q => nn(q.faltasContra)),
+                    cf: med(q => nn(q.cornersFavor)), cc: med(q => nn(q.cornersContra)), ff: med(q => nn(q.faltasFavor)), fc: med(q => sinApuntar(q, 'fc') ? null : nn(q.faltasContra)), // v236
                     pc: med(q => q.pasesClaveTotal != null ? nn(q.pasesClaveTotal) : null), pa: med(q => q.pasesAreaTotal != null ? nn(q.pasesAreaTotal) : null),
                     def: med(q => q.accionesDefTotal != null ? nn(q.accionesDefTotal) : null), par: med(q => sumPar(q))
                 };
@@ -6581,6 +7245,11 @@
         const c = Object.assign({}, t); delete c.convocatorias;
         if (Array.isArray(c.partidos)) c.partidos = c.partidos.map(p => { if (!p || !p.dlg) return p; const q = Object.assign({}, p); delete q.dlg; return q; }); // v190: los apuntes del delegado no viajan al visor
         c.actaVisor = (typeof actaVisorOn === 'function') ? actaVisorOn() : false; // v139
+        try { // v224: el visor recibe las sinergias recalculadas (mismos campos: impN/(segsN/60)*70 = valor)
+            const S = sinergiasV221(t), o = {};
+            S.pares.forEach(x => { o[x.clave] = { segs: Math.round(x.min * 60), segsN: Math.round(x.min * 60), impN: x.val * x.min / 70, impactoAcum: 0, pj: x.pj, juntos: x.juntos, media: x.esperado, tipo: x.tipo }; }); // el visor enseña la diferencia con la media de su tipo
+            c.sinergias = o; c.sinergiasInfo = { usados: S.usados, total: S.total, version: 224 };
+        } catch (e) { console.error('sinergias visor v221', e); }
         c.resumenDatos = (typeof resumenDatosOn === 'function') ? resumenDatosOn() : true; // v203
         // v119 · solo viaja el vídeo si se pueden ver vídeos, el gol no está oculto y el goleador tiene permiso
         const global = (typeof videosGlobalOn === 'function') ? videosGlobalOn() : true;
@@ -7739,6 +8408,7 @@
             narracion: (() => { try { return narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); return []; } })(), // v193
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
             faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, // v117
+            tarjetasRival: tarjetasRival.slice(), // v220
             palosNuestros, palosRival, // v205
             analisisIA: analisisIACompleto, resumenIA: resumenIACompleto, notasIA: MOSTRAR_NOTAS_IA ? notasIAPartido : {}
         };
@@ -7810,7 +8480,7 @@
         // La plantilla completa (incluye a quien aún no ha jugado minutos) va aparte del resto
         // de "temporada": solo se calcula al publicar, no se guarda en el JSON de la temporada.
         const plantilla = Object.values(playersData).map(p => ({ id: p.id, name: p.name, dorsal: p.dorsal, estado: estadoDe(p) }));
-        const payload = { secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), temporada: temporadaPublica(t), reglas: REGLAS_IMPACTO, plantilla }; // v67: las reglas viajan con la temporada
+        const payload = { secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), temporada: temporadaPublica(t), premios: (typeof window.premiosPublicados === 'function' ? window.premiosPublicados() : null), reglas: Object.assign({}, REGLAS_IMPACTO, { minMinutosSinergia: SIN_MIN_JUNTOS }), plantilla }; // v67: las reglas viajan con la temporada
         return window.__hergarFirebaseSet('temporada', payload);
     }
 
@@ -8006,6 +8676,19 @@
     let actaDescanso = null; // v139: cómo iba el partido al descanso (para el acta por partes)
     let fuerasJuegoNuestros = 0; // v117
     let fuerasJuegoRival = 0;    // v117
+    let tarjetasRival = [];      // v220 · [{ min, tipo: 'A' | 'R' }]
+    // v226 · PIZARRA DE CADA MOMENTO: cada vez que cambia el once en el campo (cambios, recolocaciones o formación) se apunta
+    // la pizarra entera con su minuto. Se guarda con el partido (partido.pizarra) y el visor la usa para la química por tramos.
+    let pizarraLog = [];         // [{ m, f, ids: [ids en el orden de la pizarra] }]
+    function pizarraRegistrar() {
+        if (!partidoEmpezado || matchFinished) return;
+        const sel = document.getElementById('formationSelector');
+        const m = Math.floor(getElapsedSeconds() / 60), f = (sel && sel.value) || '4-2-3-1', ids = onFieldIds.map(String);
+        const ult = pizarraLog[pizarraLog.length - 1];
+        if (ult && ult.f === f && ult.ids.join(',') === ids.join(',')) return;
+        if (ult && ult.m === m && pizarraLog.length > 1) { pizarraLog[pizarraLog.length - 1] = { m, f, ids }; return; } // varios toques en el mismo minuto: vale el último
+        pizarraLog.push({ m, f, ids });
+    }
     let palosNuestros = 0, palosRival = 0; // v205: tiros al palo (también cuentan como tiros a puerta)
     let zonasRivales = {};
     let zonasEquipo = {};
@@ -8129,6 +8812,8 @@
 
     function saveState() {
         if (reproduciendoPrevio) return; // v129: mientras se reconstruye el tramo previo no se guarda ni se publica nada
+        try { b2bRevisarDirecto(); } catch (e) { console.error('Box-to-box:', e); } // v225
+        try { pizarraRegistrar(); } catch (e) { console.error('Pizarra:', e); } // v226
         try { sincronizarRolesDesdePizarra(); } catch (e) {} // v93
         // Nunca sobreescribir jugadores si playersData está vacío
         if (Object.keys(playersData).length > 0) {
@@ -8149,7 +8834,7 @@
             benchSittingTime,
             substitutionTimeline, rivalName,
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, pizarraLog, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             analisisIACompleto, resumenIACompleto, notasIAPartido,
             tiroGolRival: true // v110
         }));
@@ -8216,6 +8901,8 @@
             cornersContra = state.cornersContra || 0;
             fuerasJuegoNuestros = state.fuerasJuegoNuestros || 0; // v117
             fuerasJuegoRival = state.fuerasJuegoRival || 0;       // v117
+            tarjetasRival = Array.isArray(state.tarjetasRival) ? state.tarjetasRival : []; trPintarBadges(); // v220
+            pizarraLog = Array.isArray(state.pizarraLog) ? state.pizarraLog : []; // v226
             palosNuestros = state.palosNuestros || 0; palosRival = state.palosRival || 0; // v205
             { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
             tirosTrasCambio = state.tirosTrasCambio || { n: 0, r: 0 }; // v137
@@ -9769,6 +10456,35 @@
         document.getElementById("lsb_cornersC").innerText = cornersContra;
     };
 
+    // v220 · TARJETAS DEL RIVAL: un toque, con el minuto. No cambian el impacto de nadie.
+    // Una segunda amarilla del mismo jugador rival se apunta como roja (lo que importa es que se quedan con uno menos).
+    function trPintarBadges() {
+        const a = document.getElementById('lsb_taR'), r = document.getElementById('lsb_trR');
+        if (a) a.innerText = tarjetasRival.filter(x => x.tipo === 'A').length;
+        if (r) r.innerText = tarjetasRival.filter(x => x.tipo === 'R').length;
+    }
+    function registrarTarjetaRival(tipo) {
+        if (!partidoEmpezado || matchFinished) return false;
+        logSnapshot();
+        const min = Math.floor(getElapsedSeconds() / 60);
+        tarjetasRival.push({ min, tipo });
+        substitutionTimeline.push(tipo === 'R' ? `[${min}'] 🟥 Roja al rival` : `[${min}'] 🟨 Amarilla al rival`);
+        trPintarBadges();
+        saveState();
+        actualizarLiveMatchStatsBar();
+        return true;
+    }
+    window.registrarTarjetaRival = registrarTarjetaRival;
+    document.getElementById("amarillaRivalBtn").onclick = function() {
+        if (!partidoEmpezado || matchFinished) { alert('Las tarjetas se apuntan con el partido en marcha.'); return; }
+        registrarTarjetaRival('A');
+    };
+    document.getElementById("rojaRivalBtn").onclick = function() {
+        if (!partidoEmpezado || matchFinished) { alert('Las tarjetas se apuntan con el partido en marcha.'); return; }
+        if (!confirm('🟥 ¿Roja al rival?\n\nSi es su segunda amarilla, apúntala también así: se quedan con uno menos desde este minuto.')) return;
+        registrarTarjetaRival('R');
+    };
+
     // v117 · FUERA DE JUEGO DEL RIVAL: un toque, sin jugador y sin puntos
     document.getElementById("fueraJuegoRivalBtn").onclick = function() {
         if (matchFinished) return;
@@ -10533,6 +11249,7 @@ REGLAS
 - Básate solo en los datos de abajo. Describe acciones que estén en los números: no inventes situaciones (rivales encima, combinaciones entre jugadores concretos), ni actitudes que no se pueden medir (concentración, intensidad, ganas), ni hables de la temporada o de partidos anteriores salvo con los datos de LIGA y TEMPORADA. No afirmes nada táctico que los datos no muestren (por ejemplo, "presionamos alto" o "dominamos por banda").
 - Usa los datos de TEMPORADA para comentar en 1-3 frases algo de algún jugador cuando sea relevante: su primer gol, una racha goleadora, que sea el máximo goleador o asistente, que hoy rinda por encima o por debajo de su media (/70), su puntería a lo largo de la temporada... Siempre con los números reales; si no hay nada destacable, no lo fuerces.
 - Usa los datos de LIGA para situar al rival (su posición, su racha, el enfrentamiento anterior) y dar su valor al resultado.
+- Si vienen QUÍMICA DEL ONCE, PARTIDO GRANDE o BOX-TO-BOX, úsalos en una o dos frases cuando aporten: que el once venía rodado o con parejas nuevas (por rotaciones o bajas), el valor de rendir en un partido grande o quién hizo un partido box-to-box (siempre en positivo; escribe «box-to-box» tal cual, sin traducirlo). Una química baja nunca es culpa de ningún niño: dilo en colectivo.
 - La hora del partido es la del CONTEXTO: si dices mañana o tarde, que cuadre (antes de las 14:00 es por la mañana).
 - Estas reglas son para ti: no las expliques ni las menciones en el informe (por ejemplo, no expliques que un sustituido no puede volver a entrar, aunque debes tenerlo en cuenta en las rotaciones). No atribuyas intenciones al cuerpo técnico.
 - No termines con lemas, ánimos ni emojis de colores: acaba con la última idea útil.
@@ -10552,10 +11269,10 @@ ${ctxNotas ? `NOTAS DE QUIEN REGISTRA EL PARTIDO: ${ctxNotas}\n` : ''}GOLES: ${g
 TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta${palosNuestros ? `, de ellos ${palosNuestros} al palo` : ''}, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta${palosRival ? `, de ellos ${palosRival} al palo` : ''}, ${tirosRivalesFuera} sin peligro)
 FALTAS/CÓRNERS: F.Favor ${faltasFavor} F.Contra ${faltasContra} | C.Favor ${cornersFavor} C.Contra ${cornersContra}
 FUERAS DE JUEGO: Hergar ${fuerasJuegoNuestros} | Rival ${fuerasJuegoRival} (los del rival suelen indicar que la línea defensiva sube bien)
-TOP SINERGIAS: ${topSinergias || 'Sin datos'}
+${tarjetasRival.length ? `TARJETAS DEL RIVAL: ${tarjetasRival.map(x => (x.tipo === 'R' ? 'roja' : 'amarilla') + ' ' + x.min + "'").join(', ')}${tarjetasRival.some(x => x.tipo === 'R') ? ' (con una roja, el rival juega con uno menos desde ese minuto)' : ''}\n` : ''}TOP SINERGIAS: ${topSinergias || 'Sin datos'}
 CAMBIOS (minuto del reloj del partido; la 2.ª parte empieza en el 35'): ${(() => { try { const cs = substitutionTimeline.filter(x => typeof x === 'string' && x.includes('🔄 Sale')).map(x => { const m = parseInt((/^\[(\d+)'\]/.exec(x) || [])[1], 10); const parte = isNaN(m) ? '' : (m < 35 ? ` (1.ª parte, min ${m})` : m === 35 ? ' (en el descanso)' : ` (2.ª parte, ${m - 35} min después de empezar)`); return x.replace(/^\[\d+'\]\s*🔄\s*/, `${isNaN(m) ? '' : m + "' "}`) + parte; }); return cs.length ? cs.join(' | ') : 'Ninguno'; } catch (e) { return 'Sin datos'; } })()}
 CRONOLOGÍA: ${priorizarCronologia(substitutionTimeline, 15).join(' | ')}
-
+${(() => { try { return iaExtrasPartido(); } catch (e) { return ''; } })()}
 ESTADÍSTICAS INDIVIDUALES DE ESTE PARTIDO (ordenadas por impacto /70):
 ${jugadoresData}
 ${temporadaTxt ? `
@@ -11418,6 +12135,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             case 'tpR': pendingAction = 'TIRO_RIVAL_PUERTA'; registrarAccionRival(); break;
             case 'ff': registrarFaltaFavor(j != null && playersData[j] ? j : null); break; // v205: con el niño que la recibió
             case 'fc': document.getElementById('faltaContraBtn').onclick(); break;
+            case 'taR': tarjetasRival.push({ min: Math.floor(getElapsedSeconds() / 60), tipo: 'A' }); substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🟨 Amarilla al rival`); trPintarBadges(); break; // v220
+            case 'trR': tarjetasRival.push({ min: Math.floor(getElapsedSeconds() / 60), tipo: 'R' }); substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🟥 Roja al rival`); trPintarBadges(); break; // v220
             case 'fjR': fuerasJuegoRival++; substitutionTimeline.push(`[${Math.floor(getElapsedSeconds() / 60)}'] 🚩 Fuera de juego del rival`); break;
             case 'sub': selectedPlayerId = Number(e.s); handleBenchPlayerClick(Number(e.e)); break;
             case 'swap': selectedPlayerId = null; handleFieldPlayerClick(j); handleFieldPlayerClick(Number(e.x)); break;
@@ -11476,7 +12195,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         return {
             v: 1, ev, fin1: st.fin1 != null ? Number(st.fin1) : null, fin2: st.fin2 != null ? Number(st.fin2) : null, parte: Number(st.parte) || 1, acum: Number(st.acum) || 0,
             onceInicial: arr(st.onceInicial).map(Number), formInicial: st.formInicial || (d && d.formacion) || null,
-            conv: arr(conv).map(p => Number(p.id)), horaInicio: st.horaInicio || null, fecha: st.fecha || null, rival: (d && d.rival) || null
+            conv: arr(conv).map(p => Number(p.id)), horaInicio: st.horaInicio || null, fecha: st.fecha || null, rival: (d && d.rival) || null,
+            fjfc: !!st.fjfc // v236: el delegado ya apunta fueras de juego y faltas en contra
         };
     }
     async function cargarPartidoDelegado() {
@@ -11838,6 +12558,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const d = (Number(yP[c]) || 0) - (Number(xP[c]) || 0);
             if (d) Pn[c] = Math.max(0, (Number(Pn[c]) || 0) + d);
         });
+        if (Array.isArray(yP.tarjetasRival)) Pn.tarjetasRival = yP.tarjetasRival.slice(); // v220
         if (yP.tirosTrasCambio && xP.tirosTrasCambio) {
             Pn.tirosTrasCambio = Pn.tirosTrasCambio || { n: 0, r: 0 };
             ['n', 'r'].forEach(c => { Pn.tirosTrasCambio[c] = Math.max(0, (Pn.tirosTrasCambio[c] || 0) + (yP.tirosTrasCambio[c] || 0) - (xP.tirosTrasCambio[c] || 0)); });
@@ -12260,6 +12981,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             tirosRivalesPuerta: num(P.tirosRivalesPuerta), tirosRivalesFuera: num(P.tirosRivalesFuera),
             faltasFavor: num(P.faltasFavor), faltasContra: num(P.faltasContra), cornersFavor: num(P.cornersFavor), cornersContra: num(P.cornersContra),
             fuerasJuegoNuestros: num(P.fuerasJuegoNuestros), fuerasJuegoRival: num(P.fuerasJuegoRival),
+            tarjetasRival: Array.isArray(P.tarjetasRival) ? P.tarjetasRival : [], // v220
             analisisIA: P.analisisIA || '', resumenIA: P.resumenIA || '', notasIA: {},
             republicado: true
         };
@@ -13345,7 +14067,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             { label: 'Córners en contra', v1: p1.cornersContra || 0, v2: p2.cornersContra || 0, invertido: true },
             { label: 'Fueras de juego propios', v1: p1.fuerasJuegoNuestros || 0, v2: p2.fuerasJuegoNuestros || 0, invertido: true },
             { label: 'Fueras de juego del rival', v1: p1.fuerasJuegoRival || 0, v2: p2.fuerasJuegoRival || 0 }
-        ];
+        ].concat((Array.isArray(p1.tarjetasRival) || Array.isArray(p2.tarjetasRival)) ? (() => { const c1 = trCuenta(p1), c2 = trCuenta(p2), sd2 = (c, k) => c ? c[k] : '—'; // v220
+            return [{ label: 'Amarillas al rival', v1: sd2(c1, 'am'), v2: sd2(c2, 'am'), raw1: c1 ? c1.am : 0, raw2: c2 ? c2.am : 0 }, { label: 'Rojas al rival', v1: sd2(c1, 'ro'), v2: sd2(c2, 'ro'), raw1: c1 ? c1.ro : 0, raw2: c2 ? c2.ro : 0 }]; })() : []);
 
         const statsHtml = stats.map(s => {
             const raw1 = s.raw1 !== undefined ? s.raw1 : s.v1;
@@ -13555,6 +14278,22 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
         try { programarCopiaNube(); } catch (e) {} // v109: copia en la nube
     }
+    // v236 · partidos del delegado de antes de la v236: no apuntaba fueras de juego ni faltas en contra.
+    // Se marcan con p.sinApuntar para que esos ceros no entren en las medias (en vez de contar como 0).
+    function marcarSinApuntarDelegado(t) {
+        let n = 0;
+        ((t && t.partidos) || []).forEach(p => { if (p && p.dlg && !p.dlg.fjfc && !Array.isArray(p.sinApuntar)) { p.sinApuntar = ['fj', 'fc']; n++; } });
+        return n;
+    }
+    function sinApuntar(p, k) { return !!(p && Array.isArray(p.sinApuntar) && p.sinApuntar.includes(k)); }
+    setTimeout(() => {
+        try {
+            if (localStorage.getItem('hergar_F11_v236sinApuntar') === '1') return;
+            const t = getTemporada();
+            if (marcarSinApuntarDelegado(t)) { saveTemporada(t); try { publicarTemporadaFirebase(t); } catch (e) {} }
+            localStorage.setItem('hergar_F11_v236sinApuntar', '1');
+        } catch (e) { console.error('v236 sinApuntar:', e); }
+    }, 4000);
 
     // ── v109 · COPIA AUTOMÁTICA EN LA NUBE (Firebase) ────────────────────────
     // Cada vez que cambia la temporada, la Liga o la plantilla, se sube una copia comprimida a
@@ -14041,7 +14780,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const linea = substitutionTimeline[idx];
         if (linea == null) return;
         const l = mgdLeer().filter(x => x.idx !== idx);
-        if (datos.origen || datos.pos) l.push(Object.assign({ idx, linea }, datos));
+        if (datos.origen || datos.pos || datos.cuerpo) l.push(Object.assign({ idx, linea }, datos)); // v236: + cuerpo
         try { localStorage.setItem(MGD_KEY, JSON.stringify(l)); } catch (e) {}
     }
     function mgdBorrar() { try { localStorage.removeItem(MGD_KEY); } catch (e) {} }
@@ -14077,6 +14816,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         goles.forEach(g => {
             const e = mgd.find(x => x.idx === g.idx && x.linea === substitutionTimeline[g.idx]);
             if (g.propia && !(e && e.origen)) g.origen = 'propia'; // v205
+            if (e && e.cuerpo && g.equipo !== 'rival' && !g.propia) g.cuerpo = e.cuerpo; // v236
             if (!e || g.penalti) return;
             if (e.origen) g.origen = e.origen;
             if (e.pos) g.pos = { x: e.pos.x, y: e.pos.y };
@@ -14162,6 +14902,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         amarilla: ['Amarilla para {J}.', '{J} ve la amarilla.', 'Tarjeta amarilla a {J}.', 'El árbitro amonesta a {J}.'],
         dobleAmarilla: ['Segunda amarilla para {J}: expulsado.', '{J} ve la segunda amarilla y se va a la calle.'],
         roja: ['Roja directa a {J}.', '{J} es expulsado con roja directa.'],
+        // v220 · tarjetas del rival
+        amarillaRival: ['Amarilla para un jugador del {RIV}.', 'El árbitro amonesta a uno del {RIV}.', 'Tarjeta amarilla para el {RIV}.'],
+        rojaRival: ['¡Expulsión en el {RIV}! El Hergar jugará con uno más.', 'Roja para un jugador del {RIV}: se quedan con uno menos.', '¡El {RIV} se queda con uno menos!'],
         descanso: {
             cero: ['Descanso sin goles.', '0-0 al descanso. Todo por decidir.', 'Al vestuario con el marcador a cero.'],
             ventaja: ['Descanso con ventaja: {H}-{R}.', 'Al vestuario por delante, {H}-{R}.', 'Buen primer tiempo: {H}-{R} al descanso.', '{H}-{R} al descanso. Media parte, media faena.'],
@@ -14221,6 +14964,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             else if ((g = /^🔄 Sale #\S+ (\S+) ➡️ Entra #\S+ (\S+)/.exec(t))) out.push({ tipo: 'cambio', min, idx, sale: g[1], entra: g[2] });
             else if ((g = /^🟨 Amarilla #\S+ (\S+)(.*)$/.exec(t))) out.push({ tipo: /DOBLE AMARILLA/.test(g[2]) ? 'dobleAmarilla' : 'amarilla', min, idx, j: g[1] });
             else if ((g = /^🟥 Roja directa #\S+ (\S+)/.exec(t))) out.push({ tipo: 'roja', min, idx, j: g[1] });
+            else if (/^🟨 Amarilla al rival/.test(t)) out.push({ tipo: 'amarillaRival', min, idx }); // v220
+            else if (/^🟥 Roja al rival/.test(t)) out.push({ tipo: 'rojaRival', min, idx });
         });
         return out;
     }
@@ -14320,6 +15065,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 const y = (arr) => arr.length > 1 ? arr.slice(0, -1).join(', ') + ' y ' + arr[arr.length - 1] : arr[0];
                 const v = { E: y(L.map(c => c.entra)), S: y(L.map(c => c.sale)) };
                 res.push({ m: h.min, ic: '🔄', k: 'cambio', h: '', x: narrRellena(narrElige(ctx, L.length > 1 ? 'cambioD' : 'cambio', L.length > 1 ? NARR.cambioDoble : NARR.cambio, clave), v) });
+            } else if (h.tipo === 'amarillaRival' || h.tipo === 'rojaRival') { // v220
+                res.push({ m: h.min, ic: h.tipo === 'amarillaRival' ? '🟨' : '🟥', k: 'tarjeta', h: '', x: narrRellena(narrElige(ctx, h.tipo, NARR[h.tipo], clave), { RIV }) });
             } else if (h.tipo === 'amarilla' || h.tipo === 'dobleAmarilla' || h.tipo === 'roja') {
                 res.push({ m: h.min, ic: h.tipo === 'amarilla' ? '🟨' : '🟥', k: 'tarjeta', h: '', x: narrRellena(narrElige(ctx, h.tipo, NARR[h.tipo], clave), { J: h.j }) });
             }
@@ -14346,12 +15093,17 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
         const goles = golesDesdeCronologia();
         const hechos = narrHechos(lineas, goles);
-        return narrConstruir(hechos, {
+        const res = narrConstruir(hechos, {
             rival: rivalName || (document.getElementById('rivalNameInput') || {}).value || 'RIVAL',
             duracion: 70,
             descanso: partNumber === 2 || matchFinished,
             final: !!matchFinished
         });
+        try { // v225 · 📦 box-to-box en su minuto (el final, siempre el último)
+            const bb = b2bNarracion(70);
+            if (bb.length) { const fin = res.filter(e => e.k === 'final'), resto = res.filter(e => e.k !== 'final').concat(bb); resto.sort((a, b) => (a.m - b.m) || ((a.k === 'b2b' || a.k === 'b2bT') - (b.k === 'b2b' || b.k === 'b2bT'))); return resto.concat(fin); }
+        } catch (e) { console.error('Box-to-box (narración):', e); }
+        return res;
     }
 
     // ── v171 · Origen y lado de los goles para el informe IA ──
@@ -14368,10 +15120,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const b = Math.abs(g.pos.x - 34);
         return g.pos.y <= 5.5 && b <= 9.16 ? 'área pequeña' : (g.pos.y <= 16.5 && b <= 20.16 ? 'área' : 'fuera del área');
     }
+    const CUERPO_IA = { der: 'con la derecha', izq: 'con la izquierda', cab: 'de cabeza', otra: 'con otra parte del cuerpo' }; // v236
     function golDetalleIA(g) {
         const o = !g.penalti && g.origen ? ORIGEN_IA[g.origen] : null;
         const z = zonaGolIA(g), l = ladoGol(g);
-        const partes = [o, z && l ? `${z}, ${l === 'centro' ? 'por el centro' : 'por ' + l}` : z].filter(Boolean);
+        const c = g.equipo !== 'rival' && g.cuerpo ? CUERPO_IA[g.cuerpo] : null;
+        const partes = [o, z && l ? `${z}, ${l === 'centro' ? 'por el centro' : 'por ' + l}` : z, c].filter(Boolean);
         return partes.length ? ` [${partes.join('; ')}]` : '';
     }
     function origenGolesTemporadaIA() {
@@ -14387,8 +15141,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             return n >= 4 ? `${Object.keys(c).sort((a, b) => c[b] - c[a]).map(k => `${ORIGEN_IA[k]} ${c[k]}`).join(', ')} (de ${n} con el origen apuntado)` : '';
         };
         const f = cuenta('hergar'), r = cuenta('rival');
-        if (!f && !r) return '';
-        return `CÓMO LLEGAN LOS GOLES EN LA TEMPORADA (acumulado de la temporada; los encajados, siempre en colectivo y sin nombres) — A favor: ${f || 'pocos datos'} | En contra: ${r || 'pocos datos'}`;
+        // v236 · con qué marcamos (solo nuestros goles)
+        const cc = {}; let nc = 0;
+        ps.forEach(p => (Array.isArray(p.goles) ? p.goles : []).forEach(g => { if (g && g.equipo !== 'rival' && g.cuerpo) { cc[g.cuerpo] = (cc[g.cuerpo] || 0) + 1; nc++; } }));
+        const cTxt = nc >= 4 ? ` | Con qué marcamos: ${Object.keys(cc).sort((a, b) => cc[b] - cc[a]).map(k => `${CUERPO_IA[k]} ${cc[k]}`).join(', ')} (de ${nc} con el dato apuntado)` : '';
+        if (!f && !r && !cTxt) return '';
+        return `CÓMO LLEGAN LOS GOLES EN LA TEMPORADA (acumulado de la temporada; los encajados, siempre en colectivo y sin nombres) — A favor: ${f || 'pocos datos'} | En contra: ${r || 'pocos datos'}${cTxt}`;
     }
     function textoGolesConMinuto(p) {
         const goles = Array.isArray(p.goles) ? p.goles : [];
@@ -14430,11 +15188,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const accionesDefTotal = convocadosPartido.reduce((s,p)=>s+(p.accionesDef||0),0);
         const pasesAreaTotal = convocadosPartido.reduce((s,p)=>s+(p.pasesArea||0),0);
         const pasesClaveTotal = convocadosPartido.reduce((s,p)=>s+(p.pasesClave||0),0);
-        const partido = { fecha:fechaHoy, rival:rivalName, golesLocal:goalsLocal, golesRival:goalsRival, resultado, duracion:formatTime(getElapsedSeconds()), mvp:mvpNombre, mvpId, mvpStats, goleadores:Object.values(playersData).filter(p=>p.goles>0).map(p=>`${p.name.split(' ')[0]} (${p.goles})`).join(', ')||'-', tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera, faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio: { n: tirosTrasCambio.n, r: tirosTrasCambio.r }, accionesDefTotal, pasesAreaTotal, pasesClaveTotal };
+        const partido = { fecha:fechaHoy, rival:rivalName, golesLocal:goalsLocal, golesRival:goalsRival, resultado, duracion:formatTime(getElapsedSeconds()), mvp:mvpNombre, mvpId, mvpStats, goleadores:Object.values(playersData).filter(p=>p.goles>0).map(p=>`${p.name.split(' ')[0]} (${p.goles})`).join(', ')||'-', tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera, faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tarjetasRival: tarjetasRival.slice(), tirosTrasCambio: { n: tirosTrasCambio.n, r: tirosTrasCambio.r }, accionesDefTotal, pasesAreaTotal, pasesClaveTotal };
         partido.notasIASumadas = Object.keys(notasIAPartido).length > 0; // v59
         partido.tiroGolRival = true; // v110: sus tiros a puerta del rival ya incluyen los goles del rival
         partido.titulares = titularesIniciales.slice(); // v68: titulares de este partido
         partido.formacion = formacionInicialPartido || document.getElementById('formationSelector').value; // v96: formación con la que empezó
+        try { if (pizarraLog.length) partido.pizarra = pizarraLog.map(x => ({ m: x.m, f: x.f, ids: x.ids.join(',') })); } catch (e) {} // v226: la pizarra de cada momento
         if (horaInicioPartido) partido.horaInicio = horaInicioPartido; // v99: para el tiempo y el contexto
         try { partido.goles = golesDesdeCronologia(); } catch (e) { console.error('Goles con minuto:', e); } // v84
         if (!sim) { try { partido.narracion = narracionPartido(rivalName); } catch (e) { console.error('Minuto a minuto:', e); } } // v193
@@ -14445,7 +15204,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         partido.reglaTirosFuera = 194; // v194: tiros fuera de más ya con la regla nueva
         partido.reglaDefensa = 207; // v207: defensa según el puesto ya aplicada en directo
         try { const mm = codificarMinutoV145(); if (mm) partido.minutos = mm; } catch (e) { console.error('Minuto a minuto:', e); } // v145
-        if (!sim) { try { const dp = dlgPendiente(); if (dp && dp.st && dp.code) { partido.dlg = dp.st; partido.dlgCode = dp.code; } } catch (e) {} } // v190: los apuntes del delegado se quedan con el partido (para revisarlos después)
+        if (!sim) { try { const dp = dlgPendiente(); if (dp && dp.st && dp.code) { partido.dlg = dp.st; partido.dlgCode = dp.code; if (!dp.st.fjfc) partido.sinApuntar = ['fj', 'fc']; } } catch (e) {} } // v190: los apuntes del delegado se quedan con el partido (para revisarlos después)
         t.partidos.push(partido);
         registrarConvocatorias(t, convocadosPartido, titularesIniciales); // v68: convocados, jueguen o no
         try { volcarImpactoTodos(); } catch (e) {} // v94: lo último que hizo cada uno, a su línea
@@ -15018,6 +15777,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 </div>`;
         }).join('') : '<div style="font-size:11px; color:#52665c;">No hay jugadores con minutos registrados para este partido.</div>';
 
+        // v220: tarjetas del rival
+        document.getElementById('editPartidoTarjRivList').innerHTML = (Array.isArray(p.tarjetasRival) ? p.tarjetasRival : []).map(trEditFilaHTML).join('') || trEditVacioHTML();
+
         // v84: goles con minuto
         editGolesJugadores = (filas.length ? filas : Object.values(t.jugadores || {}).map(j => ({ id: j.id, name: j.name, dorsal: j.dorsal })))
             .slice().sort((a, b) => (a.dorsal || 99) - (b.dorsal || 99));
@@ -15044,6 +15806,35 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         document.getElementById('editarPartidoModal').style.display = 'flex';
     };
 
+    // ── v220 · Editor de tarjetas del rival ──
+    function trEditVacioHTML() { return '<div class="tr-vacio" style="font-size:11px; color:#52665c;">Sin tarjetas del rival apuntadas.</div>'; }
+    function trEditFilaHTML(x) {
+        x = x || {};
+        const est = 'padding:7px 4px; border-radius:7px; border:1px solid rgba(255,255,255,0.1); background:#1a2332; color:#e2e8f0; font-size:12px;';
+        return `<div class="tr-row" style="display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.03); border-radius:9px; padding:6px 8px;">
+            <input type="number" min="0" max="130" inputmode="numeric" class="tr-min" placeholder="min" value="${x.min != null && x.min !== '' ? x.min : ''}" style="width:58px; text-align:center; ${est} color:#f5a623; font-weight:800;">
+            <select class="tr-tipo" style="flex:1; ${est}"><option value="A" ${x.tipo !== 'R' ? 'selected' : ''}>🟨 Amarilla</option><option value="R" ${x.tipo === 'R' ? 'selected' : ''}>🟥 Roja (o 2.ª amarilla)</option></select>
+            <button type="button" class="tr-del" style="padding:6px 10px; border-radius:7px; border:1px solid rgba(231,76,60,0.4); background:rgba(231,76,60,0.08); color:#e74c3c; font-weight:900;">✕</button>
+        </div>`;
+    }
+    function trEditLeer() {
+        return [...document.querySelectorAll('#editPartidoTarjRivList .tr-row')].map(r => {
+            const m = r.querySelector('.tr-min').value.trim();
+            return { min: m === '' || isNaN(parseInt(m, 10)) ? null : parseInt(m, 10), tipo: r.querySelector('.tr-tipo').value === 'R' ? 'R' : 'A' };
+        }).sort((a, b) => (a.min == null ? 999 : a.min) - (b.min == null ? 999 : b.min));
+    }
+    document.getElementById('editPartidoAddTarjRivBtn').onclick = () => {
+        const c = document.getElementById('editPartidoTarjRivList');
+        const v = c.querySelector('.tr-vacio'); if (v) v.remove();
+        c.insertAdjacentHTML('beforeend', trEditFilaHTML({ tipo: 'A' }));
+    };
+    document.getElementById('editPartidoTarjRivList').addEventListener('click', e => {
+        const b = e.target.closest('.tr-del'); if (!b) return;
+        b.closest('.tr-row').remove();
+        const c = document.getElementById('editPartidoTarjRivList');
+        if (!c.querySelector('.tr-row')) c.innerHTML = trEditVacioHTML();
+    });
+
     // ── v84 · Editor de goles con minuto ──
     let editGolesJugadores = [];
     function egVacioHTML() { return '<div class="eg-vacio" style="font-size:11px; color:#52665c;">Sin goles en este partido.</div>'; }
@@ -15062,10 +15853,11 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 <button type="button" onclick="egQuitar(this)" aria-label="Quitar gol" style="background:rgba(255,71,87,0.12); color:#ff4757; border:none; border-radius:7px; padding:6px 9px; font-weight:800;">✕</button>
             </div>
             <div class="eg-jug" style="display:${esH ? 'flex' : 'none'}; gap:6px;">
-                <select class="eg-goleador" onchange="egPintarVideo(this.closest('.eg-row'))" style="${est} flex:1;">${egOpciones(g.propia ? null : g.jugadorId, '¿Quién marcó?')}<option value="propia" data-nombre="Gol en propia" ${g.propia ? 'selected' : ''}>⚽ En propia (del rival)</option></select>
+                <select class="eg-goleador" onchange="egPintarVideo(this.closest('.eg-row')); egCuerpoVer(this.closest('.eg-row'))" style="${est} flex:1;">${egOpciones(g.propia ? null : g.jugadorId, '¿Quién marcó?')}<option value="propia" data-nombre="Gol en propia" ${g.propia ? 'selected' : ''}>⚽ En propia (del rival)</option></select>
                 <select class="eg-asist" data-prev="${g.asistenteId != null ? g.asistenteId : ''}" onchange="egAsistCambia(this)" style="${est} flex:1;">${egOpciones(g.asistenteId, 'Sin asistencia')}</select>
                 <button type="button" class="eg-vbtn" onclick="egAbrirVideo(this)" aria-label="Vídeo del gol">🎥</button>
             </div>
+            ${egCuerpoFilaHTML(g)}
             ${egMapaFilaHTML(g, est)}
             <div class="eg-vbox" style="display:none; flex-direction:column; gap:6px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.25);">
                 <label class="eg-vsubir" style="display:flex; align-items:center; justify-content:center; min-height:44px; border-radius:9px; background:linear-gradient(135deg,#b41438,#e0405f); color:#fff; font-weight:800; font-size:12.5px; cursor:pointer;">📤 Subir vídeo del móvil<input type="file" accept="video/*" style="display:none;" onchange="egSubirVideo(this)"></label>
@@ -15094,7 +15886,36 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         ajustar(sel.value, +1);
         sel.dataset.prev = sel.value;
     };
-    window.egCambiaEquipo = function (sel) { const row = sel.closest('.eg-row'); row.querySelector('.eg-jug').style.display = sel.value === 'rival' ? 'none' : 'flex'; if (sel.value === 'rival') row.querySelector('.eg-vbox').style.display = 'none'; egPintarVideo(row); egPintarMapa(row); };
+    window.egCambiaEquipo = function (sel) { const row = sel.closest('.eg-row'); row.querySelector('.eg-jug').style.display = sel.value === 'rival' ? 'none' : 'flex'; if (sel.value === 'rival') row.querySelector('.eg-vbox').style.display = 'none'; egPintarVideo(row); egCuerpoVer(row); egPintarMapa(row); };
+    // ── v236 · 🦶 CON QUÉ MARCÓ (solo nuestros goles): g.cuerpo = 'der' | 'izq' | 'cab' | 'otra' ──
+    const GOL_CUERPO = [['der', '🦶 Derecha'], ['izq', '🦶 Izquierda'], ['cab', '🗣️ Cabeza'], ['otra', 'Otra']];
+    function egCuerpoFilaHTML(g) {
+        const ver = g.equipo !== 'rival' && !g.propia;
+        return `<div class="eg-cuer" style="display:${ver ? 'grid' : 'none'};">
+                <span class="eg-cuer-t">🦶 Con qué:</span>
+                ${GOL_CUERPO.map(([v, t]) => `<button type="button" class="eg-cb${g.cuerpo === v ? ' on' : ''}" data-v="${v}" onclick="egCuerpo(this)">${t.replace(/^\S+ /, '')}</button>`).join('')}
+                <input type="hidden" class="eg-cpo" value="${g.cuerpo || ''}">
+                <input type="hidden" class="eg-prev" value="${Array.isArray(g.previas) && g.previas.length ? encodeURIComponent(JSON.stringify({ j: g.jugadorId != null ? String(g.jugadorId) : null, m: g.min != null ? Number(g.min) : null, p: g.previas })) : ''}">
+            </div>`;
+    }
+    window.egCuerpo = function (b) {
+        const row = b.closest('.eg-row'), inp = row.querySelector('.eg-cpo');
+        inp.value = inp.value === b.dataset.v ? '' : b.dataset.v;
+        row.querySelectorAll('.eg-cb').forEach(x => x.classList.toggle('on', x.dataset.v === inp.value));
+        egResumenMapa();
+    };
+    window.egCuerpoVer = function (row) {
+        if (!row) return;
+        const c = row.querySelector('.eg-cuer'); if (!c) return;
+        const ver = row.querySelector('.eg-equipo').value !== 'rival' && row.querySelector('.eg-goleador').value !== 'propia';
+        c.style.display = ver ? 'grid' : 'none';
+        egResumenMapa();
+    };
+    // Nuestros goles (no en propia) a los que les falta «con qué marcó»
+    function golesCuerpoQueFaltan(p) {
+        if (!Array.isArray(p.goles) || !p.goles.length) return 0;
+        return p.goles.filter(g => g && g.equipo !== 'rival' && !g.propia && !g.cuerpo).length;
+    }
 
     // ── v169 · ORIGEN Y POSICIÓN DE CADA GOL (para el 🎯 Mapa de goles del visor) ──
     // Cada gol guarda g.origen (código) y g.pos = { x, y } en metros: x de 0 a 68 a lo ancho y y de 0 a 50 desde la
@@ -15187,6 +16008,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const comp = rows.filter(r => r.querySelector('.eg-pen').checked || (r.querySelector('.eg-orig').value && r.querySelector('.eg-px').value !== '')).length;
         const f = rows.length - comp;
         el.innerHTML = f ? `<span style="color:#f5a623;">📍 Te ${f === 1 ? 'falta 1 gol' : 'faltan ' + f + ' goles'} por completar (cómo llegó y desde dónde) para el Mapa de goles.</span>` : '<span style="color:#2ed573;">📍 Todos los goles tienen origen y posición.</span>';
+        // v236 · con qué marcó
+        const fc = rows.filter(r => r.querySelector('.eg-equipo').value !== 'rival' && r.querySelector('.eg-goleador') && r.querySelector('.eg-goleador').value !== 'propia' && !(r.querySelector('.eg-cpo') || {}).value).length;
+        el.innerHTML += fc ? `<br><span style="color:#f5a623;">🦶 ${fc === 1 ? 'Falta 1 gol' : 'Faltan ' + fc + ' goles'} por poner con qué se marcó.</span>` : (rows.some(r => r.querySelector('.eg-equipo').value !== 'rival') ? '<br><span style="color:#2ed573;">🦶 Todos nuestros goles tienen con qué se marcó.</span>' : '');
     }
     // Goles de un partido guardado a los que les falta el origen o la posición
     function golesMapaQueFaltan(p) {
@@ -15587,6 +16411,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const sg = row.querySelector('.eg-goleador'), sa = row.querySelector('.eg-asist');
             const g = Object.assign({ min, equipo, jugadorId: idDe(sg.value), nombre: nombreDe(sg), asistenteId: idDe(sa.value), asistente: nombreDe(sa), penalti }, extra);
             if (sg.value === 'propia') { Object.assign(g, { jugadorId: null, nombre: 'Gol en propia', propia: true, asistenteId: null, asistente: null, penalti: false }); if (!g.origen) g.origen = 'propia'; } // v205
+            else { const cpo = row.querySelector('.eg-cpo'); if (cpo && cpo.value) g.cuerpo = cpo.value; } // v236
+            // v237 · ⛓️ la cadena del gol se conserva si sigue siendo del mismo niño y en el mismo minuto
+            if (!g.propia) { try { const pv = row.querySelector('.eg-prev'); if (pv && pv.value) { const o = JSON.parse(decodeURIComponent(pv.value)); if (o && Array.isArray(o.p) && o.j === (g.jugadorId != null ? String(g.jugadorId) : null) && o.m === g.min) g.previas = o.p; } } catch (e) { console.error('Cadenas de gol:', e); } }
             const vid = row.querySelector('.eg-vid').value; if (vid) g.video = vid;              // v119
             if (row.querySelector('.eg-vocu').checked) g.videoOculto = true;                      // v119
             return g;
@@ -15680,6 +16507,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         let avisoAsist = '';
         try { avisoAsist = aplicarAsistenciasPorJugador(t, golesMin, { fechaVieja, rivalViejo, nuevaFecha, nuevoRival }); } catch (e) { console.error('Asistencias:', e); } // v123
         if (golesMin.length) p.goles = golesMin; else delete p.goles;
+        { const tr = trEditLeer(); if (tr.length || Array.isArray(p.tarjetasRival)) p.tarjetasRival = tr; } // v220 (partido antiguo sin tocar: sigue «sin datos»)
 
         saveTemporada(t);
         publicarTemporadaFirebase(t); // ⚽ HERGAR LIVE: refleja la corrección también en el visor
@@ -15800,20 +16628,11 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     function renderSinergias() {
         const t = getTemporada();
         const container = document.getElementById('sinergiasContainer');
-        const pares = {};
-        Object.entries(t.sinergias || {}).forEach(([clave, d]) => { pares[clave] = { segs: d.segs || 0, segsN: d.segsN || 0, impN: d.impN || 0 }; });
-        // v68 FIX: si el partido en curso YA está guardado en la temporada, sus sinergias ya están en t.sinergias;
-        // sumarlas otra vez las duplicaba (un partido de 70' salía como 140' juntos) hasta pulsar "Nuevo partido".
-        Object.entries(partidoYaTransferido ? {} : sinergias).forEach(([clave, d]) => {
-            if (!pares[clave]) pares[clave] = { segs: 0, segsN: 0, impN: 0 };
-            pares[clave].segs += d.segs || 0;
-            pares[clave].segsN += d.segsN || 0;
-            pares[clave].impN += impactoJuntosPar(clave, d);
-        });
         const nombres = {};
         Object.values(playersData).forEach(p => { nombres[p.id] = `#${p.dorsal} ${p.name.split(' ')[0]}`; });
         Object.values(t.jugadores || {}).forEach(j => { if (!nombres[j.id]) nombres[j.id] = `#${j.dorsal} ${j.name.split(' ')[0]}`; });
-        container.innerHTML = htmlSinergias(pares, nombres, false, ritmosTemporada(t)); // v159: ≈ en observación
+        let S; try { S = sinergiasV221(t); } catch (e) { console.error('sinergias v221', e); S = { pares: [], usados: 0, total: (t.partidos || []).length }; }
+        container.innerHTML = htmlSinergiasV221(S, nombres); // v221
     }
 
     function renderRachas() {
@@ -16087,7 +16906,7 @@ ${separador}`;
 
         msg += `\n\n📊 *STATS*
 🎯 Tiros: ${totalNuestros} (${tirosNuestrosPuerta} a puerta) | Rival: ${totalRivales} (${tirosRivalesPuerta} a puerta)
-🟡 Faltas: ${faltasFavor}F · ${faltasContra}C  ⛳ Córners: ${cornersFavor}F · ${cornersContra}C${(fuerasJuegoNuestros || fuerasJuegoRival) ? `\n🚩 Fueras de juego: Hergar ${fuerasJuegoNuestros} · Rival ${fuerasJuegoRival}` : ''}`;
+🟡 Faltas: ${faltasFavor}F · ${faltasContra}C  ⛳ Córners: ${cornersFavor}F · ${cornersContra}C${(fuerasJuegoNuestros || fuerasJuegoRival) ? `\n🚩 Fueras de juego: Hergar ${fuerasJuegoNuestros} · Rival ${fuerasJuegoRival}` : ''}${tarjetasRival.length ? `\n🟨🟥 Tarjetas al rival: ${tarjetasRival.map(x => (x.tipo === 'R' ? '🟥' : '🟨') + ' ' + x.min + "'").join(' · ')}` : ''}`;
 
         if (tarjetasStr) msg += `\n🃏 Tarjetas: ${tarjetasStr}`;
 
@@ -16746,6 +17565,8 @@ ${separador}`;
         cornersFavor = 0;
         cornersContra = 0;
         fuerasJuegoNuestros = 0; fuerasJuegoRival = 0; // v117
+        tarjetasRival = []; trPintarBadges(); // v220
+        pizarraLog = []; // v226
         palosNuestros = 0; palosRival = 0; // v205
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = 0; }
         tirosTrasCambio = { n: 0, r: 0 }; // v137
@@ -16782,6 +17603,7 @@ ${separador}`;
             p.accionesDefClave = 0; p.regates = 0; // v67
             p.fuerasJuego = 0; // v117
             p.palos = 0; p.faltasRecibidas = 0; // v205
+            delete p.b2bN; delete p.b2bT; // v225
             p.segsPorLinea = {}; p.golesContraEnCampo = 0; p.tirosFavorEnCampo = 0; p.tirosContraEnCampo = 0; p.bonusPorteriaCero = 0; p.golesFavorEnCampo = 0; p.bonusGolEquipo = 0; p.equipoImp = 0; p.tirRivBruto = 0; p.tirRivPen = 0; // v192 · v67: portería a cero · v145: parte de equipo
             p.impPorLinea = {}; p._impUlt = 0; // v94
             p.segsPorPuesto = {}; p.impPorPuesto = {}; // v95
@@ -17161,7 +17983,7 @@ ${separador}`;
             playersData, goalsLocal, goalsRival,
             benchSittingTime,
             substitutionTimeline, tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
-            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
+            faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, pizarraLog, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             accumulatedSeconds: getElapsedSeconds() // BUG FIX: incluir tiempo para coherencia en undo
         }, sinFoto));
         if (actionHistory.length>25) actionHistory.shift();
@@ -17185,6 +18007,8 @@ ${separador}`;
         document.getElementById("lsb_cornersF").innerText = cornersFavor;
         document.getElementById("lsb_cornersC").innerText = cornersContra;
         fuerasJuegoNuestros = prev.fuerasJuegoNuestros||0; fuerasJuegoRival = prev.fuerasJuegoRival||0; // v117
+        tarjetasRival = Array.isArray(prev.tarjetasRival) ? prev.tarjetasRival : []; trPintarBadges(); // v220
+        if (Array.isArray(prev.pizarraLog)) pizarraLog = prev.pizarraLog; // v226
         palosNuestros = prev.palosNuestros||0; palosRival = prev.palosRival||0; // v205
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
         tirosTrasCambio = prev.tirosTrasCambio || { n: 0, r: 0 }; // v137
@@ -17232,11 +18056,11 @@ ${separador}`;
             ctx.font = '9px Inter'; ctx.fillStyle = '#64748b'; ctx.textAlign = 'center';
             ctx.fillText("0'", pad, H - 4); if (!vestuario) ctx.fillText("35'", pad + (W - pad * 2) * 35 / dur, H - 4); ctx.fillText(dur + "'", W - pad, H - 4);
             ctx.textAlign = 'left'; ctx.font = '700 9px Inter';
-            ctx.fillStyle = '#ff6b85'; ctx.fillText('▲ HERGAR', pad, 11);
+            ctx.fillStyle = '#ff5577'; ctx.fillText('▲ HERGAR', pad, 11);
             ctx.fillStyle = '#94a3b8'; ctx.fillText('▼ RIVAL', pad + 64, 11);
             const pk = momentumPicos(serie.slice(0, hasta + 1));
             const el = document.getElementById('momentumStats');
-            if (el) el.innerHTML = `Quién aprieta en los últimos ${MOMENTUM_VENTANA} minutos (tiros, córners, pases clave, goles y acciones defensivas).<br><span style="color:#ff6b85">▲ Más apretó el Hergar: ${pk.hergar != null ? pk.hergar + "'" : '—'}</span>  ·  <span style="color:#94a3b8">▼ Más apretó el rival: ${pk.rival != null ? pk.rival + "'" : '—'}</span>`;
+            if (el) el.innerHTML = `Quién aprieta en los últimos ${MOMENTUM_VENTANA} minutos (tiros, córners, pases clave, goles y acciones defensivas).<br><span style="color:#ff5577">▲ Más apretó el Hergar: ${pk.hergar != null ? pk.hergar + "'" : '—'}</span>  ·  <span style="color:#94a3b8">▼ Más apretó el rival: ${pk.rival != null ? pk.rival + "'" : '—'}</span>`;
         }
     }
 
@@ -18386,11 +19210,85 @@ ${separador}`;
                 <div class="liga-equipo-nombre ${eq.esHergar?'hergar':''}" style="flex:1; cursor:pointer;" onclick="abrirFichaRival('${eq.id}')">${eq.nombre}${pendiente ? '<div style="font-size:9.5px; color:#f5a623; font-weight:700; margin-top:2px;">Escudo pendiente de enviar al visor</div>' : ''}<div style="font-size:10px; font-weight:600; margin-top:2px; color:${eq.campo ? '#64748b' : '#f5a623'};">${eq.campo ? ctxEsc([eq.campo.nombre, CTX_CESPED[eq.campo.cesped], eq.campo.lat == null ? 'sin ubicación' : ''].filter(Boolean).join(' · ')) : 'Sin campo todavía'}</div></div>
                 <button onclick="abrirCampoEquipo('${eq.id}')" style="${btn} background:${eq.campo ? 'rgba(46,213,115,0.1)' : 'rgba(245,166,35,0.1)'}; color:${eq.campo ? '#2ed573' : '#f5a623'}; border:1px solid ${eq.campo ? 'rgba(46,213,115,0.4)' : 'rgba(245,166,35,0.45)'};">🏟️</button>
                 ${eq.esHergar ? '' : `
+                <button onclick="abrirColorEquipo('${eq.id}')" aria-label="Color de sus barras en el visor" style="${btn} background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); display:inline-flex; align-items:center;"><span style="width:15px; height:15px; border-radius:50%; display:inline-block; background:${eq.color || '#64748b'}; border:2px solid ${eq.color ? '#fff' : 'rgba(255,255,255,0.3)'};"></span></button>
                 <label for="escudoEquipoInput" onclick="escudoEquipoPendiente='${eq.id}'" style="${btn} background:rgba(46,213,115,0.1); color:#2ed573; border:1px solid rgba(46,213,115,0.4);">📷 ${tiene ? 'Cambiar' : 'Escudo'}</label>
                 ${tiene ? `<button onclick="quitarEscudoEquipo('${eq.id}')" aria-label="Quitar escudo" style="${btn} background:rgba(255,255,255,0.05); color:#94a3b8; border:1px solid rgba(255,255,255,0.1);">🗑</button>` : ''}
                 <button class="liga-equipo-del" onclick="eliminarEquipoLiga('${eq.id}')">✕</button>`}
             </div>`;
         }).join('');
+    }
+
+    // ── v231 · 🎨 COLOR DE CADA EQUIPO: lo elige Javi y el visor pinta con él las barras del rival ──
+    // Se guarda en la Liga (eq.color) y viaja al visor con ella. Sin color = gris, como antes. El Hergar, siempre rojo.
+    const COLORES_EQUIPO = [
+        ['', 'Sin color', '#64748b', '#fff'], ['#2563eb', 'Azul', '#2563eb', '#fff'], ['#38bdf8', 'Celeste', '#38bdf8', '#0a0e14'],
+        ['#16a34a', 'Verde', '#16a34a', '#fff'], ['#eab308', 'Amarillo', '#eab308', '#0a0e14'], ['#f97316', 'Naranja', '#f97316', '#0a0e14'],
+        ['#7c3aed', 'Morado', '#7c3aed', '#fff'], ['#e5e7eb', 'Blanco', '#e5e7eb', '#0a0e14'], ['#8b1d3a', 'Granate', '#8b1d3a', '#fff'], ['#dc2626', 'Rojo', '#dc2626', '#fff']
+    ];
+    // ¿Se confunde con el rojo del Hergar (180,20,56)? Tono rojizo y bastante saturado.
+    function colorPareceRojoHergar(hex) {
+        const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return false;
+        const n = parseInt(m[1], 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+        if (mx < 0.2 || d / mx < 0.45) return false;
+        let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360;
+        return h >= 335 || h <= 15;
+    }
+    let colorEquipoTmp = { id: null, color: '' };
+    function abrirColorEquipo(id) {
+        const eq = getLiga().equipos.find(e => e.id === id);
+        if (!eq) return;
+        colorEquipoTmp = { id, color: eq.color || '' };
+        let m = document.getElementById('colorEquipoModal');
+        if (!m) {
+            m = document.createElement('div');
+            m.id = 'colorEquipoModal';
+            m.style.cssText = 'display:none; position:fixed; inset:0; z-index:10300; background:rgba(0,0,0,.85); align-items:center; justify-content:center; padding:20px;';
+            m.addEventListener('click', ev => { if (ev.target === m) cerrarColorEquipo(); });
+            document.body.appendChild(m);
+        }
+        pintarColorEquipo(eq);
+        m.style.display = 'flex';
+    }
+    function pintarColorEquipo(eq) {
+        const m = document.getElementById('colorEquipoModal'); if (!m) return;
+        eq = eq || getLiga().equipos.find(e => e.id === colorEquipoTmp.id);
+        if (!eq) return;
+        const sel = colorEquipoTmp.color || '';
+        const libre = sel && !COLORES_EQUIPO.some(c => c[0].toLowerCase() === sel.toLowerCase());
+        const muestras = COLORES_EQUIPO.map(([v, nom, hex, txt]) => {
+            const on = (v || '').toLowerCase() === sel.toLowerCase();
+            return `<button type="button" onclick="elegirColorEquipo('${v}')" aria-label="${nom}" style="height:46px; border-radius:10px; background:${hex}; border:${on ? '3px solid #fff' : '1px solid rgba(255,255,255,.15)'}; color:${txt}; font-size:9px; font-weight:800; display:flex; align-items:flex-end; justify-content:center; padding-bottom:3px; cursor:pointer;">${nom}</button>`;
+        }).join('');
+        const muestra = sel || '#64748b';
+        const filaBarra = (l, h, r) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px;"><span style="color:#ff5577;">${h}</span><span style="font-family:Inter,sans-serif; font-size:11px; font-weight:700; color:#cbd5e1;">${l}</span><span style="color:${sel ? muestra : '#94a3b8'};">${r}</span></div><div style="display:flex; gap:3px; height:7px; margin-top:4px; border-radius:4px; overflow:hidden;"><div style="flex:${h}; background:rgb(180,20,56);"></div><div style="flex:${r}; background:${muestra};"></div></div></div>`;
+        m.innerHTML = `<div style="background:linear-gradient(145deg,#111827,#0f172a); border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:16px; width:100%; max-width:360px; max-height:88vh; overflow-y:auto;">
+            <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px; color:#fff;">🎨 COLOR · ${ctxEsc(String(eq.nombre).toUpperCase())}</div>
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:4px 0 12px;">El visor pintará con este color sus barras (estadísticas del partido, cara a cara, medias, Modo TV y resumen). El Hergar sigue siempre en rojo.</div>
+            <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:8px;">${muestras}</div>
+            <label style="display:flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; font-weight:700; color:#cbd5e1;">Otro color: <input type="color" value="${libre ? sel : '#2563eb'}" onchange="elegirColorEquipo(this.value)" style="width:52px; height:36px; border:${libre ? '3px solid #fff' : '1px solid rgba(255,255,255,.2)'}; border-radius:8px; background:none; padding:0;"></label>
+            ${colorPareceRojoHergar(sel) ? `<div style="margin-top:10px; font-size:11.5px; line-height:1.45; color:#f5a623; background:rgba(245,166,35,.1); border:1px solid rgba(245,166,35,.4); border-radius:9px; padding:8px 10px;">⚠️ Este color se parece mucho al rojo del Hergar: en las barras no se distinguirían bien. Puedes guardarlo igualmente.</div>` : ''}
+            <div style="margin-top:12px; background:rgba(0,0,0,.25); border-radius:12px; padding:10px 12px;">
+                <div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:800; font-size:11px;"><span style="color:#ff5577;">HERGAR</span><span style="color:${sel ? muestra : '#94a3b8'};">${ctxEsc(String(eq.abrev || eq.nombre).toUpperCase())}</span></div>
+                ${filaBarra('Disparos', 9, 4)}${filaBarra('Córners', 6, 3)}
+                <div style="font-size:10px; color:#64748b; margin-top:6px;">Así se verá (datos de ejemplo).</div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+                <button type="button" onclick="cerrarColorEquipo()" style="flex:1; min-height:44px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.05); color:#e2e8f0; font-weight:800; font-family:'Montserrat',sans-serif;">Cancelar</button>
+                <button type="button" onclick="guardarColorEquipo()" style="flex:1; min-height:44px; border-radius:10px; border:none; background:linear-gradient(135deg,#2ed573,#27ae60); color:#0a0e14; font-weight:900; font-family:'Montserrat',sans-serif;">Guardar</button>
+            </div>
+        </div>`;
+    }
+    function elegirColorEquipo(v) { colorEquipoTmp.color = v || ''; pintarColorEquipo(); }
+    function cerrarColorEquipo() { const m = document.getElementById('colorEquipoModal'); if (m) m.style.display = 'none'; }
+    function guardarColorEquipo() {
+        const liga = getLiga();
+        const eq = liga.equipos.find(e => e.id === colorEquipoTmp.id);
+        if (!eq) { cerrarColorEquipo(); return; }
+        if (colorEquipoTmp.color) eq.color = colorEquipoTmp.color; else delete eq.color;
+        saveLiga(liga); // se publica con la Liga
+        cerrarColorEquipo();
+        renderLigaEquipos();
     }
 
     // ── v89 · PRONÓSTICO DE LA LIGA (v90: el partido que interesa pesa lo probable de cada resultado · v91: lo que necesitas, calendario y nivel) (mismo código en app y visor) ──
@@ -18917,7 +19815,7 @@ ${separador}`;
     }
     function pronJorChip(txt, tipo){
       const c = ({ ok: ['#2ed573', 'rgba(46,213,115,.14)'], igual: ['#f5a623', 'rgba(245,166,35,.14)'], sorpresa: ['#ff7a90', 'rgba(255,85,119,.16)'],
-        claro: ['#cbd5e1', 'rgba(148,163,184,.14)'], interes: ['#2ed573', 'rgba(46,213,115,.14)'], nuestro: ['#ff7a90', 'rgba(255,85,119,.16)'] })[tipo] || ['#cbd5e1', 'rgba(148,163,184,.14)'];
+        claro: ['#cbd5e1', 'rgba(148,163,184,.14)'], interes: ['#2ed573', 'rgba(46,213,115,.14)'], nuestro: ['#ff5577', 'rgba(255,85,119,.16)'] })[tipo] || ['#cbd5e1', 'rgba(148,163,184,.14)'];
       return `<span style="display:inline-block; font-size:10.5px; font-weight:700; color:${c[0]}; background:${c[1]}; border-radius:6px; padding:2px 7px; line-height:1.4;">${pronEsc(txt)}</span>`;
     }
     function pronJorBarra(pr, colL, colV, alto){
@@ -19005,7 +19903,7 @@ ${separador}`;
           const colL = p.l === H ? PRON_JOR_HERGAR : PRON_JOR_LOCAL, colV = p.v === H ? PRON_JOR_HERGAR : PRON_JOR_VIS;
           const res = p.jugado ? `<span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px; color:#f5f7fa;">${p.gl} - ${p.gv}</span>` : '';
           h += `<div style="padding:8px 0; border-top:1px solid rgba(255,255,255,.06);">
-            <div style="display:flex; justify-content:space-between; gap:8px; font-size:12px; font-weight:700; margin-bottom:5px;"><span style="color:${p.l === H ? '#ff7a90' : '#e2e8f0'};">${pronEsc(pronJorNom(D.nombres[p.l]))}</span>${res}<span style="color:${p.v === H ? '#ff7a90' : '#e2e8f0'}; text-align:right;">${pronEsc(pronJorNom(D.nombres[p.v]))}</span></div>
+            <div style="display:flex; justify-content:space-between; gap:8px; font-size:12px; font-weight:700; margin-bottom:5px;"><span style="color:${p.l === H ? '#ff5577' : '#e2e8f0'};">${pronEsc(pronJorNom(D.nombres[p.l]))}</span>${res}<span style="color:${p.v === H ? '#ff5577' : '#e2e8f0'}; text-align:right;">${pronEsc(pronJorNom(D.nombres[p.v]))}</span></div>
             ${pronJorBarra(o.pr, colL, colV, 7)}</div>`;
         });
         h += `</div>`;
@@ -19022,7 +19920,7 @@ ${separador}`;
               const esH = p.l === H || p.v === H;
               if (!esH && it.rango < .03) { resto.push(p); return; }
               const r = esH ? it.rangoTodo : it.rango; // en nuestro partido cuentan los tres resultados
-          const peso = r >= .08 ? ['Mucho', '#ff7a90'] : r >= .03 ? ['Bastante', '#2ed573'] : ['Poco', '#94a3b8'];
+          const peso = r >= .08 ? ['Mucho', '#ff5577'] : r >= .03 ? ['Bastante', '#2ed573'] : ['Poco', '#94a3b8'];
               const v = it.vals, nL = pronJorNom(D.nombres[p.l]), nV = pronJorNom(D.nombres[p.v]), f = (x) => x == null ? '—' : pronPct(x) + ' %';
               const txt = esH ? (() => { const g = p.l === H ? v[0] : v[2], q = p.l === H ? v[2] : v[0]; return `Ganando, ${f(g)}. Empatando, ${f(v[1])}. Perdiendo, ${f(q)}.`; })()
                               : `Gana ${pronEsc(nL)}, ${f(v[0])}. Empate, ${f(v[1])}. Gana ${pronEsc(nV)}, ${f(v[2])}.`;
@@ -20120,6 +21018,7 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
             }
         } catch (e) {}
         try { const hx = previaDatosHergarTexto(); if (hx) L.push(hx); } catch (e) { console.error('Previa IA (datos del Hergar):', e); } // v196
+        try { const ex = iaExtrasPrevia(liga, riv); if (ex) L.push(`PARTIDO GRANDE Y BOX-TO-BOX:\n${ex}`); } catch (e) { console.error('Previa IA (extras):', e); } // v227
         const cap = previaIA && previaIA.captura;
         if (cap && cap.localId && cap.visitanteId && cap.golesLocal != null && cap.golesVisitante != null) {
             const iL = IDX[cap.localId], iV = IDX[cap.visitanteId];
@@ -21300,6 +22199,14 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     #v169MapaModal .ori { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; margin-bottom: 8px; }
     #v169MapaModal .ori button { min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: #1e293b; color: #cbd5e1; font-weight: 800; font-size: 12px; padding: 4px; }
     #v169MapaModal .ori button.sel { background: rgba(245,166,35,.18); border-color: #f5a623; color: #f5a623; }
+    #v169MapaModal .cpo { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin-bottom: 8px; }
+    #v169MapaModal .cpo:empty { display: none; }
+    #v169MapaModal .cpo button { min-height: 44px; border-radius: 10px; border: 1px solid rgba(255,255,255,.14); background: #1e293b; color: #cbd5e1; font-weight: 800; font-size: 12px; padding: 4px; }
+    #v169MapaModal .cpo button.sel { background: rgba(46,213,115,.16); border-color: #2ed573; color: #2ed573; }
+    .eg-cuer { grid-template-columns: auto repeat(4, minmax(0, 1fr)); gap: 4px; align-items: center; }
+    .eg-cuer-t { font-size: 10.5px; color: #94a3b8; font-weight: 700; margin-right: 2px; }
+    .eg-cb { min-height: 34px; padding: 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-radius: 8px; border: 1px solid rgba(255,255,255,.12); background: #1a2332; color: #94a3b8; font-weight: 800; font-size: 11px; }
+    .eg-cb.on { border-color: #2ed573; color: #2ed573; background: rgba(46,213,115,.12); }
     #v169MapaModal svg { width: 100%; display: block; border-radius: 12px; background: radial-gradient(ellipse at center,#1a6e3a,#0f4a25); touch-action: manipulation; }
     #v169MapaModal .est { text-align: center; font-size: 11.5px; color: #cbd5e1; min-height: 16px; margin: 5px 0 8px; }
     #v169MapaModal .bot { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
@@ -21308,6 +22215,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
 <div id="v169MapaModal" role="dialog" aria-modal="true" aria-label="¿Cómo llegó el gol y desde dónde?"><div class="caja">
     <div class="tit" id="v169MapaTit">⚽ ¿Cómo llegó el gol?</div>
     <div class="sub" id="v169MapaSub">Opcional · toca el origen y el sitio del campo</div>
+    <div class="cpo" id="v236Cpo"></div>
     <div class="ori" id="v169MapaOri"></div>
     <svg id="v169MapaCampo" viewBox="0 0 340 250"></svg>
     <div class="est" id="v169MapaEst"></div>
@@ -21319,23 +22227,27 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             hergar: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['error', 'Error rival']],
             rival: [['jugada', 'Jugada'], ['robo', 'Robo / contra'], ['rechace', 'Rechace'], ['corner', 'Córner'], ['falta', 'Falta'], ['perdida', 'Pérdida nuestra'], ['propia', 'En propia']]
         };
-        let idxGol = null, origen = null, pos = null;
+        let idxGol = null, origen = null, pos = null, cuerpo = null; // v236: + con qué marcó
         const $ = (id) => document.getElementById(id);
         function pintar() {
             $('v169MapaCampo').innerHTML = (typeof egCampoSVG === 'function') ? egCampoSVG(pos ? pos.x : '', pos ? pos.y : '', false) : '';
             $('v169MapaEst').textContent = pos ? `📍 A ${Math.round(Math.hypot(pos.y, pos.x - 34))} m de la portería` : 'Toca en el campo desde dónde fue';
             [...$('v169MapaOri').children].forEach(b => b.classList.toggle('sel', b.dataset.v === origen));
+            [...$('v236Cpo').children].forEach(b => b.classList.toggle('sel', b.dataset.v === cuerpo));
         }
         window.v169AbrirMapaGol = function (idx, equipo) {
-            idxGol = idx; origen = null; pos = null;
+            idxGol = idx; origen = null; pos = null; cuerpo = null;
             const m = /^\[(\d+)'\]\s*(.*)$/.exec(String(substitutionTimeline[idx] || ''));
             const esPropia = !!(m && /^⚽ Gol en propia/.test(m[2])); // v205
             if (esPropia) origen = 'propia';
             const quien = esPropia ? 'en propia del rival' : equipo === 'rival' ? 'del rival' : ((m && /⚽ Gol #\S+ (\S+)/.exec(m[2])) ? 'de ' + /⚽ Gol #\S+ (\S+)/.exec(m[2])[1] : '');
             $('v169MapaTit').textContent = `${equipo === 'rival' ? '🥅' : '⚽'} Gol ${quien}${m ? ' · ' + m[1] + "'" : ''}`;
-            $('v169MapaSub').innerHTML = `Opcional · arriba, ${equipo === 'rival' ? '<b>nuestra portería</b>' : '<b>la portería del rival</b>'}`;
+            $('v169MapaSub').innerHTML = `Opcional · ${equipo === 'rival' || esPropia ? '' : 'con qué marcó, cómo llegó y desde dónde · '}arriba, ${equipo === 'rival' ? '<b>nuestra portería</b>' : '<b>la portería del rival</b>'}`;
             $('v169MapaOri').innerHTML = (esPropia ? [['propia', 'En propia']] : []).concat(ORI[equipo === 'rival' ? 'rival' : 'hergar']).map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join('');
             [...$('v169MapaOri').children].forEach(b => b.onclick = () => { origen = origen === b.dataset.v ? null : b.dataset.v; pintar(); });
+            // v236 · 🦶 con qué marcó: solo nuestros goles (no en propia)
+            $('v236Cpo').innerHTML = (equipo !== 'rival' && !esPropia) ? [['der', '🦶 Derecha'], ['izq', '🦶 Izquierda'], ['cab', '🗣️ Cabeza'], ['otra', 'Otra']].map(([v, t]) => `<button type="button" data-v="${v}">${t}</button>`).join('') : '';
+            [...$('v236Cpo').children].forEach(b => b.onclick = () => { cuerpo = cuerpo === b.dataset.v ? null : b.dataset.v; pintar(); });
             pintar();
             $('v169MapaModal').classList.add('on');
         };
@@ -21347,7 +22259,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         const cerrar = () => { $('v169MapaModal').classList.remove('on'); idxGol = null; };
         $('v169MapaSaltar').onclick = cerrar;
         $('v169MapaOk').onclick = () => {
-            if (idxGol != null && (origen || pos)) { const d = {}; if (origen) d.origen = origen; if (pos) d.pos = pos; mgdGuardar(idxGol, d); try { if (typeof publicarPartidoFirebase === 'function') publicarPartidoFirebase(); } catch (e) {} } // v174: el visor recibe el sitio del gol
+            if (idxGol != null && (origen || pos || cuerpo)) { const d = {}; if (origen) d.origen = origen; if (pos) d.pos = pos; if (cuerpo) d.cuerpo = cuerpo; mgdGuardar(idxGol, d); try { if (typeof publicarPartidoFirebase === 'function') publicarPartidoFirebase(); } catch (e) {} } // v174: el visor recibe el sitio del gol
             cerrar();
         };
     })();
@@ -21423,6 +22335,10 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             if (ma && (Number(ult.golesLocal) || 0) + (Number(ult.golesRival) || 0)) items.push({ key: `mapa|${cp}|${ma}`, g: 'ultimo', gsub: sub, titulo: `${plural(ma, 'gol', 'goles')} sin origen o posición`,
                 det: 'Para el Mapa de goles del visor. Los penaltis no hace falta completarlos.',
                 donde: 'Editar partido → ¿Cómo llegó? y 📍', accion: 'Completar', fn: () => pendEditar(i, 'mapa') });
+            const cu = golesCuerpoQueFaltan(ult); // v236
+            if (cu) items.push({ key: `cuerpo|${cp}|${cu}`, g: 'ultimo', gsub: sub, titulo: `${plural(cu, 'gol', 'goles')} sin «con qué marcó»`,
+                det: 'Derecha, izquierda, cabeza u otra: para las estadísticas de pierna y cabeza del visor.',
+                donde: 'Editar partido → goles → Con qué', accion: 'Completar', fn: () => pendEditar(i, 'cuerpo') });
             const sv = golesSinVideo(ult);
             if (sv.length) items.push({ key: `video|${cp}`, g: 'ultimo', gsub: sub, titulo: `${plural(sv.length, 'gol del Hergar', 'goles del Hergar')} sin vídeo`,
                 det: '«La semana del Hergar» del visor espera a los vídeos como mucho 24 horas.',
@@ -21435,10 +22351,11 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         // Partidos anteriores (todo junto)
         if (n > 1) {
             const ant = ps.slice(0, n - 1);
-            let sm = 0, smP = [], ma = 0, maP = [], tit = [], vids = [];
+            let sm = 0, smP = [], ma = 0, maP = [], tit = [], vids = [], cu = 0, cuP = [];
             ant.forEach((p, i) => {
                 const a = golesSinMinuto(p); if (a) { sm += a; smP.push(i); }
                 const b = golesMapaQueFaltan(p); if (b && (Number(p.golesLocal) || 0) + (Number(p.golesRival) || 0)) { ma += b; maP.push(i); }
+                const c = golesCuerpoQueFaltan(p); if (c) { cu += c; cuP.push(i); } // v236
                 if (!(Array.isArray(p.titulares) && p.titulares.length)) tit.push(i);
                 golesSinVideo(p).forEach(x => vids.push({ i, k: x.k, g: x.g, p }));
             });
@@ -21447,6 +22364,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 det: `${jl(smP)}. Esos partidos no cuentan en el más/menos ni en los momentos del partido.`, donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(smP[0], 'min') });
             if (ma) items.push({ key: `antmapa|${ma}`, g: 'antes', titulo: `${plural(ma, 'gol', 'goles')} sin mapear en ${plural(maP.length, 'partido', 'partidos')}`,
                 det: `${jl(maP)}. Sin ellos, el Mapa de goles de la temporada sale incompleto.`, donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(maP[0], 'mapa') });
+            if (cu) items.push({ key: `antcuerpo|${cu}`, g: 'antes', titulo: `${plural(cu, 'gol', 'goles')} sin «con qué marcó» en ${plural(cuP.length, 'partido', 'partidos')}`,
+                det: `${jl(cuP)}. Con los vídeos se pueden completar todos.`, donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(cuP[0], 'cuerpo') }); // v236
             if (vids.length) items.push({ key: `antvideo`, g: 'antes', titulo: `${plural(vids.length, 'gol', 'goles')} sin vídeo en partidos anteriores`,
                 det: 'Marca los que no se grabaron y dejarán de salir aquí.', donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(vids[0].i, 'video'),
                 subs: vids.map(x => ({ txt: `J${x.i + 1} ${x.p.rival} · ${nombreGol(x.g)}`, fn: () => marcarSinVideo(x.i, x.k, true) })) });
@@ -21571,6 +22490,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 if (que === 'min') return r.querySelector('.eg-min').value === '';
                 if (que === 'mapa') return !pen && (r.querySelector('.eg-orig').value === '' || r.querySelector('.eg-px').value === '');
                 if (que === 'video') return !rival && !r.querySelector('.eg-vid').value && !r.querySelector('.eg-vocu').checked && !r.querySelector('.eg-vbtn').classList.contains('bloq');
+                if (que === 'cuerpo') return !rival && r.querySelector('.eg-goleador').value !== 'propia' && !(r.querySelector('.eg-cpo') || {}).value; // v236
                 return false;
             };
             const fila = rows.find(falta);
@@ -21780,7 +22700,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     @keyframes vozLat { 0%,100% { box-shadow: 0 0 0 0 rgba(255,85,119,.5); } 50% { box-shadow: 0 0 0 7px rgba(255,85,119,0); } }
     #vozTira { display: none; border-radius: 12px; background: rgba(180,20,56,.07); border: 1px solid rgba(255,85,119,.28); padding: 8px 10px; position: relative; z-index: 1; }
     #vozTira.on { display: block; }
-    #vozTira .cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 800; color: #ff8fa3; letter-spacing: .3px; }
+    #vozTira .cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 800; color: #ff5577; letter-spacing: .3px; }
     #vozTira .cab button { background: #000; color: #94a3b8; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; height: 30px; padding: 0 10px; font-size: 10.5px; font-weight: 800; flex-shrink: 0; }
     .voz-ev { display: flex; align-items: center; gap: 7px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.05); font-size: 12px; }
     .voz-ev .m { font-family: 'Montserrat', monospace; font-weight: 800; font-size: 10.5px; color: #64748b; width: 26px; flex-shrink: 0; }
@@ -21983,7 +22903,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         FALLO: ['❌', 'Fallo'], FALLO_IMP: ['💥', 'Fallo importante'], PARADA: ['🧤', 'Parada'], PARADA_DIFICIL: ['🧤⭐', 'Paradón'], FUERA_JUEGO: ['🚩', 'Fuera de juego'],
         AMARILLA: ['🟨', 'Amarilla'], ROJA: ['🟥', 'Roja'], FALTA_FAVOR: ['🟡', 'Falta a favor'], FALTA_CONTRA: ['🟠', 'Falta en contra'],
         CORNER_FAVOR: ['⛳', 'Córner a favor'], CORNER_CONTRA: ['⛳', 'Córner en contra'], GOL_RIVAL: ['🥅', 'Gol del rival'], TIRO_RIVAL_PUERTA: ['🥅', 'Tiro del rival a puerta'],
-        TIRO_RIVAL_FUERA: ['💨', 'Tiro del rival fuera'], PALO_RIVAL: ['🪵', 'Palo del rival'], FJ_RIVAL: ['🚩', 'Fuera de juego del rival'], GOL_PROPIA_RIVAL: ['⚽', 'Gol en propia del rival'],
+        TIRO_RIVAL_FUERA: ['💨', 'Tiro del rival fuera'], PALO_RIVAL: ['🪵', 'Palo del rival'], FJ_RIVAL: ['🚩', 'Fuera de juego del rival'], GOL_PROPIA_RIVAL: ['⚽', 'Gol en propia del rival'], TARJ_RIVAL_A: ['🟨', 'Amarilla al rival'], TARJ_RIVAL_R: ['🟥', 'Roja al rival'],
         PEN_FAVOR: ['🎯', 'Penalti'], PEN_RIVAL: ['🎯', 'Penalti del rival'], CAMBIO: ['🔄', 'Cambio'], DESHACER: ['↩', 'Borrar lo último']
     };
     const RES_PEN = { GOL: 'gol', PARADO: 'parado', FUERA: 'fuera' };
@@ -22079,6 +22999,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             return falla('Córner, ¿a favor o en contra?', true);
         }
         if (has(/ falta /)) return parseFalta(t);
+        if (has(/ (amarilla|roja|tarjeta|tarjetas|expulsion|expulsado|expulsan) /) && esRivalAcc(t)) return ok({ act: has(/ (roja|expulsion|expulsado|expulsan|segunda amarilla|doble amarilla) /) ? 'TARJ_RIVAL_R' : 'TARJ_RIVAL_A' }); // v220
         if (has(/ amarilla /)) return conJugador(t, 'AMARILLA', true);
         if (has(/ roja /)) return conJugador(t, 'ROJA', true);
         if (has(/ (paradon|parada dificil|parada buena|gran parada|parada clave) /)) return ok({ act: 'PARADA_DIFICIL' });
@@ -22177,6 +23098,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 case 'TIRO_RIVAL_FUERA': rival('TIRO_RIVAL_FUERA'); break;
                 case 'PALO_RIVAL': rival('TIRO_RIVAL_PALO'); break;
                 case 'FJ_RIVAL': document.getElementById('fueraJuegoRivalBtn').onclick(); break;
+                case 'TARJ_RIVAL_A': registrarTarjetaRival('A'); break; // v220
+                case 'TARJ_RIVAL_R': registrarTarjetaRival('R'); break;
                 case 'GOL_PROPIA_RIVAL': registrarGolPropiaRival(); golPropia = true; break;
                 case 'PEN_FAVOR':
                     penaltiEjecutorId = r.j.id; penaltiProvocadorId = r.provoca && enCampo(r.provoca) ? r.provoca.id : null;
@@ -22446,7 +23369,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         ['Parada', 'parada · paradón (el portero que está en el campo)'], ['Fuera de juego', 'fuera de juego del 9'], ['Tarjetas', 'amarilla al 6 · roja al 6'],
         ['Penalti', 'penalti del 9 gol · parado · fuera'], ['Cambio', 'entra el 14 por el 7 · cambio 14 por 7'],
         ['DEL RIVAL Y DEL EQUIPO'], ['Gol del rival', 'gol de ellos · gol en contra · nos marcan'], ['Tiro del rival', 'tiro de ellos · tiro en contra · tiro en contra fuera'], ['Palo del rival', 'palo de ellos · palo en contra'],
-        ['Penalti del rival', 'penalti de ellos / en contra + gol · parado · fuera'], ['Fuera de juego rival', 'fuera de juego de ellos'], ['Gol en propia del rival', 'gol en propia · autogol'],
+        ['Penalti del rival', 'penalti de ellos / en contra + gol · parado · fuera'], ['Fuera de juego rival', 'fuera de juego de ellos'], ['Tarjetas al rival', 'amarilla de ellos · amarilla al rival · tarjeta en contra · roja de ellos · expulsado uno de ellos (la 2.ª amarilla, como roja)'], ['Gol en propia del rival', 'gol en propia · autogol'],
         ['Córners', 'córner a favor · córner de ellos · córner en contra'], ['Faltas', 'falta a favor · le hacen falta al 9 · falta en contra (la cometemos nosotros)'],
         ['CORREGIR'], ['Quitar lo último', 'borra · deshaz (igual que ↩)']
     ];
@@ -22457,7 +23380,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     const ancla = Array.from(document.querySelectorAll('#rosterEditSection > div')).find(d => /CONFIGURACIÓN IA/.test(d.textContent || ''));
     if (ancla) ancla.insertAdjacentHTML('beforebegin', `<div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
         <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎙️ CONTROL POR VOZ</div>
-        <button type="button" onclick="vozAbrirPrueba()" style="width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(255,85,119,0.5); background:rgba(180,20,56,0.12); color:#ff8fa3; font-weight:800; font-size:12px;">🧪 PROBAR VOZ Y CASCOS</button>
+        <button type="button" onclick="vozAbrirPrueba()" style="width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(255,85,119,0.5); background:rgba(180,20,56,0.12); color:#ff5577; font-weight:800; font-size:12px;">🧪 PROBAR VOZ Y CASCOS</button>
         <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin:6px 0 8px;">Para cuando cambies de cascos. No apunta nada en el partido.</div>
         <details id="vozApodosDet"><summary style="font-size:12px; font-weight:800; color:#e2e8f0; cursor:pointer; min-height:36px; display:flex; align-items:center;">🏷️ Apodos de cada niño para la voz</summary>
             <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin:2px 0 6px;">Cómo le llamáis en el equipo, separado por comas (p. ej. «Alex, Ale»). Los diminutivos normales (Sebas, Dani, Santi…) ya se entienden sin ponerlos.</div>
@@ -22479,6 +23402,266 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     { const det = $('vozApodosDet'); if (det) det.addEventListener('toggle', () => { if (det.open) pintarApodos(); }); }
 
     pintarTira();
+})();
+</script>
+
+<!-- ── v230 · 🏆 PREMIOS DE LA VUELTA: se calculan solos, Javi los revisa (cambiar ganador, elegir el gol) y los publica en el visor ── -->
+<style>
+    #pmModal { display: none; position: fixed; inset: 0; z-index: 9500; background: #0a0e14; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #pmModal .pm-wrap { max-width: 480px; margin: 0 auto; padding: 14px 14px 40px; display: flex; flex-direction: column; gap: 12px; }
+    .pm-card { background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px; }
+    .pm-h { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: 1px; color: #94a3b8; margin-bottom: 6px; }
+    .pm-row { display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.06); align-items: start; }
+    .pm-row:first-of-type { border-top: none; }
+    .pm-row .e { font-size: 18px; line-height: 1.2; }
+    .pm-row .t { font-size: 12.5px; font-weight: 700; color: #e2e8f0; }
+    .pm-row .g { font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 14px; color: #fff; margin-top: 2px; }
+    .pm-row .d { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+    .pm-row .g.off { color: #64748b; font-weight: 700; font-size: 12px; }
+    .pm-sel { width: 100%; min-height: 38px; margin-top: 6px; border-radius: 9px; background: #0f172a; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.12); padding: 0 8px; font-size: 12px; }
+    .pm-gol { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 10px; background: #0f151f; margin-top: 6px; cursor: pointer; font-size: 12px; }
+    .pm-gol input { width: 20px; height: 20px; accent-color: #2ed573; margin: 0; flex-shrink: 0; }
+    .pm-gol a { margin-left: auto; color: #5dade2; font-weight: 700; text-decoration: none; font-size: 12px; padding: 6px; }
+    .pm-btn { min-height: 46px; border-radius: 12px; border: none; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13px; }
+</style>
+<div id="pmModal" role="dialog" aria-label="Premios de la vuelta">
+    <div class="pm-wrap" id="pmContenido"></div>
+</div>
+<script>
+(function () {
+    const PM_KEY = 'hergar_F11_premios';
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const f1 = v => (Math.round(v * 10) / 10).toFixed(1).replace('.', ',').replace('-0,0', '0,0');
+    const sg = v => (v > 0 ? '+' : '') + f1(v);
+    const VUELTAS = [['1', '1.ª vuelta'], ['2', '2.ª vuelta'], ['3', '3.ª vuelta'], ['T', 'temporada']];
+    const PM_EVO_R = { gol: .75, asist: .40, dp: .30, df: .10, pal: .30, pc: .25, pa: .15, reg: .10, def: .30, defC: 1.00, par: .30, parD: 1.00, fj: -.05 }; // como «Sus acciones» del visor
+    const PM_B2B_N = 4, PM_B2B_T = 6;
+
+    function leer() { try { return JSON.parse(localStorage.getItem(PM_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    function guardar(d) { try { localStorage.setItem(PM_KEY, JSON.stringify(d)); } catch (e) {} }
+    // Lo que va al visor con la temporada (lista de premios publicados)
+    window.premiosPublicados = function () { const d = leer(); return Array.isArray(d.publicados) && d.publicados.length ? d.publicados : null; };
+
+    function nombre(t, id) { const j = (t.jugadores || {})[id] || (typeof playersData !== 'undefined' ? playersData[id] : null); return j ? String(j.name || '').split(' ')[0] : '¿?'; }
+    function hist(j, p) { return (j.historial || []).find(x => x.fecha === p.fecha && x.rival === p.rival) || null; }
+    function susAcc(h) { // «sus acciones» del niño en un partido (sin la parte de equipo); null si el partido no tiene detalle
+        if (!h) return null;
+        if (h.accImp !== undefined && h.accImp !== null) return Number(h.accImp) || 0;
+        if (!h.acc) return null;
+        let s = (h.goles || 0) * PM_EVO_R.gol + (h.asistencias || 0) * PM_EVO_R.asist;
+        ['dp', 'df', 'pal', 'pc', 'pa', 'reg', 'def', 'defC', 'par', 'parD', 'fj'].forEach(k => s += (Number(h.acc[k]) || 0) * PM_EVO_R[k]);
+        return s;
+    }
+    function b2b(h) {
+        if (!h || h.acc === undefined || h.acc === null) return 0;
+        const a = h.acc || {}, g = Number(h.goles) || 0, n = k => Number(a[k]) || 0;
+        const at = 2 * g + 2 * (Number(h.asistencias) || 0) + n('pc') + n('pa') + n('reg') + Math.max(0, n('dp') - g);
+        const de = n('def') + n('defC');
+        return at >= PM_B2B_T && de >= PM_B2B_T ? 2 : at >= PM_B2B_N && de >= PM_B2B_N ? 1 : 0;
+    }
+    function rango(t, d) {
+        const n = (t.partidos || []).length;
+        const desde = Math.max(0, Math.min(n, (Number(d.desde) || 1) - 1));
+        return { desde, hasta: n, ps: (t.partidos || []).slice(desde) };
+    }
+
+    // ── Cálculo de los premios (cada uno con su ranking: el 1.º gana, el resto sale en el podio o para cambiarlo) ──
+    function calcular(t, liga, d) {
+        const R0 = rango(t, d), ps = R0.ps, js = Object.values(t.jugadores || {});
+        const P = {};
+        const durDe = p => { try { return mmDuracion(p, proFilas(t, p)); } catch (e) { return 70; } };
+        let posibles = 0; ps.forEach(p => { if (!p.manual) posibles += durDe(p); });
+        // por niño y partido
+        const fila = js.map(j => {
+            const L = ps.map(p => ({ p, h: hist(j, p) })).filter(x => x.h && (x.h.mins || 0) > 0);
+            const mins = L.reduce((s, x) => s + (Number(x.h.mins) || 0), 0);
+            let sa = 0, saMin = 0; L.forEach(x => { const v = susAcc(x.h); if (v != null) { sa += v; saMin += Number(x.h.mins) || 0; } });
+            const nMvp = ps.filter(p => p.mvpId != null && String(p.mvpId) === String(j.id)).length;
+            const goles = L.reduce((s, x) => s + (Number(x.h.goles) || 0), 0), asis = L.reduce((s, x) => s + (Number(x.h.asistencias) || 0), 0);
+            const par = L.reduce((s, x) => s + (x.h.acc ? (Number(x.h.acc.par) || 0) + (Number(x.h.acc.parD) || 0) : 0), 0);
+            const nb = L.filter(x => b2b(x.h) >= 1).length, nbT = L.filter(x => b2b(x.h) === 2).length;
+            const per = L.map(x => ({ v: susAcc(x.h), m: Number(x.h.mins) || 0 })).filter(x => x.v != null && x.m >= 20).map(x => x.v / x.m * 70);
+            return { j, id: String(j.id), L, mins, sa, saMin, nMvp, goles, asis, par, nb, nbT, per, pj: L.length };
+        }).filter(x => x.pj > 0);
+        const top = (arr, f, filt, ord) => arr.filter(filt || (() => true)).map(x => Object.assign({ v: f(x) }, x)).filter(x => x.v != null).sort(ord || ((a, b) => b.v - a.v));
+
+        // ⭐ MVP: sus acciones por 70', con la mitad de los minutos posibles como mínimo; desempatan las veces MVP
+        const minMvp = Math.round(posibles * 0.5);
+        P.mvp = top(fila, x => x.saMin > 0 ? x.sa / x.saMin * 70 : null, x => x.saMin >= minMvp && x.saMin > 0, (a, b) => b.v - a.v || b.nMvp - a.nMvp)
+            .map(x => ({ ids: [x.id], v: x.v, dato: sg(x.v), lab: "sus acciones por 70'", extras: [[x.mins + "'", 'minutos'], [String(x.nMvp), x.nMvp === 1 ? 'vez MVP' : 'veces MVP']], txt: `El que más ha hecho con sus acciones por cada 70 minutos (goles, pases, regates, defensas…). Jugó ${x.pj} de ${ps.length} partidos.` }));
+        // 🎯 Pichichi · 🅰️ El asistente · 🧤 El muro
+        P.pichichi = top(fila, x => x.goles, x => x.goles > 0, (a, b) => b.v - a.v || a.mins - b.mins)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'gol' : 'goles', extras: [[String(x.asis), x.asis === 1 ? 'asistencia' : 'asistencias'], [String(x.pj), 'partidos']], txt: `El máximo goleador de la ${d.nombre}.` }));
+        P.asistente = top(fila, x => x.asis, x => x.asis > 0, (a, b) => b.v - a.v || a.mins - b.mins)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'asistencia' : 'asistencias', extras: [[String(x.goles), x.goles === 1 ? 'gol' : 'goles'], [String(x.pj), 'partidos']], txt: 'El que más goles ha dado a sus compañeros.' }));
+        P.muro = top(fila, x => x.par, x => x.par > 0)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: 'paradas', extras: [[x.mins + "'", 'minutos'], [String(x.pj), 'partidos']], txt: 'Bajo palos, el que más balones ha sacado.' }));
+        // 🧩 El pegamento: con cuántos compañeros forma pareja rodada en toda la vuelta
+        //  v233: por zona (pgParejas). v232: solo minutos como VECINOS en la pizarra (enlaces de la química); antes el portero salía rodado con todos
+        try {
+            const R = qmTemporada(t), ven = {}, mj = {};
+            for (let k = R0.desde; k < R0.hasta; k++) { Object.entries(R.porPartido[k] || {}).forEach(([c, m]) => { ven[c] = (ven[c] || 0) + m; }); Object.entries(R.minsJug[k] || {}).forEach(([id, m]) => { mj[id] = (mj[id] || 0) + m; }); }
+            const G = pgParejas(R, R0.desde, R0.hasta), ids = Object.keys(G.mv).filter(id => G.mv[id] > 0), soc = {}; // v233: por zona
+            ids.forEach(id => { soc[id] = G.socios[id].length; });
+            P.pegamento = ids.filter(id => soc[id] > 0).map(id => ({ ids: [id], v: soc[id], dato: String(soc[id]), lab: 'compañeros con los que está rodado', extras: [[mj[id] + "'", 'minutos']], txt: 'El que más une al equipo: el que más parejas rodadas forma con los compañeros que juegan a su lado.' })).sort((a, b) => b.v - a.v);
+            // 🔗 La pareja de la vuelta: la pareja de vecinos (en la pizarra) que más minutos ha jugado junta
+            const vec = new Set();
+            for (let k = Math.max(1, R0.desde); k < R0.hasta; k++) { const r = R.partidos[k]; if (r && r.tramos) r.tramos.forEach(tr => tr.enlaces.forEach(e => vec.add(qmClave(e.a, e.b)))); }
+            P.pareja = [...vec].map(c => ({ c, m: ven[c] || 0 })).filter(x => x.m > 0).sort((a, b) => b.m - a.m)
+                .map(x => { const [a, b] = x.c.split('|'); return { ids: [a, b], v: x.m, dato: Math.round(x.m) + "'", lab: 'jugando juntos', extras: [], txt: 'La pareja de compañeros vecinos en el campo que más minutos ha compartido.' }; });
+        } catch (e) { console.error('Premios · química:', e); P.pegamento = P.pegamento || []; P.pareja = P.pareja || []; }
+        // 🔥 Se crece en los grandes (peso en el equipo contra los 4 rivales de más Elo, frente al resto)
+        try {
+            const t2 = Object.assign({}, t, { partidos: ps });
+            const G = grandesTemporada(t2, liga);
+            P.grandes = G.jug.filter(x => x.ok && x.dif != null && x.dif > 0.05).sort((a, b) => b.dif - a.dif)
+                .map(x => ({ ids: [String(x.j.id)], v: x.dif, dato: sg(x.dif), lab: 'más peso en el equipo en los grandes', extras: [[String(x.ng), x.ng === 1 ? 'partido grande' : 'partidos grandes']], txt: 'Contra los 4 rivales de más Elo, el que más sube su peso en el equipo.' }));
+        } catch (e) { console.error('Premios · grandes:', e); P.grandes = []; }
+        // 📈 El que más ha mejorado: sus acciones por 70' del último tercio de sus partidos frente al primero
+        P.mejorado = fila.filter(x => x.per.length >= 6).map(x => {
+            const n = Math.floor(x.per.length / 3), a = x.per.slice(0, n), b = x.per.slice(-n);
+            const m = L => L.reduce((s, v) => s + v, 0) / L.length;
+            return { ids: [x.id], v: m(b) - m(a), ini: m(a), fin: m(b), n };
+        }).filter(x => x.v > 0.05).sort((a, b) => b.v - a.v)
+            .map(x => ({ ids: x.ids, v: x.v, dato: sg(x.v), lab: "más en sus acciones por 70'", extras: [[f1(x.ini), `sus ${x.n} primeros`], [f1(x.fin), `sus ${x.n} últimos`]], txt: `Comparando sus ${x.n} últimos partidos con sus ${x.n} primeros, el que más ha crecido.` }));
+        // 📦 Rey del box-to-box
+        P.b2b = top(fila, x => x.nb, x => x.nb > 0, (a, b) => b.v - a.v || b.nbT - a.nbT)
+            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'partido box-to-box' : 'partidos box-to-box', extras: x.nbT ? [[String(x.nbT), 'box-to-box total']] : [], txt: 'El que más partidos ha llegado a todo: 4 o más puntos atacando y 4 o más defendiendo.' }));
+        // 🏟️ El partido de la vuelta: la victoria (o si no, el empate) contra el rival más fuerte por Elo de hoy
+        try {
+            const E = eloLiga(liga), otros = E ? E.equipos.filter(x => !x.e.esHergar) : [];
+            P.partido = ps.map((p, k) => {
+                const rv = proRivalLiga(liga, p), pos = otros.findIndex(x => x.i === rv.i);
+                return { p, k: R0.desde + k, pos, res: p.resultado, gf: Number(p.golesLocal) || 0, gc: Number(p.golesRival) || 0 };
+            }).filter(x => x.res === 'V' || x.res === 'E').sort((a, b) => (a.res === b.res ? 0 : a.res === 'V' ? -1 : 1) || (a.pos < 0 ? 99 : a.pos) - (b.pos < 0 ? 99 : b.pos) || (b.gf - b.gc) - (a.gf - a.gc))
+                .map(x => ({ ids: [], partido: x.k, v: x.pos, dato: `${x.gf}-${x.gc}`, lab: `${x.res === 'V' ? 'victoria' : 'empate'} ante ${x.p.rival}`, extras: [[`J${x.k + 1}`, 'jornada']].concat(x.pos >= 0 ? [[`${x.pos + 1}.º`, 'rival más fuerte']] : []), txt: x.pos >= 0 ? `${x.res === 'V' ? 'La victoria' : 'El empate'} con más mérito: contra el ${x.pos + 1}.º rival más fuerte de la Liga por Elo.` : 'El mejor resultado de la vuelta.', nom: `J${x.k + 1} · vs ${x.p.rival}` }));
+        } catch (e) { console.error('Premios · partido:', e); P.partido = []; }
+        return { P, ps, R0, posibles };
+    }
+    const LISTA = [
+        ['mvp', '⭐', 'MVP de la vuelta'], ['pichichi', '🎯', 'Pichichi'], ['asistente', '🅰️', 'El asistente'], ['muro', '🧤', 'El muro'],
+        ['pegamento', '🧩', 'El pegamento'], ['grandes', '🔥', 'Se crece en los grandes'], ['mejorado', '📈', 'El que más ha mejorado'],
+        ['b2b', '📦', 'Rey del box-to-box'], ['pareja', '🔗', 'La pareja de la vuelta'], ['partido', '🏟️', 'El partido de la vuelta']
+    ];
+    function nomOpc(t, o) { return o.nom || o.ids.map(id => nombre(t, id)).join(' + '); }
+    function golesConVideo(t, R0) {
+        const out = [];
+        R0.ps.forEach((p, k) => (Array.isArray(p.goles) ? p.goles : []).forEach((g, gi) => {
+            if (!g || g.equipo === 'rival' || !g.video || g.videoOculto) return;
+            if (g.jugadorId != null && typeof permisoVideo === 'function' && !permisoVideo(g.jugadorId)) return;
+            out.push({ i: R0.desde + k, k: gi, p, g });
+        }));
+        return out;
+    }
+
+    let estado = null; // { t, liga, d, C }
+    function render() {
+        const box = document.getElementById('pmContenido');
+        const t = getTemporada(), liga = getLiga(), d = leer();
+        d.vuelta = d.vuelta || '1'; d.desde = d.desde || 1; d.ov = d.ov || {};
+        d.nombre = (VUELTAS.find(x => x[0] === d.vuelta) || VUELTAS[0])[1];
+        const n = (t.partidos || []).length;
+        if (!n) { box.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px;">🏆 Premios</div><button type="button" class="pm-btn" style="background:#1f2a3a; color:#fff; padding:0 16px;" onclick="cerrarPremios()">Cerrar</button></div><div class="pm-card">Aún no hay partidos en la temporada.</div>`; return; }
+        const C = calcular(t, liga, d);
+        estado = { t, liga, d, C };
+        const ov = d.ov[d.vuelta] || {};
+        const publicado = (d.publicados || []).find(x => x.vuelta === d.vuelta);
+        const filas = LISTA.map(([k, e, tit]) => {
+            const L = (C.P[k] || []).slice(0, 8), sel = ov[k];
+            let elegido = sel === 'no' ? null : (sel != null ? L.find(o => nomOpc(t, o) === sel) : null) || (sel === 'no' ? null : L[0]);
+            const opts = L.map(o => `<option value="${esc(nomOpc(t, o))}"${elegido && nomOpc(t, elegido) === nomOpc(t, o) ? ' selected' : ''}>${esc(nomOpc(t, o))} · ${esc(o.dato)} ${esc(o.lab)}</option>`).join('');
+            return `<div class="pm-row"><span class="e">${e}</span><div><div class="t">${esc(tit)}</div>
+                ${elegido ? `<div class="g">${esc(nomOpc(t, elegido))}</div><div class="d">${esc(elegido.dato)} ${esc(elegido.lab)}</div>` : `<div class="g off">${L.length ? 'No se da este premio' : 'Nadie cumple todavía'}</div>`}
+                ${L.length ? `<select class="pm-sel" onchange="premiosCambiar('${k}', this.value)"><option value="no"${!elegido ? ' selected' : ''}>— No dar este premio —</option>${opts}</select>` : ''}</div></div>`;
+        }).join('');
+        const goles = golesConVideo(t, C.R0), gsel = ov.gol;
+        const golesHTML = goles.length ? goles.map(x => {
+            const v = x.i + ':' + x.k;
+            return `<label class="pm-gol"><input type="radio" name="pmGol" value="${v}"${gsel === v ? ' checked' : ''} onchange="premiosCambiar('gol', this.value)">
+                <div><b style="color:#fff;">${esc(x.g.jugadorId != null ? nombre(t, x.g.jugadorId) : 'Gol')}</b> · J${x.i + 1}${x.g.min != null ? ` · ${x.g.min}'` : ''}<br><span style="color:#94a3b8; font-size:11px;">vs ${esc(x.p.rival)}${x.g.origen ? ' · ' + esc(x.g.origen) : ''}</span></div>
+                ${typeof urlVideoGol === 'function' ? `<a href="${esc(urlVideoGol(x.g.video))}" target="_blank" rel="noopener" onclick="event.stopPropagation();">▶ Ver</a>` : ''}</label>`;
+        }).join('') + `<label class="pm-gol"><input type="radio" name="pmGol" value=""${!gsel ? ' checked' : ''} onchange="premiosCambiar('gol', '')"><div style="color:#94a3b8;">Sin gol de la vuelta</div></label>`
+            : `<div style="font-size:12px; color:#94a3b8;">No hay goles con vídeo en estos partidos.</div>`;
+        const avisoOk = typeof oneSignalKey === 'function' && !!oneSignalKey();
+        box.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <div><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px; color:#fff;">🏆 Premios de la ${esc(d.nombre)}</div>
+                <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;">Se calculan solos. Puedes cambiar el ganador de cualquiera.</div></div>
+                <button type="button" class="pm-btn" style="background:#1f2a3a; color:#fff; padding:0 16px; flex:none;" onclick="cerrarPremios()">Cerrar</button>
+            </div>
+            <div class="pm-card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <select class="pm-sel" style="margin:0; flex:1; min-width:130px;" onchange="premiosVuelta(this.value)">${VUELTAS.map(([v, l]) => `<option value="${v}"${v === d.vuelta ? ' selected' : ''}>Premios de la ${l}</option>`).join('')}</select>
+                <label style="font-size:12px; color:#cbd5e1; display:flex; align-items:center; gap:6px;">desde la J<input type="number" min="1" max="${n}" value="${C.R0.desde + 1}" onchange="premiosDesde(this.value)" style="width:56px; min-height:38px; border-radius:9px; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,0.12); padding:0 6px;"></label>
+                <div style="width:100%; font-size:11px; color:#94a3b8;">Cuentan ${C.ps.length} ${C.ps.length === 1 ? 'partido' : 'partidos'} (J${C.R0.desde + 1}–J${C.R0.hasta}). Para el MVP hace falta jugar ${Math.round(C.posibles * 0.5)}' como poco (la mitad).</div>
+            </div>
+            ${publicado ? `<div class="pm-card" style="border-color:rgba(46,213,115,.45); font-size:12px; color:#cbd5e1;">✅ Publicados en el visor el ${new Date(publicado.ts).toLocaleDateString('es-ES')}. Si los vuelves a publicar, se sustituyen. <button type="button" onclick="premiosQuitar()" style="margin-left:4px; background:none; border:none; color:#ff6b7a; font-weight:700; font-size:12px; text-decoration:underline;">Quitar del visor</button></div>` : ''}
+            <div class="pm-card"><div class="pm-h">PREMIOS CALCULADOS</div>${filas}</div>
+            <div class="pm-card"><div class="pm-h">⚽ GOL DE LA VUELTA · LO ELIGES TÚ</div>${golesHTML}</div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:${avisoOk ? '#e2e8f0' : '#64748b'}; min-height:40px;"><input type="checkbox" id="pmAviso" ${avisoOk ? 'checked' : 'disabled'} style="width:20px; height:20px; accent-color:#2ed573;"> Mandar aviso a las familias${avisoOk ? '' : ' (falta la clave de OneSignal en Ajustes)'}</label>
+            <button type="button" class="pm-btn" style="background:rgb(180,20,56); color:#fff;" onclick="premiosPublicar()">📢 ${publicado ? 'Volver a publicar' : 'Publicar en el visor'}</button>
+            <div id="pmEstado" style="font-size:12px; color:#94a3b8; text-align:center; min-height:16px;"></div>`;
+    }
+    window.premiosCambiar = function (k, v) { const d = leer(); d.vuelta = d.vuelta || '1'; d.ov = d.ov || {}; d.ov[d.vuelta] = d.ov[d.vuelta] || {}; d.ov[d.vuelta][k] = v; guardar(d); render(); };
+    window.premiosVuelta = function (v) { const d = leer(); d.vuelta = v; const pub = (d.publicados || []).find(x => x.vuelta === v); if (pub) d.desde = pub.desde + 1; else if (v === '1' || v === 'T') d.desde = 1; else { const ant = (d.publicados || []).filter(x => x.vuelta !== 'T').sort((a, b) => b.hasta - a.hasta)[0]; d.desde = ant ? ant.hasta + 1 : 1; } guardar(d); render(); };
+    window.premiosDesde = function (v) { const d = leer(); d.desde = Math.max(1, Number(v) || 1); guardar(d); render(); };
+
+    // Foto fija de los premios: el visor solo los enseña (no los recalcula al seguir la temporada)
+    function construir() {
+        const { t, d, C } = estado, ov = (d.ov || {})[d.vuelta] || {};
+        const premios = [];
+        LISTA.forEach(([k, e, tit]) => {
+            const L = C.P[k] || []; const sel = ov[k];
+            if (sel === 'no' || !L.length) return;
+            const g = (sel != null ? L.find(o => nomOpc(t, o) === sel) : null) || L[0];
+            const podio = L.filter(o => o !== g).slice(0, 2);
+            premios.push({ k, e, t: k === 'mvp' ? `MVP de la ${d.nombre}` : k === 'pareja' ? `La pareja de la ${d.nombre}` : k === 'partido' ? `El partido de la ${d.nombre}` : tit,
+                ids: g.ids.map(String), nombre: nomOpc(t, g), dato: g.dato, lab: g.lab, extras: g.extras || [], txt: g.txt || '', partido: g.partido != null ? g.partido : null,
+                podio: [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) });
+        });
+        let gol = null;
+        if (ov.gol) {
+            const [i, k] = String(ov.gol).split(':').map(Number), p = (t.partidos || [])[i], g = p && p.goles && p.goles[k];
+            if (g) gol = { i, k, id: g.jugadorId != null ? String(g.jugadorId) : null, nombre: g.jugadorId != null ? nombre(t, g.jugadorId) : 'Gol', rival: p.rival, fecha: p.fecha, min: g.min != null ? g.min : null, origen: g.origen || null, video: g.video };
+        }
+        const ps = C.ps, v = ps.filter(p => p.resultado === 'V').length, e = ps.filter(p => p.resultado === 'E').length, dd = ps.filter(p => p.resultado === 'D').length;
+        const gf = ps.reduce((s, p) => s + (Number(p.golesLocal) || 0), 0), gc = ps.reduce((s, p) => s + (Number(p.golesRival) || 0), 0);
+        return { vuelta: d.vuelta, nombre: d.nombre, ts: Date.now(), desde: C.R0.desde, hasta: C.R0.hasta, balance: { pj: ps.length, v, e, d: dd, gf, gc, pts: v * 3 + e }, premios, gol };
+    }
+    window.premiosPublicar = async function () {
+        if (!estado) return;
+        const snap = construir();
+        if (!snap.premios.length && !snap.gol) { alert('No hay ningún premio que publicar.'); return; }
+        const d = leer();
+        d.publicados = (d.publicados || []).filter(x => x.vuelta !== snap.vuelta).concat([snap]);
+        guardar(d);
+        const st = document.getElementById('pmEstado'); if (st) { st.style.color = '#94a3b8'; st.textContent = 'Publicando…'; }
+        const aviso = document.getElementById('pmAviso'), conAviso = aviso && aviso.checked;
+        let res = null;
+        try { res = await publicarTemporadaFirebase(getTemporada()); } catch (e) { res = { ok: false, error: String(e) }; }
+        if (!(res && res.ok)) { if (st) { st.style.color = '#ff4757'; st.textContent = '⚠️ No se pudo publicar: ' + ((res && res.error) || 'error'); } return; }
+        if (conAviso) {
+            try {
+                await fetch('https://api.onesignal.com/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${oneSignalKey()}` },
+                    body: JSON.stringify({ app_id: ONESIGNAL_APP_ID, included_segments: ['Subscribed Users'], headings: { en: `🏆 Premios de la ${snap.nombre}` }, contents: { en: `Ya están los premios de la ${snap.nombre} del Hergar. ¡Entra a verlos!` }, url: LIVE_VIEWER_BASE_URL + '?premios=1' }) });
+            } catch (e) { console.error('Aviso de premios:', e); }
+        }
+        render();
+        const st2 = document.getElementById('pmEstado'); if (st2) { st2.style.color = '#2ed573'; st2.textContent = `✅ Publicados en el visor${conAviso ? ' y aviso enviado' : ''}.`; }
+    };
+    window.premiosQuitar = async function () {
+        const d = leer(); if (!confirm(`¿Quitar del visor los premios de la ${d.nombre || 'vuelta'}?`)) return;
+        d.publicados = (d.publicados || []).filter(x => x.vuelta !== (d.vuelta || '1')); guardar(d);
+        try { await publicarTemporadaFirebase(getTemporada()); } catch (e) {}
+        render();
+    };
+    window.abrirPremios = function () {
+        try { cerrarMasSheet(); } catch (e) {}
+        const m = document.getElementById('pmModal'); m.style.display = 'block'; m.scrollTop = 0;
+        try { render(); } catch (e) { console.error('Premios:', e); document.getElementById('pmContenido').innerHTML = `<div class="pm-card">No se han podido calcular los premios: ${esc(e.message || e)} <button type="button" onclick="cerrarPremios()">Cerrar</button></div>`; }
+    };
+    window.cerrarPremios = function () { document.getElementById('pmModal').style.display = 'none'; };
+    const sheet = document.getElementById('masSheet');
+    if (sheet) sheet.insertAdjacentHTML('afterbegin', '<button class="mas-item" id="masPremiosBtn" onclick="abrirPremios()"><span class="ic">🏆</span>Premios de la vuelta</button>');
 })();
 </script>
 
