@@ -1583,12 +1583,13 @@
                 <button id="btnAltoContraste" class="btn-config" style="flex:0 0 52px;background:linear-gradient(135deg,#f1c40f,#f39c12);color:#0a0e14;border-radius:12px;font-weight:700;font-size:11px;padding:0;" onclick="toggleAltoContraste()">☀️</button>
             </div>
             <div class="accion-panel">
-                <div id="previaRow" class="controls-row" style="flex-wrap:wrap; display:none;">
-                    <button id="publicarAlineacionBtn" style="flex:1; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 8px;">📣 PUBLICAR ALINEACIÓN</button>
-                    <button id="llegueTardeBtn" onclick="ltAbrir()" style="flex:1 1 100%; background:linear-gradient(135deg,#e67e22,#d35400); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 10px;">⏩ LLEGUÉ TARDE</button>
-                    <button id="delegadoCargarBtn" onclick="cargarPartidoDelegado()" style="flex:1 1 100%; background:linear-gradient(135deg,#1f7a4b,#14532d); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 10px;">📥 PARTIDO DEL DELEGADO</button>
-                    <button id="visorRepararBtn" onclick="republicarUltimoPartidoVisor()" style="flex:1 1 100%; display:none; background:rgba(245,166,35,0.12); color:#f5c26b; border-radius:12px; font-weight:800; font-size:11px; border:1px solid rgba(245,166,35,0.5); padding:10px 10px; line-height:1.35;"></button>
+                <div id="previaRow" class="controls-row" style="flex-wrap:wrap; display:none;"><!-- v244: bloque «Antes de empezar» -->
+                    <div style="flex:1 1 100%; font-family:'Montserrat',sans-serif; font-weight:800; font-size:10px; letter-spacing:1.5px; color:#f5a623;">ANTES DE EMPEZAR</div>
+                    <button id="publicarAlineacionBtn" style="flex:1 1 70%; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:12px; font-weight:800; font-size:11px; border:none; padding:10px 8px; min-height:44px;">📣 PUBLICAR ALINEACIÓN</button>
                     <button id="avisarAlineacionBtn" style="flex:0 0 auto; display:none; background:rgba(30,41,59,0.6); color:#cbd5e1; border-radius:12px; font-weight:700; font-size:11px; border:1px solid rgba(255,255,255,0.12); padding:10px 10px;">🔔 AVISAR</button>
+                    <button id="llegueTardeBtn" onclick="ltAbrir()" style="flex:1 1 40%; min-height:44px; background:rgba(255,255,255,0.05); color:#e2e8f0; border-radius:12px; font-weight:800; font-size:11px; border:1px solid rgba(255,255,255,0.14); padding:8px 6px;">⏩ Llegué tarde</button>
+                    <button id="delegadoCargarBtn" onclick="cargarPartidoDelegado()" style="flex:1 1 40%; min-height:44px; background:rgba(255,255,255,0.05); color:#e2e8f0; border-radius:12px; font-weight:800; font-size:11px; border:1px solid rgba(255,255,255,0.14); padding:8px 6px;">📥 Partido del delegado</button>
+                    <button id="visorRepararBtn" onclick="republicarUltimoPartidoVisor()" style="flex:1 1 100%; display:none; background:rgba(245,166,35,0.12); color:#f5c26b; border-radius:12px; font-weight:800; font-size:11px; border:1px solid rgba(245,166,35,0.5); padding:10px 10px; line-height:1.35;"></button>
                 </div>
                 <div class="controls-row" style="flex-wrap:nowrap;">
                     <button id="tiroRivalPuertaBtn" class="btn-contra"><span class="icn">🥅</span>T.PTA RIV</button>
@@ -1687,7 +1688,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v243</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v244</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -1696,16 +1697,14 @@
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; position:relative;">
             <span id="temporadaTitulo" style="color:#f5a623; font-size:14px; font-weight:900; letter-spacing:2px; font-family:'Montserrat',sans-serif;">🏆 TEMPORADA OFICIAL</span>
             <div style="display:flex; gap:6px;">
-                <button id="temporadaMasBtn" style="background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px; padding:6px 12px; font-weight:700; border:1px solid rgba(255,255,255,0.05);">⋯</button>
+                <button id="temporadaMasBtn" style="background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px; padding:6px 12px; font-weight:700; border:1px solid rgba(255,255,255,0.05);" aria-label="Herramientas">🧰</button>
                 <button id="closeTemporadaBtn" style="background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:10px; padding:6px 14px; font-weight:700; border:1px solid rgba(255,255,255,0.05);">✕ CERRAR</button>
             </div>
             <div id="temporadaMasSheet" style="display:none; position:absolute; top:38px; right:0; z-index:20; background:#132518; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); min-width:240px; max-height:75vh; overflow-y:auto; overscroll-behavior:contain; flex-direction:column; gap:6px;">
-                <div class="tmas-label" style="color:#64748b;">CORREGIR PARTIDOS</div>
-                <button id="cargaManualBtn" style="background:linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📝 Cargar partido manual</button>
-                <button id="corregirMinutosBtn" style="background:linear-gradient(135deg,#e67e22,#d35400); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">⏱ Corregir minutos de un partido</button>
-                <button id="titularesPartidosBtn" style="background:linear-gradient(135deg,#2980b9,#3498db); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🧾 Titulares de partidos guardados</button>
-                <button id="corregirLineasBtn" style="background:linear-gradient(135deg,#27ae60,#2ed573); color:#0a0e14; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📍 Corregir puestos de un partido</button>
-                <button id="recalcImpactoMenuBtn" onclick="abrirRecalcImpacto()" style="background:linear-gradient(135deg,#b41438,#e0405f); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🔁 Recalcular impacto de goleadas</button>
+                <button id="cargaManualBtn" style="display:none; background:linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📝 Cargar partido manual</button>
+                <button id="corregirMinutosBtn" style="display:none; background:linear-gradient(135deg,#e67e22,#d35400); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">⏱ Corregir minutos de un partido</button>
+                <button id="titularesPartidosBtn" style="display:none; background:linear-gradient(135deg,#2980b9,#3498db); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🧾 Titulares de partidos guardados</button>
+                <button id="corregirLineasBtn" style="display:none; background:linear-gradient(135deg,#27ae60,#2ed573); color:#0a0e14; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📍 Corregir puestos de un partido</button>
                 <div class="tmas-label" style="color:#64748b;">CONSULTAR</div>
                 <button id="archivoTemporadasBtn" style="background:linear-gradient(135deg,#34495e,#2c3e50); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📚 Temporadas anteriores</button>
                 <button id="historialRivalBtn" style="background:linear-gradient(135deg,#16a085,#1abc9c); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🆚 Historial de enfrentamientos</button>
@@ -1713,6 +1712,8 @@
                 <button id="syncTemporadaVisorBtn" style="background:linear-gradient(135deg,#e67e22,#f39c12); color:#0a0e14; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🔄 Sincronizar temporada con el visor</button>
                 <button id="exportTemporadaBtn" style="background:linear-gradient(135deg,#27ae60,#2ecc71); color:#0a0e14; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📤 Exportar JSON</button>
                 <label id="importTemporadaLabel" style="background:linear-gradient(135deg,#2980b9,#3498db); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left; cursor:pointer;">📥 Importar JSON (sustituye la temporada)<input type="file" id="importTemporadaInput" accept=".json" style="display:none;"></label>
+                <div class="tmas-label" style="color:#64748b;">IMPACTO</div>
+                <button id="recalcImpactoMenuBtn" onclick="abrirRecalcImpacto()" style="background:linear-gradient(135deg,#b41438,#e0405f); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🔁 Recalcular impacto de goleadas</button>
                 <!-- v111 · zona de borrado: separada, plegada y con confirmación escrita -->
                 <div class="tmas-peligro">
                     <button id="peligroToggleBtn" type="button" class="tmas-peligro-toggle">⚠️ Borrar datos ▾</button>
@@ -1775,6 +1776,7 @@
         </div>
         
         <div id="tabTempPartidos" class="tab-temp-content" style="display:none;">
+            <button type="button" onclick="document.getElementById('cargaManualBtn').click()" style="width:100%; min-height:44px; margin-bottom:10px; border-radius:10px; background:rgba(46,213,115,0.10); border:1px solid rgba(46,213,115,0.45); color:#2ed573; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; cursor:pointer;">＋ Cargar partido manual</button><!-- v244 -->
             <div id="partidosContainer"></div>
         </div>
         
@@ -5571,7 +5573,7 @@
             <div style="font-size:12px; line-height:1.45; color:#e2e8f0;">⚠️ <strong>${B.sinTitulares} ${B.sinTitulares === 1 ? 'partido no cuenta' : 'partidos no cuentan'}</strong> porque no ${B.sinTitulares === 1 ? 'tiene' : 'tienen'} los titulares guardados:</div>
             <div style="font-size:11px; color:#94a3b8; margin-top:4px; line-height:1.45;">${B.sinTitLista.map(x => `J${x.i + 1} ${bqEsc(x.p.rival)}`).join(' · ')}</div>
             ${enApp ? `<button type="button" onclick="abrirTitularesPartidos()" style="margin-top:8px; width:100%; min-height:40px; border-radius:9px; background:rgba(245,166,35,.15); border:1px solid rgba(245,166,35,.5); color:#f5a623; font-weight:800; font-size:12px; cursor:pointer;">🧾 Marcar titulares</button>`
-                    : `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">Se marcan en la app: Temporada → ⋯ → Titulares de partidos guardados.</div>`}
+                    : `<div style="font-size:11px; color:#94a3b8; margin-top:6px;">Se marcan en la app: Partidos → 🔧 Corregir este partido → Titulares.</div>`}
         </div>` : '';
         if (!B.conDatos) return avisoTit || `<div style="font-size:12px; color:#94a3b8; line-height:1.5;">Aún no hay partidos con datos para calcularlo.</div>`;
         const ROJO = 'rgb(180,20,56)', GRIS = '#64748b';
@@ -8101,7 +8103,7 @@
         if (r.estado === 'hecho') { cont.innerHTML = caja('✓ Este partido ya está con la regla nueva.', '#2ed573'); return; }
         if (r.estado === 'nada') { cont.innerHTML = caja(`Con ${REGLAS_IMPACTO.equipo.golesSinReparto || 4} goles a favor o menos no cambia nada.`); return; }
         if (r.estado === 'sinMinutos') { cont.innerHTML = caja('A este partido le falta el minuto de algún gol de Hergar. Complétalo en Partidos → ✏️ Editar partido y vuelve aquí.', '#f5a623'); return; }
-        if (r.estado === 'sinTitulares') { cont.innerHTML = caja('Este partido no tiene guardados los titulares. Márcalos en ⋯ → 🧾 Titulares de partidos guardados y vuelve aquí.', '#f5a623'); return; }
+        if (r.estado === 'sinTitulares') { cont.innerHTML = caja('Este partido no tiene guardados los titulares. Márcalos en Partidos → 🔧 Corregir este partido → Titulares y vuelve aquí.', '#f5a623'); return; }
         const num = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n).toFixed(2).replace('.', ',');
         const p70 = (imp, mins) => mins >= 10 ? num(imp / mins * 70) : '—';
         const cab = `<div style="font-size:11.5px; color:#cbd5e1; line-height:1.5; margin-bottom:8px;">Cada gol a favor vale ahora <b style="color:#2ed573;">${num(r.v)}</b> a los que estaban en el campo (antes +1,00 los 4 primeros y +0,30 el resto).</div>`;
@@ -8198,7 +8200,7 @@
             <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin:6px 0 10px;">PJ cuenta cada partido solo en la línea donde jugó más minutos. Debajo de cada línea, los minutos en cada puesto.</div>
             <div style="font-size:10.5px; font-weight:800; color:#64748b; letter-spacing:.5px; margin-bottom:6px;">PARTIDO A PARTIDO</div>
             ${partidos}
-            ${hayViejos ? `<div style="font-size:10px; color:#64748b; font-style:italic; margin-top:4px;">"Sin detalle": partido anterior a la v94. Se puede corregir en Temporada → ⋯ → Corregir puestos.</div>` : ''}
+            ${hayViejos ? `<div style="font-size:10px; color:#64748b; font-style:italic; margin-top:4px;">"Sin detalle": partido anterior a la v94. Se puede corregir en Partidos → 🔧 Corregir este partido → Corregir puestos.</div>` : ''}
         </div>`;
     }
 
@@ -13384,6 +13386,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (!row) return;
         const enPrevia = !partidoEmpezado && !matchFinished;
         row.style.display = enPrevia ? 'flex' : 'none';
+        const panelAcc = row.closest('.accion-panel'); // v244: los botones del partido salen al pulsar INICIAR
+        if (panelAcc) panelAcc.classList.toggle('en-previa', enPrevia);
         if (!enPrevia) return;
         const btn = document.getElementById("publicarAlineacionBtn");
         const av = document.getElementById("avisarAlineacionBtn");
@@ -15848,6 +15852,13 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 ${informeIAHtml(p)}
                 ${rvDisponible(t, origIndex) ? `<button onclick="abrirRevisarDelegado(${origIndex})" style="margin-top:8px; width:100%; min-height:42px; border-radius:9px; background:rgba(46,213,115,0.10); border:1px solid rgba(46,213,115,0.45); color:#2ed573; font-weight:800; font-size:12px; cursor:pointer;">✏️ Revisar apuntes del delegado${p.dlgRevisado ? ' · ya corregido' : ''}</button>` : ''}
                 <button onclick="descargarActaPartido(${origIndex})" style="margin-top:8px; width:100%; min-height:40px; border-radius:9px; background:rgba(192,57,43,0.15); border:1px solid rgba(231,76,60,0.45); color:#ff8a80; font-weight:800; font-size:12px; cursor:pointer;">📄 Acta PDF</button>
+                <details class="pr-corregir"><summary>🔧 Corregir este partido</summary>
+                    <div style="display:flex; gap:6px; margin-top:6px;">
+                        <button type="button" onclick="corregirPartido('min', ${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.14); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">⏱ Minutos</button>
+                        <button type="button" onclick="corregirPartido('tit', ${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.14); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">🧾 Titulares</button>
+                        <button type="button" onclick="corregirPartido('pue', ${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.14); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">📍 Puestos</button>
+                    </div>
+                </details>
             </div>`;
         }).join('');
     }
@@ -22579,7 +22590,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 det: 'Marca los que no se grabaron y dejarán de salir aquí.', donde: 'Temporada → Partidos → Editar partido', accion: 'Ir al primero', fn: () => pendEditar(vids[0].i, 'video'),
                 subs: vids.map(x => ({ txt: `J${x.i + 1} ${x.p.rival} · ${nombreGol(x.g)}`, fn: () => marcarSinVideo(x.i, x.k, true) })) });
             if (tit.length) items.push({ key: `anttit|${tit.length}`, g: 'antes', titulo: `${plural(tit.length, 'partido', 'partidos')} sin titulares marcados`,
-                det: `${jl(tit)}. El efecto del banquillo y el más/menos de esos partidos son aproximados.`, donde: 'Temporada → ⋯ → Titulares de partidos guardados', accion: 'Marcar titulares',
+                det: `${jl(tit)}. El efecto del banquillo y el más/menos de esos partidos son aproximados.`, donde: 'Partidos → 🔧 Corregir este partido → Titulares', accion: 'Marcar titulares',
                 fn: () => { try { abrirTitularesPartidos(); } catch (e) {} } });
         }
         // Liga
@@ -24358,6 +24369,27 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     const conv = document.getElementById('masConvBtn');
     if (conv) conv.addEventListener('click', window.cerrarAjustes);
 })();
+</script>
+
+<!-- ── v244 · ORDEN EN LA APP (paso 2): previa recogida, corregir desde cada partido y Herramientas con un solo estilo ── -->
+<style>
+    .accion-panel.en-previa > .controls-row:not(#previaRow) { display: none !important; }
+    #temporadaMasSheet > button, #temporadaMasSheet > label { background: rgba(255,255,255,0.05) !important; color: #e2e8f0 !important; border: 1px solid rgba(255,255,255,0.12) !important; min-height: 44px; font-size: 12px !important; box-sizing: border-box; justify-content: flex-start !important; text-align: left; }
+    #temporadaMasSheet > label { display: flex; align-items: center; }
+    .pr-corregir { margin-top: 8px; }
+    .pr-corregir > summary { list-style: none; display: flex; align-items: center; justify-content: center; min-height: 40px; border-radius: 9px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: #cbd5e1; font-weight: 800; font-size: 12px; cursor: pointer; }
+    .pr-corregir > summary::-webkit-details-marker { display: none; }
+    .pr-corregir[open] > summary { border-color: rgba(245,166,35,0.6); color: #f5a623; }
+</style>
+<script>
+// Abre la herramienta de corrección con ese partido ya elegido (i = posición del partido en la temporada)
+window.corregirPartido = function (que, i) {
+    const m = { min: ['abrirCorregirMinutos', 'cmPartido', 'cmPintarJugadores'], tit: ['abrirTitularesPartidos', 'titularesPartidoSelect', 'pintarTitularesPartido'], pue: ['abrirCorregirLineas', 'corregirLineasPartido', 'pintarCorregirLineas'] }[que];
+    if (!m || typeof window[m[0]] !== 'function') return;
+    window[m[0]]();
+    const sel = document.getElementById(m[1]);
+    if (sel && sel.querySelector('option[value="' + i + '"]')) { sel.value = String(i); if (typeof window[m[2]] === 'function') window[m[2]](); }
+};
 </script>
 </body>
 </html>
