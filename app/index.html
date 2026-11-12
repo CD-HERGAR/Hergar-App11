@@ -1762,6 +1762,14 @@
                         <button type="button" onclick="guardarGitHubVideos()" style="min-height:40px; padding:0 12px; border-radius:8px; border:none; background:linear-gradient(135deg,#b41438,#e0405f); color:#fff; font-weight:800; font-size:11px; white-space:nowrap;">💾 GUARDAR Y PROBAR</button>
                     </div>
                     <div id="ghStatus" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
+                    <!-- v242 · fotos de los niños en GitHub -->
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+                        <div style="font-size:11.5px; font-weight:800; color:#e2e8f0;">📷 Fotos de los niños</div>
+                        <div id="fotosGhTxt" style="font-size:11.5px; line-height:1.45; color:#cbd5e1; margin:6px 0;"></div>
+                        <button type="button" id="fotosGhBtn" onclick="pasarFotosAGitHub(this)" style="display:none; width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(46,213,115,0.45); background:rgba(46,213,115,0.12); color:#2ed573; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px;">📤 Pasar las fotos a GitHub</button>
+                        <div id="fotosGhEstado" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
+                        <div style="font-size:10.5px; line-height:1.45; color:#94a3b8;">Las fotos nuevas se suben solas. Van a la carpeta <b>fotos</b> del mismo GitHub que los vídeos.</div>
+                    </div>
                     <!-- v121 · espacio ocupado en GitHub -->
                     <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
@@ -1823,7 +1831,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v241</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v242</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -7726,6 +7734,7 @@
         const t = getTemporada();
         const aviso = t.jugadores[id] ? ' Sus datos de la temporada se quedan.' : '';
         if (!confirm(`¿Quitar a ${p.name} de "Han subido antes"?${aviso}`)) return;
+        borrarFotoGitHubDe(p); // v242
         delete playersData[id];
         saveState();
         pintarSubirJugador();
@@ -9394,6 +9403,7 @@
 
     window.deletePlayerFromRoster = function(id) {
         if (confirm("¿Eliminar por completo a este jugador de la base de datos del club?")) {
+            borrarFotoGitHubDe(playersData[id]); // v242
             delete playersData[id];
             saveState();
             renderRosterPanel();
@@ -9587,7 +9597,7 @@
             esPartidoSuelto: false,
             portero: j.porteroStats || null, // v114
             historial: j.historial || [],
-            foto: (playersData[id] && playersData[id].foto) || null,
+            foto: (playersData[id] && (playersData[id].fotoUrl || playersData[id].foto)) || null, fotoMini: (playersData[id] && playersData[id].foto) || null, // v242
             // FICHA DE DATOS: totales reales de temporada (para calcular ratios "cada X min")
             totales: {
                 goles: j.goles || 0, asistencias: j.asistencias || 0,
@@ -9616,7 +9626,7 @@
             impactoPond: mins > 0 ? (p.impacto / mins * 70) : 0,
             esPortero: gk, esPartidoSuelto: true, historial: [],
             portero: gk ? porteroStatsPartidoSuelto(p) : null, // v114
-            foto: p.foto || null,
+            foto: p.fotoUrl || p.foto || null, fotoMini: p.foto || null, // v242
             // FICHA DE DATOS: en un partido suelto el "total" es directamente lo de ese partido
             totales: {
                 goles: p.goles || 0, asistencias: p.asistencias || 0,
@@ -9649,10 +9659,17 @@
         const img = new Image();
         entry = { img, loaded: false };
         fotoImgCache[src] = entry;
+        if (/^https?:/i.test(src)) img.crossOrigin = 'anonymous'; // v242 · foto de GitHub: así el cromo se puede descargar
         img.onload = () => {
             entry.loaded = true;
             if (ultimoCromoAbierto && ultimoCromoAbierto.canvas === canvas) {
                 dibujarCromoCanvas(canvas, ultimoCromoAbierto.stats, ultimoCromoAbierto.opciones);
+            }
+        };
+        img.onerror = () => { // v242 · sin conexión o sin publicar todavía: la miniatura del móvil
+            if (datosJugador && datosJugador.fotoMini && datosJugador.foto === src && datosJugador.fotoMini !== src) {
+                datosJugador.foto = datosJugador.fotoMini;
+                if (ultimoCromoAbierto && ultimoCromoAbierto.canvas === canvas) dibujarCromoCanvas(canvas, ultimoCromoAbierto.stats, ultimoCromoAbierto.opciones);
             }
         };
         img.src = src;
@@ -9855,7 +9872,7 @@
             nombre: s.name, dorsal: s.dorsal, posLabel: s.posLabel || 'JUG',
             partidos: 1, minutosTotal: s.minutos || 0, minsPromedio: s.minutos || 0,
             impactoPond: 0, esPortero: s.posLabel === 'POR', esPartidoSuelto: true, historial: [],
-            foto: (playersData[partido.mvpId] && playersData[partido.mvpId].foto) || null,
+            foto: (playersData[partido.mvpId] && (playersData[partido.mvpId].fotoUrl || playersData[partido.mvpId].foto)) || null, fotoMini: (playersData[partido.mvpId] && playersData[partido.mvpId].foto) || null, // v242
             totales: {
                 goles: s.goles || 0, asistencias: s.asistencias || 0,
                 pasesArea: 0, pasesClave: 0, accionesDef: 0, accionesDefClave: 0, regates: 0,
@@ -9878,48 +9895,134 @@
     // Sube y comprime la foto elegida, la guarda en el jugador y la publica para el visor.
     // Se guarda redimensionada (lado mayor 480px) manteniendo proporción — el recorte
     // concreto para el cromo se hace al dibujar, así la foto sirve igual para otros usos futuros.
-    function procesarFotoJugador(file, jugadorId) {
-        if (!file || jugadorId == null) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
+    // ── v242 · 📷 FOTOS EN GITHUB ─────────────────────────────────────────────────────────────
+    // La foto buena (320 px) se sube al GitHub del visor (carpeta fotos/) y en el móvil solo queda una miniatura
+    // (128 px, unos 5 KB). En playersData: foto = miniatura, fotoUrl = dirección de la foto en GitHub, fotoPath = su ruta.
+    // Firebase (plantilla_fotos/<id>) lleva { foto: miniatura, url } y el visor usa la url (o la miniatura si aún no hay).
+    // Sin token de GitHub se hace como antes, pero a 320 px.
+    const FOTO_GRANDE = 320, FOTO_MINI = 128;
+    function fotoRedimensionar(src, maxDim, calidad) {
+        return new Promise((ok, mal) => {
             const img = new Image();
             img.onload = () => {
-                const maxDim = 480;
                 const escala = Math.min(1, maxDim / Math.max(img.width, img.height));
-                const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
-                const off = document.createElement('canvas');
-                off.width = w; off.height = h;
+                const w = Math.max(1, Math.round(img.width * escala)), h = Math.max(1, Math.round(img.height * escala));
+                const off = document.createElement('canvas'); off.width = w; off.height = h;
                 off.getContext('2d').drawImage(img, 0, 0, w, h);
-                const dataUrl = off.toDataURL('image/jpeg', 0.75);
-                if (!playersData[jugadorId]) { alert('No se pudo guardar la foto: jugador no encontrado.'); return; }
-                playersData[jugadorId].foto = dataUrl;
-                saveState();
-                try { if (!document.getElementById('rosterPanel').classList.contains('hidden')) renderRosterPanel(); } catch (e) {} // v239
-                if (ultimoCromoAbierto && ultimoCromoAbierto.jugadorId === jugadorId) {
-                    ultimoCromoAbierto.stats.foto = dataUrl;
-                    dibujarCromoCanvas(ultimoCromoAbierto.canvas, ultimoCromoAbierto.stats, ultimoCromoAbierto.opciones);
-                }
-                publicarFotoJugadorFirebase(jugadorId, dataUrl).then(res => {
-                    if (!res || !res.ok) {
-                        const msg = (res && res.error) ? res.error : 'error desconocido';
-                        alert('La foto se ha guardado en el móvil, pero no se pudo enviar al visor.\n\nMotivo: ' + msg + '\n\nEnvíame este mensaje tal cual para que pueda revisarlo.');
-                    }
-                });
+                ok(off.toDataURL('image/jpeg', calidad));
             };
-            img.onerror = () => alert('No se pudo leer la imagen. Prueba con otra foto.');
-            img.src = ev.target.result;
+            img.onerror = () => mal(new Error('No se pudo leer la imagen'));
+            img.src = src;
+        });
+    }
+    function fotoUrlPages(path) { const [u, r] = ghRepo().split('/'); return `https://${(u || '').toLowerCase()}.github.io/${r}/${path}`; }
+    // La foto tarda 1-2 minutos en estar publicada en GitHub Pages: se espera a que se pueda abrir antes de pasarla al visor
+    async function fotoEsperarPublicada(url, intentos) {
+        for (let i = 0; i < (intentos || 30); i++) {
+            try { const r = await fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + 'c=' + Date.now(), { method: 'HEAD', cache: 'no-store' }); if (r.ok) return true; } catch (e) {}
+            await new Promise(r => setTimeout(r, 10000));
+        }
+        return false;
+    }
+    let fotoGhCola = Promise.resolve(); // GitHub no admite dos cambios a la vez en el mismo repositorio
+    function fotoSubirGitHub(jugadorId, grande) {
+        const tarea = fotoGhCola.then(async () => {
+            const p = playersData[jugadorId]; if (!p) return { ok: false, error: 'jugador no encontrado' };
+            const path = `fotos/${jugadorId}_${Date.now().toString(36)}.jpg`;
+            const r = await fetch(`https://api.github.com/repos/${ghRepo()}/contents/${path}`, {
+                method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, ghCabeceras()),
+                body: JSON.stringify({ message: `Foto de ${String(p.name || jugadorId).split(' ')[0]}`, content: String(grande).split(',')[1] || '' })
+            });
+            if (!r.ok) {
+                let txt = ''; try { txt = (await r.json()).message || ''; } catch (e) {}
+                return { ok: false, error: r.status === 401 ? 'token de GitHub no válido' : r.status === 403 || r.status === 404 ? 'el token de GitHub no tiene permiso de escritura' : (txt || 'error ' + r.status) };
+            }
+            const anterior = p.fotoPath;
+            p.fotoPath = path; p.fotoUrl = fotoUrlPages(path);
+            saveState();
+            if (anterior && anterior !== path) { try { await ghBorrarArchivo(anterior); } catch (e) { console.warn('Foto anterior:', e); } }
+            return { ok: true, url: p.fotoUrl, path };
+        });
+        fotoGhCola = tarea.catch(() => {});
+        return tarea;
+    }
+    // Guarda una foto (dataURL de cualquier tamaño) para un niño: miniatura en el móvil, grande en GitHub, y al visor
+    async function guardarFotoJugador(jugadorId, src, silencioso) {
+        const p = playersData[jugadorId]; if (!p) throw new Error('jugador no encontrado');
+        const conGh = typeof ghToken === 'function' && !!ghToken();
+        const grande = await fotoRedimensionar(src, FOTO_GRANDE, 0.8);
+        const mini = conGh ? await fotoRedimensionar(grande, FOTO_MINI, 0.72) : grande;
+        p.foto = mini;
+        if (!conGh) { delete p.fotoUrl; delete p.fotoPath; }
+        saveState();
+        try { if (!document.getElementById('rosterPanel').classList.contains('hidden')) renderRosterPanel(); } catch (e) {} // v239
+        if (ultimoCromoAbierto && ultimoCromoAbierto.jugadorId === jugadorId) {
+            ultimoCromoAbierto.stats.foto = grande; ultimoCromoAbierto.stats.fotoMini = mini;
+            dibujarCromoCanvas(ultimoCromoAbierto.canvas, ultimoCromoAbierto.stats, ultimoCromoAbierto.opciones);
+        }
+        const r1 = await publicarFotoJugadorFirebase(jugadorId, mini, null); // el visor la ve ya (en pequeño)
+        if (!conGh) return { ok: !!(r1 && r1.ok), error: r1 && r1.error, github: false };
+        const up = await fotoSubirGitHub(jugadorId, grande);
+        if (!up.ok) return { ok: false, error: up.error, github: true };
+        fotoEsperarPublicada(up.url).then(() => { if (playersData[jugadorId] && playersData[jugadorId].fotoUrl === up.url) publicarFotoJugadorFirebase(jugadorId, mini, up.url); });
+        return { ok: true, github: true };
+    }
+    function procesarFotoJugador(file, jugadorId) {
+        if (!file || jugadorId == null) return;
+        if (!playersData[jugadorId]) { alert('No se pudo guardar la foto: jugador no encontrado.'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            guardarFotoJugador(jugadorId, ev.target.result).then(res => {
+                if (!res || !res.ok) {
+                    const msg = (res && res.error) ? res.error : 'error desconocido';
+                    alert((res && res.github ? 'La foto se ha guardado en el móvil, pero no se pudo subir a GitHub.' : 'La foto se ha guardado en el móvil, pero no se pudo enviar al visor.') + '\n\nMotivo: ' + msg + '\n\nEnvíame este mensaje tal cual para que pueda revisarlo.');
+                }
+            }).catch(e => alert('No se pudo leer la imagen. Prueba con otra foto.\n\n' + (e && e.message ? e.message : '')));
         };
         reader.onerror = () => alert('No se pudo leer el archivo.');
         reader.readAsDataURL(file);
     }
+    // Pasar a GitHub las fotos que aún están enteras en el móvil (las de antes de la v242)
+    function fotosPendientesDeGitHub() { return Object.values(playersData).filter(p => p && p.foto && !p.fotoUrl && !p.invitado); }
+    function fotosBytesMovil() { let b = 0; Object.values(playersData).forEach(p => { if (p && p.foto) b += p.foto.length; }); return b; }
+    window.pasarFotosAGitHub = async function (btn) {
+        const est = document.getElementById('fotosGhEstado');
+        const pon = (t, c) => { if (est) { est.style.color = c || '#cbd5e1'; est.innerHTML = t; } };
+        if (!ghToken()) { pon('Primero guarda el token de GitHub (arriba).', '#f5a623'); return; }
+        const lista = fotosPendientesDeGitHub();
+        if (!lista.length) { pon('✓ Todas las fotos están ya en GitHub.', '#2ed573'); return; }
+        const antes = fotosBytesMovil();
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+        let ok = 0, mal = 0, err = '';
+        for (let i = 0; i < lista.length; i++) {
+            pon(`⏳ Subiendo ${i + 1} de ${lista.length}: ${escSube(String(lista[i].name || '').split(' ')[0])}… no cierres la app.`, '#94a3b8');
+            try { const r = await guardarFotoJugador(lista[i].id, lista[i].foto, true); if (r && r.ok) ok++; else { mal++; err = (r && r.error) || err; } }
+            catch (e) { mal++; err = e.message || String(e); }
+        }
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+        const ahorro = Math.max(0, antes - fotosBytesMovil());
+        pon(`${ok ? `✅ ${ok} ${ok === 1 ? 'foto pasada' : 'fotos pasadas'} a GitHub · liberados ${(ahorro / 1024).toFixed(0)} KB en el móvil. En el visor salen en buena calidad en 1-2 minutos.` : ''}${mal ? `<br><span style="color:#ff6b7a;">❌ ${mal} no se ${mal === 1 ? 'pudo' : 'pudieron'} subir: ${escSube(err)}</span>` : ''}`, mal ? '#f5a623' : '#2ed573');
+        pintarFotosGitHub();
+        try { actualizarEspacioGitHub(false); } catch (e) {}
+    };
+    function pintarFotosGitHub() {
+        const txt = document.getElementById('fotosGhTxt'); if (!txt) return;
+        const n = Object.values(playersData).filter(p => p && p.foto && !p.invitado).length, pend = fotosPendientesDeGitHub().length, kb = (fotosBytesMovil() / 1024).toFixed(0);
+        txt.innerHTML = !n ? 'Ningún niño tiene foto todavía.' : pend ? `${pend} de ${n} ${n === 1 ? 'foto está' : 'fotos están'} todavía enteras en el móvil (${kb} KB entre todas). Al pasarlas a GitHub, en el móvil solo queda una miniatura.`
+            : `✓ Las ${n} fotos están en GitHub. En el móvil ocupan ${kb} KB (miniaturas).`;
+        const b = document.getElementById('fotosGhBtn'); if (b) b.style.display = pend ? '' : 'none';
+    }
+    window.pintarFotosGitHub = pintarFotosGitHub;
+    // Al quitar a un niño de la plantilla, su foto se borra también de GitHub
+    function borrarFotoGitHubDe(p) { if (p && p.fotoPath && typeof ghToken === 'function' && ghToken()) { const path = p.fotoPath; fotoGhCola = fotoGhCola.then(() => ghBorrarArchivo(path)).catch(e => console.warn('Foto en GitHub:', e)); } }
 
     // Las fotos van en su propio path de Firebase (no dentro de matches/…), para que no se
     // reenvíen en cada actualización del partido en vivo — solo se publican cuando cambian.
-    function publicarFotoJugadorFirebase(jugadorId, dataUrl) {
+    function publicarFotoJugadorFirebase(jugadorId, dataUrl, url) {
         if (!window.__hergarFirebaseSet) return Promise.resolve({ ok: false, error: 'Firebase no disponible todavía' });
-        return window.__hergarFirebaseSet(`plantilla_fotos/${jugadorId}`, {
-            secret: HERGAR_LIVE_SECRET, foto: dataUrl, actualizado: Date.now()
-        });
+        const d = { secret: HERGAR_LIVE_SECRET, foto: dataUrl, actualizado: Date.now() };
+        if (url) d.url = url; // v242: la foto buena está en GitHub; foto es la miniatura
+        return window.__hergarFirebaseSet(`plantilla_fotos/${jugadorId}`, d);
     }
 
     // ── FICHA DE DATOS: estadísticas reales medias por partido (sustituye a los atributos FIFA) ──
@@ -16151,6 +16254,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (chip) { chip.innerText = ghToken() ? '✓ token guardado' : 'sin token'; chip.style.color = ghToken() ? '#2ed573' : '#f5a623'; }
         if (st && msg !== undefined) { st.style.color = color || '#cbd5e1'; st.innerText = msg; }
         try { pintarEspacioGitHub(); } catch (e) {} // v121
+        try { pintarFotosGitHub(); } catch (e) {} // v242
     }
     window.guardarGitHubVideos = async function () {
         const tok = document.getElementById('ghTokenInput').value.trim();
@@ -22488,6 +22592,11 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             if (e && e.sinUsar) items.push({ key: `gh|${e.sinUsar}`, g: 'mant', titulo: `${plural(e.sinUsar, 'vídeo', 'vídeos')} sin usar en GitHub`,
                 det: `Son subidas repetidas que ningún gol usa (${fmtMB(e.sinUsarBytes || 0)}). Se pueden borrar sin perder nada.`, donde: 'Ajustes → Convocatoria y plantilla → Subir vídeos a GitHub',
                 accion: 'Limpiar', fn: () => pendAbrirAjustes('ghHuerfanosBox') });
+            // v242 · fotos todavía enteras en el móvil
+            const fpend = (typeof ghToken === 'function' && ghToken() && typeof fotosPendientesDeGitHub === 'function') ? fotosPendientesDeGitHub() : [];
+            if (fpend.length) items.push({ key: `fotosgh|${fpend.length}`, g: 'mant', titulo: `${plural(fpend.length, 'foto', 'fotos')} sin pasar a GitHub`,
+                det: `Ocupan ${(fotosBytesMovil() / 1024).toFixed(0)} KB en el móvil. En GitHub se ven mejor en el visor y aquí solo queda una miniatura.`, donde: 'Ajustes → Convocatoria y plantilla → Subir vídeos a GitHub → Fotos',
+                accion: 'Ir', fn: () => pendAbrirAjustes('fotosGhTxt') });
         } catch (e) { console.warn('Pendientes (mantenimiento):', e); }
 
         // v206 · espacio de guardado casi lleno
