@@ -1688,7 +1688,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v244</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v245</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -12315,6 +12315,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 break;
             case 'golR': pendingAction = 'GOL_RIVAL'; registrarAccionRival(); break;
             case 'golP': registrarGolPropiaRival(); break; // v205
+            // v245 · penaltis apuntados por el delegado: mismos puntos que al apuntarlos en la app (sin «quién lo provocó»)
+            case 'penFG': case 'penFP': case 'penFF':
+                if (!playersData[j]) break;
+                penaltiEjecutorId = j; penaltiProvocadorId = null; registrarPenaltiFavor({ penFG: 'GOL', penFP: 'PARADO', penFF: 'FUERA' }[e.k]);
+                break;
+            case 'penRG': case 'penRP': case 'penRF': registrarPenaltiRival({ penRG: 'GOL', penRP: 'PARADO', penRF: 'FUERA' }[e.k]); break;
             case 'palo': if (!playersData[j]) break; activeActionPlayerId = j; pendingAction = 'PALO'; registrarAccionJugador(); break; // v205
             case 'palR': pendingAction = 'TIRO_RIVAL_PALO'; registrarAccionRival(); break; // v205
             case 'tfR': pendingAction = 'TIRO_RIVAL_FUERA'; registrarAccionRival(); break;
@@ -12425,7 +12431,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const ccMas = arrN(cc.mas).filter(id => playersData[id]), ccMenos = arrN(cc.menos).filter(id => playersData[id]);
         const ccTxt = (ccMas.length || ccMenos.length) ? `\n🔁 Convocatoria cambiada en el campo: ${[...ccMas.map(id => '+ ' + playersData[id].name), ...ccMenos.map(id => '− ' + playersData[id].name)].join(', ')}` : '';
         const minFin = Math.floor(Number(st.fase === 'final' ? (st.parte === 2 ? st.fin2 : st.fin1) : st.acum) / 60) || 0;
-        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol')} goles${n('golP') ? ` (+${n('golP')} en propia del rival)` : ''} · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta${n('palo') ? ` · 🪵 ${n('palo')} al palo` : ''} · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas${ccTxt}\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
+        if (!confirm(`📥 PARTIDO DEL DELEGADO\n\nHERGAR ${st.gl || 0} - ${st.gr || 0} ${d.rival || ''}\n${st.fecha || ''}${st.horaInicio ? ' · ' + st.horaInicio : ''} · hasta el ${minFin}'\nEmpezó con 1-${st.formInicial || d.formacion}\n\n⚽ ${n('gol') + n('penFG')} goles${n('golP') ? ` (+${n('golP')} en propia del rival)` : ''} · 🥅 ${n('golR')} en contra\n🎯 ${n('tp')} a puerta${n('palo') ? ` · 🪵 ${n('palo')} al palo` : ''} · 💨 ${n('tf')} fuera\n🛡️⭐ ${n('defC')} def. clave · ❌ ${n('fa') + n('faI')} fallos\n🔄 ${n('sub')} cambios · ↔ ${n('swap') + n('form')} cambios de puesto/sistema\n🟨🟥 ${n('am') + n('ro')} tarjetas${ccTxt}\n\nSe carga en la pantalla de partido como si lo hubieras apuntado tú. Después revisa, pide el 🤖 análisis IA si quieres y pulsa 🏁 FINAL y guardar como siempre. ¿Cargar?`)) return;
         const backup = ltBackup();
         // Previa: convocatoria, once, banquillo, sistema y rival del delegado
         if (compartirEnVivo) desactivarCompartirPartido(); // la alineación publicada de este móvil no debe pisar al visor
@@ -12497,11 +12503,12 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         def: ['🛡️', 'Acción defensiva'], defC: ['🛡️⭐', 'Acción def. clave'], reg: ['🌀', 'Regate'], fa: ['❌', 'Fallo'], faI: ['💥', 'Fallo importante'],
         fj: ['🚩', 'Fuera de juego'], am: ['🟨', 'Amarilla'], ro: ['🟥', 'Roja'],
         golP: ['⚽', 'Gol en propia del rival'], palo: ['🪵', 'Al palo'], palR: ['🪵', 'Palo del rival'], // v205
+        penFG: ['⚽', 'Gol de penalti'], penFP: ['❌', 'Penalti fallado (parado)'], penFF: ['❌', 'Penalti fallado (fuera/poste)'], penRG: ['🥅', 'Gol rival de penalti'], penRP: ['🧤', 'Penalti rival parado'], penRF: ['💨', 'Penalti rival fallado'], // v245
         golR: ['🥅', 'Gol rival'], par: ['🧤', 'Parada'], parD: ['🧤⭐', 'Parada difícil'], tpR: ['🥅', 'Tiro rival a puerta'], tfR: ['💨', 'Tiro rival sin peligro'],
         cf: ['⛳', 'Córner a favor'], cc: ['⛳', 'Córner en contra'], ff: ['🟡', 'Falta a favor'], fc: ['🟠', 'Falta en contra'], fjR: ['🚩', 'Fuera de juego rival'],
         sub: ['🔄', 'Cambio'], swap: ['↔', 'Cambio de puesto'], form: ['🏟️', 'Cambio de sistema']
     };
-    const RV_JUG = ['gol', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'fj', 'am', 'ro'];
+    const RV_JUG = ['penFG', 'penFP', 'penFF', 'gol', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'fj', 'am', 'ro'];
     const RV_ANADIR = ['sub', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'am', 'ro', 'gol', 'golP'];
     let rv = null;
     const rvNorm = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -12574,7 +12581,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         // 1.ª o 2.ª parte: por orden; pasa a la 2.ª cuando el minuto baja, cuando ya no cabe en la 1.ª o cuando se supera lo que había al descanso
         const D = st.actaDescanso || null;
         const cuenta = { gl: 0, gr: 0, tnP: 0, tnF: 0, trP: 0, trF: 0, cf: 0, cc: 0, ff: 0, fc: 0, fjN: 0, fjR: 0 };
-        const SUMA = { gol: ['gl', 'tnP'], golP: ['gl'], palo: ['tnP'], palR: ['trP'], tp: ['tnP'], tf: ['tnF'], golR: ['gr', 'trP'], par: ['trP'], parD: ['trP'], tpR: ['trP'], tfR: ['trF'], cf: ['cf'], cc: ['cc'], ff: ['ff'], fc: ['fc'], fj: ['fjN'], fjR: ['fjR'] };
+        const SUMA = { penFG: ['gl', 'tnP'], penFP: ['tnP'], penFF: ['tnF'], penRG: ['gr', 'trP'], penRP: ['trP'], penRF: ['trF'], gol: ['gl', 'tnP'], golP: ['gl'], palo: ['tnP'], palR: ['trP'], tp: ['tnP'], tf: ['tnF'], golR: ['gr', 'trP'], par: ['trP'], parD: ['trP'], tpR: ['trP'], tfR: ['trF'], cf: ['cf'], cc: ['cc'], ff: ['ff'], fc: ['fc'], fj: ['fjN'], fjR: ['fjR'] };
         let parte = 1, maxMin = 0;
         const minFin1 = Math.floor(fin1 / 60);
         crudos.forEach(o => {
@@ -12765,7 +12772,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (yP.acta) { const liga = Pn.acta && Pn.acta.liga; Pn.acta = yP.acta; if (liga) Pn.acta.liga = liga; else delete Pn.acta.liga; }
         if (yP.minutos) Pn.minutos = yP.minutos;
         // goles: si se ha tocado alguno, se rehacen y se les pasa lo apuntado después (vídeo, origen, sitio…)
-        const firmaG = (evs) => JSON.stringify(evs.filter(e => e.k === 'gol' || e.k === 'golR' || e.k === 'golP').map(e => [e.k, e.p, e.t, e.j || null, e.a || null]));
+        const firmaG = (evs) => JSON.stringify(evs.filter(e => e.k === 'gol' || e.k === 'golR' || e.k === 'golP' || e.k === 'penFG' || e.k === 'penRG').map(e => [e.k, e.p, e.t, e.j || null, e.a || null]));
         let golesCambian = false;
         if (firmaG(rv.D.ev) !== firmaG(evsNuevos) && Array.isArray(yP.goles)) {
             golesCambian = true;
