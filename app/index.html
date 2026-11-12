@@ -1640,152 +1640,8 @@
                 <button id="publicarConvocatoriaBtn" onclick="publicarConvocatoria()" style="width:100%; padding:11px; background:linear-gradient(135deg,#2ed573,#27ae60); color:#04140a; border:none; border-radius:10px; font-weight:800; font-size:13px; cursor:pointer;">📋 Publicar convocatoria</button>
                 <div id="convocatoriaPubStatus" style="font-size:11px; color:#8da499; margin-top:6px; min-height:14px;"></div>
                 <button id="pasarDelegadoBtn" onclick="pasarAlDelegado()" style="width:100%; margin-top:8px; padding:11px; background:rgba(46,213,115,0.10); color:#2ed573; border:1px solid rgba(46,213,115,0.45); border-radius:10px; font-weight:800; font-size:13px; cursor:pointer;">📲 Pasar al delegado (si no vas a estar)</button>
-                <button id="sincronizarPlantillaBtn" onclick="sincronizarPlantillaVisor()" style="width:100%; margin-top:8px; padding:10px; background:rgba(255,255,255,0.06); color:#e7efe9; border:1px solid rgba(255,255,255,0.1); border-radius:10px; font-weight:700; font-size:12px; cursor:pointer;">🔄 Sincronizar plantilla con el visor</button>
-                <div id="sincronizarPlantillaStatus" style="font-size:11px; color:#8da499; margin-top:6px; min-height:14px;"></div>
             </div>
-            <h4 style="margin:14px 0 6px; color:#f5a623; font-size:12px; text-transform:uppercase; font-family:'Montserrat',sans-serif;">Añadir nuevo alta al club:</h4>
-            <div class="roster-input-group">
-                <input type="text" id="newPlayerName" placeholder="Nombre completo...">
-                <input type="number" id="newPlayerDorsal" placeholder="Nº (opcional)" min="1" max="99">
-                <button id="addPlayerBtn">➕</button>
-            </div>
-            <div style="font-size:10px; color:#64748b; margin:-4px 0 10px 2px;">
-                El dorsal es opcional al dar de alta. Puedes asignarlo o cambiarlo luego tocando ✏️ junto al nombre en la lista.
-            </div>
-            <button id="loadDemoBtn">🧪 CARGAR PLANTILLA DE PRUEBA</button>
-
-            <!-- PANEL CONFIGURACIÓN API KEY -->
-            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">⚙️ CONFIGURACIÓN IA</div>
-                <div style="display:flex; gap:6px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
-                    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:11px; outline:none; font-family:'Inter',sans-serif;">
-                    <button id="saveApiKeyBtn" style="padding:8px 12px; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:8px; font-size:11px; font-weight:700; border:none; cursor:pointer; white-space:nowrap;">💾 GUARDAR</button>
-                </div>
-                <div id="apiKeyStatus" style="font-size:10px; margin-top:6px; color:#52665c; padding:0 2px;"></div>
-                <!-- v197 · modelo de la IA -->
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px;">
-                    <label for="modeloIASelect" style="font-size:12px; color:#e2e8f0;">Modelo de la IA</label>
-                    <select id="modeloIASelect" onchange="guardarModeloIA(this.value)" style="min-height:40px; padding:0 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); background:#111827; color:#e2e8f0; font-size:12px;">
-                        <option value="claude-sonnet-4-6">Sonnet 4.6 (el de antes)</option>
-                        <option value="claude-sonnet-5-5">Sonnet 5.5 (nuevo)</option>
-                    </select>
-                </div>
-                <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin-top:4px;">Se usa en el análisis del partido, la previa y la importación de la federación. Sonnet 4.6 dejará de funcionar en algún momento a partir de febrero de 2027.</div>
-                <!-- v138 · clave de OneSignal (avisos de gol y alineación en el visor) -->
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin:12px 0 8px;">🔔 CLAVE DE ONESIGNAL (AVISOS DEL VISOR)</div>
-                <div style="display:flex; gap:6px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
-                    <input type="password" id="oneSignalKeyInput" placeholder="os_v2_app_..." style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:11px;">
-                    <button type="button" onclick="guardarOneSignalKey()" style="padding:8px 12px; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:8px; font-size:11px; font-weight:700; border:none; cursor:pointer; white-space:nowrap;">Guardar</button>
-                </div>
-                <div id="oneSignalKeyStatus" style="font-size:10px; margin-top:6px; color:#52665c; padding:0 2px;"></div>
-            </div>
-
-            <!-- PANEL COPIA DE SEGURIDAD -->
-            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🗄️ COPIA DE SEGURIDAD</div>
-                <div style="display:flex; gap:8px;">
-                    <button id="exportBackupBtn" style="flex:1; padding:9px 10px; background:linear-gradient(135deg,#2ed573,#1e9e57); color:#04140a; border-radius:8px; font-size:11px; font-weight:700; border:none; cursor:pointer;">💾 EXPORTAR COPIA</button>
-                    <button id="importBackupBtn" style="flex:1; padding:9px 10px; background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:8px; font-size:11px; font-weight:700; border:1px solid rgba(255,255,255,0.08); cursor:pointer;">📤 RESTAURAR COPIA</button>
-                    <input type="file" id="importBackupInput" accept="application/json" style="display:none;">
-                </div>
-                <div id="backupStatus" style="font-size:10px; margin-top:6px; color:#52665c; padding:0 2px;"></div>
-                <!-- v138 · copia completa para pasar a otro móvil o a la PWA -->
-                <button type="button" onclick="exportarCopiaCompleta()" style="width:100%; margin-top:8px; min-height:40px; padding:9px 10px; background:rgba(245,166,35,0.12); color:#f5a623; border-radius:8px; font-size:11px; font-weight:800; border:1px solid rgba(245,166,35,0.45); cursor:pointer;">📦 COPIA COMPLETA (MUDANZA)</button>
-                <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin-top:4px;">Lleva absolutamente todo, también las claves y el token de GitHub: guárdala solo en tu móvil, no la compartas. Se restaura con «Restaurar» de aquí arriba.</div>
-                <!-- v109 · COPIA AUTOMÁTICA EN LA NUBE -->
-                <div style="margin-top:12px; padding:12px; border-radius:12px; background:rgba(52,152,219,0.07); border:1px solid rgba(52,152,219,0.3);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                        <span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#5dade2;">☁️ COPIA EN LA NUBE</span>
-                        <span id="nubeEstadoChip" style="font-size:10.5px; font-weight:700; color:#94a3b8;"></span>
-                    </div>
-                    <div id="nubeStatus" style="font-size:11.5px; line-height:1.45; color:#cbd5e1; margin:6px 0 8px;"></div>
-                    <div style="font-size:10.5px; color:#94a3b8; margin-bottom:4px;">Tu código de copia (guárdalo: sin él no se puede recuperar en otro móvil)</div>
-                    <div style="display:flex; gap:6px; align-items:center;">
-                        <code id="nubeCodigo" style="flex:1; min-height:40px; display:flex; align-items:center; padding:0 10px; border-radius:8px; background:#0a0e14; color:#e2e8f0; font-size:13px; letter-spacing:1px; user-select:all; -webkit-user-select:all;"></code>
-                        <button type="button" onclick="enviarCodigoNube()" style="min-height:40px; padding:0 10px; border-radius:8px; border:none; background:#25d366; color:#fff; font-weight:800; font-size:11px;">📲 Guardar</button>
-                    </div>
-                    <div style="display:flex; gap:8px; margin-top:8px;">
-                        <button type="button" onclick="subirCopiaNube(true)" style="flex:1; min-height:40px; border-radius:9px; border:none; background:linear-gradient(135deg,#2980b9,#3498db); color:#fff; font-weight:800; font-size:11px;">☁️ SUBIR AHORA</button>
-                        <button type="button" onclick="abrirRestaurarNube()" style="flex:1; min-height:40px; border-radius:9px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#cbd5e1; font-weight:800; font-size:11px;">⬇️ RESTAURAR DESDE LA NUBE</button>
-                    </div>
-                    <div id="nubeRestaurarBox" style="display:none; margin-top:10px;"></div>
-                </div>
-            </div>
-            <!-- v68 · AJUSTES DE PLANTILLA -->
-            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">👥 AJUSTES DE PLANTILLA</div>
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-                    <label for="amarillasCicloInput" style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Amarillas por ciclo de sanción</label>
-                    <input id="amarillasCicloInput" type="number" min="1" max="20" value="5" onchange="guardarAmarillasCiclo(this.value)" style="width:72px; min-height:44px; box-sizing:border-box; padding:0 10px; border:1px solid rgba(255,255,255,0.12); border-radius:10px; background:rgba(0,0,0,0.3); color:#e2e8f0; font-family:'Montserrat',sans-serif; font-weight:800; font-size:15px; text-align:center;">
-                </div>
-                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:6px;">Depende de la normativa de tu competición. Al llegar a este número, la app pregunta si sancionar al guardar el partido.</div>
-            </div>
-            <!-- v139 · ACTA EN EL VISOR -->
-            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">📄 ACTA EN PDF</div>
-                <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer;">
-                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Las familias pueden descargar el acta en el visor</span>
-                    <input id="actaVisorChk" type="checkbox" onchange="guardarActaVisor(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
-                </label>
-                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">En el visor sale completa, igual que la tuya (visor v168 o posterior). Tú la descargas siempre desde la pestaña Partidos.</div>
-            </div>
-            <!-- v203 · RESUMEN DEL PARTIDO EN EL VISOR -->
-            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎬 RESUMEN DEL PARTIDO (VISOR)</div>
-                <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer;">
-                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Con rótulos de datos: once inicial, números, dominio y Liga</span>
-                    <input id="resumenDatosChk" type="checkbox" onchange="guardarResumenDatos(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
-                </label>
-                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">Si lo apagas, el resumen de todos los partidos vuelve a ser solo la entrada, los goles y el final. Cambia al momento en el visor.</div>
-            </div>
-            <!-- v119 · VÍDEOS DE LOS GOLES -->
-            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
-                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎥 VÍDEOS DE LOS GOLES</div>
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Vídeos visibles en el visor</span>
-                    <button type="button" id="videosGlobalSw" class="vsw" onclick="toggleVideosGlobal()" aria-label="Vídeos visibles en el visor"></button>
-                </div>
-                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin:6px 0 8px;">Si lo apagas, desaparecen todos los ▶ del visor (los enlaces se quedan guardados). Debajo, el permiso de cada niño: sin permiso, sus goles no muestran vídeo.</div>
-                <div id="permisosVideoLista" style="background:rgba(0,0,0,0.2); border-radius:8px; padding:4px 8px;"></div>
-                <!-- v120 · dónde se guardan los vídeos: el repositorio de GitHub del visor -->
-                <div style="margin-top:12px; padding:12px; border-radius:12px; background:rgba(180,20,56,0.07); border:1px solid rgba(180,20,56,0.3);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                        <span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#ff5577;">📤 SUBIR VÍDEOS A GITHUB</span>
-                        <span id="ghEstadoChip" style="font-size:10.5px; font-weight:700; color:#94a3b8;"></span>
-                    </div>
-                    <div style="font-size:11px; line-height:1.45; color:#cbd5e1; margin:6px 0 8px;">Los vídeos se guardan en el mismo GitHub que el visor (carpeta <b>videos</b>) y se reproducen directamente. Hace falta un token de GitHub con permiso de escritura en ese repositorio.</div>
-                    <label for="ghRepoInput" style="font-size:10.5px; color:#94a3b8;">Repositorio (usuario/nombre)</label>
-                    <input id="ghRepoInput" type="text" value="javigarblanc-blip/Hergar-Live" style="width:100%; min-height:40px; box-sizing:border-box; margin:4px 0 8px; padding:0 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:12px;">
-                    <label for="ghTokenInput" style="font-size:10.5px; color:#94a3b8;">Token de GitHub</label>
-                    <div style="display:flex; gap:6px; margin-top:4px;">
-                        <input id="ghTokenInput" type="password" placeholder="github_pat_..." style="flex:1; min-width:0; min-height:40px; box-sizing:border-box; padding:0 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:12px;">
-                        <button type="button" onclick="guardarGitHubVideos()" style="min-height:40px; padding:0 12px; border-radius:8px; border:none; background:linear-gradient(135deg,#b41438,#e0405f); color:#fff; font-weight:800; font-size:11px; white-space:nowrap;">💾 GUARDAR Y PROBAR</button>
-                    </div>
-                    <div id="ghStatus" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
-                    <!-- v242 · fotos de los niños en GitHub -->
-                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
-                        <div style="font-size:11.5px; font-weight:800; color:#e2e8f0;">📷 Fotos de los niños</div>
-                        <div id="fotosGhTxt" style="font-size:11.5px; line-height:1.45; color:#cbd5e1; margin:6px 0;"></div>
-                        <button type="button" id="fotosGhBtn" onclick="pasarFotosAGitHub(this)" style="display:none; width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(46,213,115,0.45); background:rgba(46,213,115,0.12); color:#2ed573; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px;">📤 Pasar las fotos a GitHub</button>
-                        <div id="fotosGhEstado" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
-                        <div style="font-size:10.5px; line-height:1.45; color:#94a3b8;">Las fotos nuevas se suben solas. Van a la carpeta <b>fotos</b> del mismo GitHub que los vídeos.</div>
-                    </div>
-                    <!-- v121 · espacio ocupado en GitHub -->
-                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                            <span style="font-size:11.5px; font-weight:800; color:#e2e8f0;">📦 Espacio usado</span>
-                            <button type="button" onclick="actualizarEspacioGitHub(true)" style="min-height:34px; padding:0 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#cbd5e1; font-weight:700; font-size:11px;">↻ Actualizar</button>
-                        </div>
-                        <div style="height:10px; border-radius:5px; background:rgba(255,255,255,0.08); overflow:hidden; margin:8px 0 6px;"><div id="ghEspacioBarra" style="height:100%; width:0%; background:#2ed573; border-radius:5px; transition:width .3s;"></div></div>
-                        <div id="ghEspacioTxt" style="font-size:11.5px; line-height:1.45; color:#cbd5e1;">Sin datos todavía: pulsa ↻ Actualizar.</div>
-                        <!-- v181 · vídeos que ya no usa ningún gol (subidas repetidas) -->
-                        <div id="ghHuerfanosBox" style="display:none; margin-top:8px; padding:8px 10px; border-radius:8px; background:rgba(245,166,35,0.08); border:1px solid rgba(245,166,35,0.3);">
-                            <div id="ghHuerfanosTxt" style="font-size:11px; line-height:1.45; color:#f5c97a;"></div>
-                            <button type="button" id="ghHuerfanosBtn" onclick="limpiarVideosHuerfanos()" style="margin-top:6px; width:100%; min-height:38px; border-radius:8px; border:1px solid rgba(245,166,35,0.45); background:rgba(245,166,35,0.12); color:#f5c97a; font-weight:800; font-size:11.5px;">🧹 LIMPIAR VÍDEOS SIN USAR</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <button type="button" onclick="abrirAjustes('newPlayerName')" style="width:100%; min-height:44px; margin:0 0 10px; background:none; color:#94a3b8; border:1px dashed rgba(255,255,255,0.18); border-radius:10px; font-weight:700; font-size:12px; cursor:pointer;">➕ Dar de alta a un niño nuevo (Ajustes → Plantilla)</button>
         </div>
 
         <!-- Botón para expandir en partido -->
@@ -1831,7 +1687,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v242</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v243</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2341,6 +2197,179 @@
 </div>
 
 <!-- MODAL LIGA -->
+
+<!-- ── v243 · AJUSTES: lo que antes iba todo seguido en «Convocatoria y plantilla», ahora por secciones ── -->
+<div id="ajustesModal" style="display:none; position:absolute; top:0; left:0; width:100%; min-height:100vh; min-height:100svh; z-index:490; background:#0a0e14;">
+  <div style="max-width:520px; margin:0 auto; padding:14px 12px 110px; box-sizing:border-box;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <button type="button" id="ajCerrarBtn" aria-label="Volver" style="width:44px; height:44px; border-radius:12px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.04); color:#e2e8f0; font-size:20px; cursor:pointer;">‹</button>
+        <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; letter-spacing:2px; color:#f5a623;">⚙️ AJUSTES</div>
+    </div>
+    <details class="aj-sec" id="ajSecPlantilla"><summary><span class="aj-ic">👥</span><span class="aj-tx"><b>Plantilla</b><small>Altas de niños · amarillas por ciclo de sanción</small></span></summary><div class="aj-body">
+            <h4 style="margin:14px 0 6px; color:#f5a623; font-size:12px; text-transform:uppercase; font-family:'Montserrat',sans-serif;">Añadir nuevo alta al club:</h4>
+            <div class="roster-input-group">
+                <input type="text" id="newPlayerName" placeholder="Nombre completo...">
+                <input type="number" id="newPlayerDorsal" placeholder="Nº (opcional)" min="1" max="99">
+                <button id="addPlayerBtn">➕</button>
+            </div>
+            <div style="font-size:10px; color:#64748b; margin:-4px 0 10px 2px;">
+                El dorsal es opcional al dar de alta. Puedes asignarlo o cambiarlo luego tocando ✏️ junto al nombre en la lista.
+            </div>
+            <button id="loadDemoBtn" style="display:none;">🧪 CARGAR PLANTILLA DE PRUEBA</button>
+            <!-- v68 · AJUSTES DE PLANTILLA -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">👥 AJUSTES DE PLANTILLA</div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <label for="amarillasCicloInput" style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Amarillas por ciclo de sanción</label>
+                    <input id="amarillasCicloInput" type="number" min="1" max="20" value="5" onchange="guardarAmarillasCiclo(this.value)" style="width:72px; min-height:44px; box-sizing:border-box; padding:0 10px; border:1px solid rgba(255,255,255,0.12); border-radius:10px; background:rgba(0,0,0,0.3); color:#e2e8f0; font-family:'Montserrat',sans-serif; font-weight:800; font-size:15px; text-align:center;">
+                </div>
+                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:6px;">Depende de la normativa de tu competición. Al llegar a este número, la app pregunta si sancionar al guardar el partido.</div>
+            </div>
+    </div></details>
+    <details class="aj-sec" id="ajSecFamilias"><summary><span class="aj-ic">📡</span><span class="aj-tx"><b>Lo que ven las familias</b><small>Acta PDF · resumen con rótulos · vídeos y permisos · sincronizar plantilla</small></span></summary><div class="aj-body">
+            <div>
+                <button id="sincronizarPlantillaBtn" onclick="sincronizarPlantillaVisor()" style="width:100%; margin-top:8px; padding:10px; background:rgba(255,255,255,0.06); color:#e7efe9; border:1px solid rgba(255,255,255,0.1); border-radius:10px; font-weight:700; font-size:12px; cursor:pointer;">🔄 Sincronizar plantilla con el visor</button>
+                <div id="sincronizarPlantillaStatus" style="font-size:11px; color:#8da499; margin-top:6px; min-height:14px;"></div>
+            </div>
+            <!-- v139 · ACTA EN EL VISOR -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">📄 ACTA EN PDF</div>
+                <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer;">
+                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Las familias pueden descargar el acta en el visor</span>
+                    <input id="actaVisorChk" type="checkbox" onchange="guardarActaVisor(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
+                </label>
+                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">En el visor sale completa, igual que la tuya (visor v168 o posterior). Tú la descargas siempre desde la pestaña Partidos.</div>
+            </div>
+            <!-- v203 · RESUMEN DEL PARTIDO EN EL VISOR -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎬 RESUMEN DEL PARTIDO (VISOR)</div>
+                <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer;">
+                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Con rótulos de datos: once inicial, números, dominio y Liga</span>
+                    <input id="resumenDatosChk" type="checkbox" onchange="guardarResumenDatos(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
+                </label>
+                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">Si lo apagas, el resumen de todos los partidos vuelve a ser solo la entrada, los goles y el final. Cambia al momento en el visor.</div>
+            </div>
+            <!-- v119 · VÍDEOS DE LOS GOLES -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎥 VÍDEOS DE LOS GOLES</div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Vídeos visibles en el visor</span>
+                    <button type="button" id="videosGlobalSw" class="vsw" onclick="toggleVideosGlobal()" aria-label="Vídeos visibles en el visor"></button>
+                </div>
+                <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin:6px 0 8px;">Si lo apagas, desaparecen todos los ▶ del visor (los enlaces se quedan guardados). Debajo, el permiso de cada niño: sin permiso, sus goles no muestran vídeo.</div>
+                <div id="permisosVideoLista" style="background:rgba(0,0,0,0.2); border-radius:8px; padding:4px 8px;"></div>
+            </div>
+    </div></details>
+    <details class="aj-sec" id="ajSecCopias"><summary><span class="aj-ic">💾</span><span class="aj-tx"><b>Copias</b><small>Nube automática · exportar · restaurar · mudanza</small></span></summary><div class="aj-body">
+            <!-- PANEL COPIA DE SEGURIDAD -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🗄️ COPIA DE SEGURIDAD</div>
+                <div style="display:flex; gap:8px;">
+                    <button id="exportBackupBtn" style="flex:1; padding:9px 10px; background:linear-gradient(135deg,#2ed573,#1e9e57); color:#04140a; border-radius:8px; font-size:11px; font-weight:700; border:none; cursor:pointer;">💾 EXPORTAR COPIA</button>
+                    <button id="importBackupBtn" style="flex:1; padding:9px 10px; background:rgba(30,41,59,0.6); color:#94a3b8; border-radius:8px; font-size:11px; font-weight:700; border:1px solid rgba(255,255,255,0.08); cursor:pointer;">📤 RESTAURAR COPIA</button>
+                    <input type="file" id="importBackupInput" accept="application/json" style="display:none;">
+                </div>
+                <div id="backupStatus" style="font-size:10px; margin-top:6px; color:#52665c; padding:0 2px;"></div>
+                <!-- v138 · copia completa para pasar a otro móvil o a la PWA -->
+                <button type="button" onclick="exportarCopiaCompleta()" style="width:100%; margin-top:8px; min-height:40px; padding:9px 10px; background:rgba(245,166,35,0.12); color:#f5a623; border-radius:8px; font-size:11px; font-weight:800; border:1px solid rgba(245,166,35,0.45); cursor:pointer;">📦 COPIA COMPLETA (MUDANZA)</button>
+                <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin-top:4px;">Lleva absolutamente todo, también las claves y el token de GitHub: guárdala solo en tu móvil, no la compartas. Se restaura con «Restaurar» de aquí arriba.</div>
+                <!-- v109 · COPIA AUTOMÁTICA EN LA NUBE -->
+                <div style="margin-top:12px; padding:12px; border-radius:12px; background:rgba(52,152,219,0.07); border:1px solid rgba(52,152,219,0.3);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#5dade2;">☁️ COPIA EN LA NUBE</span>
+                        <span id="nubeEstadoChip" style="font-size:10.5px; font-weight:700; color:#94a3b8;"></span>
+                    </div>
+                    <div id="nubeStatus" style="font-size:11.5px; line-height:1.45; color:#cbd5e1; margin:6px 0 8px;"></div>
+                    <div style="font-size:10.5px; color:#94a3b8; margin-bottom:4px;">Tu código de copia (guárdalo: sin él no se puede recuperar en otro móvil)</div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <code id="nubeCodigo" style="flex:1; min-height:40px; display:flex; align-items:center; padding:0 10px; border-radius:8px; background:#0a0e14; color:#e2e8f0; font-size:13px; letter-spacing:1px; user-select:all; -webkit-user-select:all;"></code>
+                        <button type="button" onclick="enviarCodigoNube()" style="min-height:40px; padding:0 10px; border-radius:8px; border:none; background:#25d366; color:#fff; font-weight:800; font-size:11px;">📲 Guardar</button>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:8px;">
+                        <button type="button" onclick="subirCopiaNube(true)" style="flex:1; min-height:40px; border-radius:9px; border:none; background:linear-gradient(135deg,#2980b9,#3498db); color:#fff; font-weight:800; font-size:11px;">☁️ SUBIR AHORA</button>
+                        <button type="button" onclick="abrirRestaurarNube()" style="flex:1; min-height:40px; border-radius:9px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#cbd5e1; font-weight:800; font-size:11px;">⬇️ RESTAURAR DESDE LA NUBE</button>
+                    </div>
+                    <div id="nubeRestaurarBox" style="display:none; margin-top:10px;"></div>
+                </div>
+            </div>
+    </div></details>
+    <details class="aj-sec" id="ajSecClaves"><summary><span class="aj-ic">🔑</span><span class="aj-tx"><b>Claves y conexiones</b><small>IA y modelo · OneSignal · GitHub (token)</small></span></summary><div class="aj-body">
+            <!-- PANEL CONFIGURACIÓN API KEY -->
+            <div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">⚙️ CONFIGURACIÓN IA</div>
+                <div style="display:flex; gap:6px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+                    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:11px; outline:none; font-family:'Inter',sans-serif;">
+                    <button id="saveApiKeyBtn" style="padding:8px 12px; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:8px; font-size:11px; font-weight:700; border:none; cursor:pointer; white-space:nowrap;">💾 GUARDAR</button>
+                </div>
+                <div id="apiKeyStatus" style="font-size:10px; margin-top:6px; color:#52665c; padding:0 2px;"></div>
+                <!-- v197 · modelo de la IA -->
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:10px;">
+                    <label for="modeloIASelect" style="font-size:12px; color:#e2e8f0;">Modelo de la IA</label>
+                    <select id="modeloIASelect" onchange="guardarModeloIA(this.value)" style="min-height:40px; padding:0 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); background:#111827; color:#e2e8f0; font-size:12px;">
+                        <option value="claude-sonnet-4-6">Sonnet 4.6 (el de antes)</option>
+                        <option value="claude-sonnet-5-5">Sonnet 5.5 (nuevo)</option>
+                    </select>
+                </div>
+                <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin-top:4px;">Se usa en el análisis del partido, la previa y la importación de la federación. Sonnet 4.6 dejará de funcionar en algún momento a partir de febrero de 2027.</div>
+                <!-- v138 · clave de OneSignal (avisos de gol y alineación en el visor) -->
+                <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin:12px 0 8px;">🔔 CLAVE DE ONESIGNAL (AVISOS DEL VISOR)</div>
+                <div style="display:flex; gap:6px; align-items:center; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+                    <input type="password" id="oneSignalKeyInput" placeholder="os_v2_app_..." style="flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:11px;">
+                    <button type="button" onclick="guardarOneSignalKey()" style="padding:8px 12px; background:linear-gradient(135deg,#8e44ad,#6c3483); color:white; border-radius:8px; font-size:11px; font-weight:700; border:none; cursor:pointer; white-space:nowrap;">Guardar</button>
+                </div>
+                <div id="oneSignalKeyStatus" style="font-size:10px; margin-top:6px; color:#52665c; padding:0 2px;"></div>
+            </div>
+                <!-- v120 · dónde se guardan los vídeos: el repositorio de GitHub del visor -->
+                <div style="margin-top:12px; padding:12px; border-radius:12px; background:rgba(180,20,56,0.07); border:1px solid rgba(180,20,56,0.3);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#ff5577;">📤 SUBIR VÍDEOS A GITHUB</span>
+                        <span id="ghEstadoChip" style="font-size:10.5px; font-weight:700; color:#94a3b8;"></span>
+                    </div>
+                    <div style="font-size:11px; line-height:1.45; color:#cbd5e1; margin:6px 0 8px;">Los vídeos se guardan en el mismo GitHub que el visor (carpeta <b>videos</b>) y se reproducen directamente. Hace falta un token de GitHub con permiso de escritura en ese repositorio.</div>
+                    <label for="ghRepoInput" style="font-size:10.5px; color:#94a3b8;">Repositorio (usuario/nombre)</label>
+                    <input id="ghRepoInput" type="text" value="javigarblanc-blip/Hergar-Live" style="width:100%; min-height:40px; box-sizing:border-box; margin:4px 0 8px; padding:0 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:12px;">
+                    <label for="ghTokenInput" style="font-size:10.5px; color:#94a3b8;">Token de GitHub</label>
+                    <div style="display:flex; gap:6px; margin-top:4px;">
+                        <input id="ghTokenInput" type="password" placeholder="github_pat_..." style="flex:1; min-width:0; min-height:40px; box-sizing:border-box; padding:0 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.3); color:#e2e8f0; font-size:12px;">
+                        <button type="button" onclick="guardarGitHubVideos()" style="min-height:40px; padding:0 12px; border-radius:8px; border:none; background:linear-gradient(135deg,#b41438,#e0405f); color:#fff; font-weight:800; font-size:11px; white-space:nowrap;">💾 GUARDAR Y PROBAR</button>
+                    </div>
+                    <div id="ghStatus" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
+                </div>
+    </div></details>
+    <details class="aj-sec" id="ajSecVoz"><summary><span class="aj-ic">🎙️</span><span class="aj-tx"><b>Control por voz</b><small>Probar los cascos · apodos de cada niño</small></span></summary><div class="aj-body">
+        <div id="ajVozSlot"></div>
+    </div></details>
+    <details class="aj-sec" id="ajSecMant"><summary><span class="aj-ic">🧹</span><span class="aj-tx"><b>Mantenimiento</b><small>Fotos en GitHub · espacio · vídeos sin usar · pantallas de análisis</small></span></summary><div class="aj-body">
+        <div style="font-size:10.5px; line-height:1.45; color:#94a3b8;">Las fotos y los vídeos usan el token de GitHub de «Claves y conexiones».</div>
+                    <!-- v242 · fotos de los niños en GitHub -->
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+                        <div style="font-size:11.5px; font-weight:800; color:#e2e8f0;">📷 Fotos de los niños</div>
+                        <div id="fotosGhTxt" style="font-size:11.5px; line-height:1.45; color:#cbd5e1; margin:6px 0;"></div>
+                        <button type="button" id="fotosGhBtn" onclick="pasarFotosAGitHub(this)" style="display:none; width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(46,213,115,0.45); background:rgba(46,213,115,0.12); color:#2ed573; font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px;">📤 Pasar las fotos a GitHub</button>
+                        <div id="fotosGhEstado" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
+                        <div style="font-size:10.5px; line-height:1.45; color:#94a3b8;">Las fotos nuevas se suben solas. Van a la carpeta <b>fotos</b> del mismo GitHub que los vídeos.</div>
+                    </div>
+                    <!-- v121 · espacio ocupado en GitHub -->
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <span style="font-size:11.5px; font-weight:800; color:#e2e8f0;">📦 Espacio usado</span>
+                            <button type="button" onclick="actualizarEspacioGitHub(true)" style="min-height:34px; padding:0 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); background:rgba(30,41,59,0.6); color:#cbd5e1; font-weight:700; font-size:11px;">↻ Actualizar</button>
+                        </div>
+                        <div style="height:10px; border-radius:5px; background:rgba(255,255,255,0.08); overflow:hidden; margin:8px 0 6px;"><div id="ghEspacioBarra" style="height:100%; width:0%; background:#2ed573; border-radius:5px; transition:width .3s;"></div></div>
+                        <div id="ghEspacioTxt" style="font-size:11.5px; line-height:1.45; color:#cbd5e1;">Sin datos todavía: pulsa ↻ Actualizar.</div>
+                        <!-- v181 · vídeos que ya no usa ningún gol (subidas repetidas) -->
+                        <div id="ghHuerfanosBox" style="display:none; margin-top:8px; padding:8px 10px; border-radius:8px; background:rgba(245,166,35,0.08); border:1px solid rgba(245,166,35,0.3);">
+                            <div id="ghHuerfanosTxt" style="font-size:11px; line-height:1.45; color:#f5c97a;"></div>
+                            <button type="button" id="ghHuerfanosBtn" onclick="limpiarVideosHuerfanos()" style="margin-top:6px; width:100%; min-height:38px; border-radius:8px; border:1px solid rgba(245,166,35,0.45); background:rgba(245,166,35,0.12); color:#f5c97a; font-weight:800; font-size:11.5px;">🧹 LIMPIAR VÍDEOS SIN USAR</button>
+                        </div>
+                    </div>
+        <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.1);">
+            <button type="button" id="masAnalisisBtn" class="aj-linea"><span class="ic">👁️</span>Pantallas de análisis en la app: ocultas</button>
+            <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin-top:6px;">Ranking, Sinergias, Rachas, Momentum… Todo eso está en el visor; aquí se puede volver a enseñar en la app.</div>
+        </div>
+    </div></details>
+  </div>
+</div>
 <div id="ligaModal" style="display:none; position:absolute; top:0; left:0; width:100%; min-height:100vh; min-height:100svh; z-index:9000; background:rgba(0,0,0,0.88);">
     <div style="background:#111827; margin:12px auto 24px; width:calc(100% - 24px); max-width:650px; border-radius:16px; border:1px solid rgba(245,166,35,0.3); padding:20px; box-shadow:0 8px 32px rgba(0,0,0,0.8);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -13806,10 +13835,10 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         document.getElementById("mainMatchContext").classList.add("hidden");
         document.getElementById("rosterPanel").classList.remove("hidden");
         // Durante el partido: ocultar título y edición por defecto
-        document.getElementById("rosterPanelTitle").style.display = 'none';
-        document.getElementById("rosterEditSection").style.display = 'none';
-        document.getElementById("toggleRosterEditBtn").style.display = 'block';
-        document.getElementById("toggleRosterEditBtn").innerText = '⚙️ EDITAR PLANTILLA Y CONFIGURACIÓN';
+        // v243: la convocatoria va sola y siempre a la vista; los ajustes están en Más → Ajustes
+        document.getElementById("rosterPanelTitle").style.display = 'block';
+        document.getElementById("rosterEditSection").style.display = 'block';
+        document.getElementById("toggleRosterEditBtn").style.display = 'none';
         renderRosterPanel();
         actualizarEstadoApiKey();
     };
@@ -18402,16 +18431,20 @@ ${separador}`;
     <button id="tabEnVivoBtn" class="bottom-tab"><span class="ic">📊</span>En vivo</button>
     <button id="tabTemporadaBtn" class="bottom-tab"><span class="ic">📅</span>Partidos</button>
     <button id="tabLigaBtn" class="bottom-tab"><span class="ic">📋</span>Liga</button>
-    <button id="tabMasBtn" class="bottom-tab"><span class="ic">⚙️</span>Ajustes</button>
+    <button id="tabMasBtn" class="bottom-tab"><span class="ic">☰</span>Más</button>
 </div>
 <div id="masSheet" class="mas-sheet">
+    <div class="mas-grp" id="masGrpPartido">ANTES DEL PARTIDO</div>
+    <button class="mas-item" id="masConvBtn"><span class="ic">📋</span>Convocatoria</button>
+    <button class="mas-item" id="masNuevoBtn"><span class="ic">🔄</span>Nuevo partido</button>
+    <div class="mas-grp" id="masGrpTareas">TAREAS</div>
+    <div class="mas-grp" id="masGrpVisor">VISOR</div>
     <button class="mas-item" id="masVisorBtn" style="color:#2ed573; font-weight:800;"><span class="ic">📊</span>Ver los datos en el visor</button>
-    <button class="mas-item" id="masConvBtn"><span class="ic">⚙️</span>Convocatoria y plantilla</button>
     <button class="mas-item" id="masCompartirEnlaceBtn"><span class="ic">📲</span>Compartir enlace del visor</button>
+    <div class="mas-grp" id="masGrpApp">LA APP</div>
+    <button class="mas-item" id="masAjustesBtn"><span class="ic">⚙️</span>Ajustes</button>
     <button class="mas-item" id="masComoSeCalculaBtn"><span class="ic">❔</span>¿Cómo se calcula el impacto?</button>
     <button class="mas-item" id="masContrasteBtn"><span class="ic">☀️</span>Alto contraste</button>
-    <button class="mas-item" id="masNuevoBtn"><span class="ic">🔄</span>Nuevo partido</button>
-    <button class="mas-item" id="masAnalisisBtn" style="color:#94a3b8;"><span class="ic">👁️</span>Pantallas de análisis en la app: ocultas</button>
 </div>
 
 <!-- FICHA DE DATOS (estadísticas reales medias) — estilos con prefijo fd- para no chocar con nada existente -->
@@ -22693,10 +22726,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     }
     function pendAbrirAjustes(idDestino) {
         cerrarPend();
-        document.getElementById('masConvBtn').click();
-        const sec = document.getElementById('rosterEditSection');
-        if (sec && sec.style.display === 'none') toggleRosterEdit();
-        setTimeout(() => { const el = document.getElementById(idDestino); if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.style.outline = '2px solid #f5a623'; el.style.outlineOffset = '2px'; } }, 300);
+        window.abrirAjustes(idDestino, true); // v243
     }
 
     // ── Pantalla ──
@@ -22835,7 +22865,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     if (tabMas) tabMas.insertAdjacentHTML('beforeend', '<span id="pendBadge" class="pend-badge" aria-label="Pendientes"></span>');
     const sheet = document.getElementById('masSheet');
     if (sheet) {
-        sheet.insertAdjacentHTML('afterbegin', '<button class="mas-item" id="masPendBtn" style="color:#f5a623; font-weight:800;"><span class="ic">🧹</span>Pendientes<span id="pendMasNum" class="pend-num" style="display:none;"></span></button>');
+        (document.getElementById('masGrpTareas') || sheet).insertAdjacentHTML(document.getElementById('masGrpTareas') ? 'afterend' : 'afterbegin', '<button class="mas-item" id="masPendBtn" style="color:#f5a623; font-weight:800;"><span class="ic">🧹</span>Pendientes<span id="pendMasNum" class="pend-num" style="display:none;"></span></button>');
         document.getElementById('masPendBtn').onclick = abrirPendientes;
     }
     const marcador = document.querySelector('.match-header .scoreboard-row');
@@ -23558,8 +23588,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     $('vpDic').innerHTML = dicHTML;
 
     // ───────── Ajustes: apodos y prueba (en «Editar plantilla y configuración») ─────────
-    const ancla = Array.from(document.querySelectorAll('#rosterEditSection > div')).find(d => /CONFIGURACIÓN IA/.test(d.textContent || ''));
-    if (ancla) ancla.insertAdjacentHTML('beforebegin', `<div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+    const ancla = document.getElementById('ajVozSlot'); // v243: sección propia en Ajustes
+    if (ancla) ancla.insertAdjacentHTML('beforeend', `<div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
         <div style="font-size:10px; color:#64748b; font-weight:700; letter-spacing:1px; margin-bottom:8px;">🎙️ CONTROL POR VOZ</div>
         <button type="button" onclick="vozAbrirPrueba()" style="width:100%; min-height:44px; border-radius:10px; border:1px solid rgba(255,85,119,0.5); background:rgba(180,20,56,0.12); color:#ff5577; font-weight:800; font-size:12px;">🧪 PROBAR VOZ Y CASCOS</button>
         <div style="font-size:10.5px; line-height:1.45; color:#94a3b8; margin:6px 0 8px;">Para cuando cambies de cascos. No apunta nada en el partido.</div>
@@ -23859,7 +23889,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     };
     window.cerrarPremios = function () { document.getElementById('pmModal').style.display = 'none'; };
     const sheet = document.getElementById('masSheet');
-    if (sheet) sheet.insertAdjacentHTML('afterbegin', '<button class="mas-item" id="masPremiosBtn" onclick="abrirPremios()"><span class="ic">🏆</span>Premios de la vuelta</button>');
+    if (sheet) (document.getElementById('masGrpVisor') || sheet).insertAdjacentHTML(document.getElementById('masGrpVisor') ? 'beforebegin' : 'afterbegin', '<button class="mas-item" id="masPremiosBtn" onclick="abrirPremios()"><span class="ic">🏆</span>Premios de la vuelta</button>');
 })();
 </script>
 
@@ -24272,10 +24302,62 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     if (sheet) {
         const b = document.createElement('button'); b.className = 'mas-item'; b.id = 'masVisitasBtn'; b.innerHTML = '<span class="ic">👥</span>Visitas al visor'; b.onclick = () => window.abrirVisitas();
         const pend = document.getElementById('masPendBtn');
-        if (pend && pend.parentNode === sheet) pend.insertAdjacentElement('afterend', b); else sheet.appendChild(b);
+        const grpApp = document.getElementById('masGrpApp'); // v243: al final del bloque VISOR
+        if (grpApp) grpApp.insertAdjacentElement('beforebegin', b); else if (pend && pend.parentNode === sheet) pend.insertAdjacentElement('afterend', b); else sheet.appendChild(b);
     }
 })();
 </script>
 
+
+<!-- ── v243 · ORDEN EN LA APP (paso 1): menú Más por bloques, Convocatoria sola y Ajustes por secciones ── -->
+<style>
+    .mas-sheet { max-height: calc(100vh - 90px); max-height: calc(100svh - 90px); overflow-y: auto; }
+    .mas-sheet .mas-grp { padding: 10px 10px 4px; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: 1.5px; color: #8da499; }
+    .mas-sheet .mas-grp:first-child { padding-top: 6px; }
+    .mas-sheet .mas-item { justify-content: flex-start; }
+    .aj-sec { margin-bottom: 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); }
+    .aj-sec[open] { border-color: rgba(245,166,35,0.5); }
+    .aj-sec > summary { list-style: none; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 12px; cursor: pointer; }
+    .aj-sec > summary::-webkit-details-marker { display: none; }
+    .aj-sec > summary::after { content: '›'; margin-left: auto; font-size: 20px; color: #94a3b8; transition: transform .15s; }
+    .aj-sec[open] > summary::after { transform: rotate(90deg); }
+    .aj-sec .aj-ic { width: 24px; text-align: center; font-size: 17px; flex-shrink: 0; }
+    .aj-sec .aj-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .aj-sec .aj-tx b { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; color: #e2e8f0; }
+    .aj-sec .aj-tx small { font-size: 11.5px; line-height: 1.35; color: #94a3b8; }
+    .aj-body { padding: 4px 12px 14px; }
+    .aj-body > :first-child { margin-top: 0 !important; border-top: none !important; padding-top: 0 !important; }
+    .aj-linea { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 12px; text-align: left; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: #e2e8f0; font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; }
+</style>
+<script>
+(function () {
+    const modal = document.getElementById('ajustesModal');
+    if (!modal) return;
+    function cerrarMenu() { const s = document.getElementById('masSheet'); if (s) s.classList.remove('open'); }
+    window.cerrarAjustes = function () { modal.style.display = 'none'; };
+    // idDestino (opcional): abre la sección donde está ese elemento y lo lleva al centro; resaltar = marco naranja
+    window.abrirAjustes = function (idDestino, resaltar) {
+        cerrarMenu();
+        modal.style.display = 'block';
+        try { if (typeof renderRosterPanel === 'function') renderRosterPanel(); } catch (e) { console.warn('Ajustes:', e); }
+        try { if (typeof actualizarEstadoApiKey === 'function') actualizarEstadoApiKey(); } catch (e) { console.warn('Ajustes:', e); }
+        const el = idDestino ? document.getElementById(idDestino) : null;
+        if (!el) { window.scrollTo(0, 0); return; }
+        const sec = el.closest('details.aj-sec');
+        if (sec) sec.open = true;
+        setTimeout(() => {
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            if (resaltar) { el.style.outline = '2px solid #f5a623'; el.style.outlineOffset = '2px'; }
+        }, 300);
+    };
+    document.getElementById('ajCerrarBtn').onclick = window.cerrarAjustes;
+    const b = document.getElementById('masAjustesBtn');
+    if (b) b.onclick = () => window.abrirAjustes();
+    // Cualquier pestaña de abajo o la convocatoria cierran Ajustes
+    document.querySelectorAll('.bottom-tab').forEach(t => t.addEventListener('click', () => { if (t.id !== 'tabMasBtn') window.cerrarAjustes(); }));
+    const conv = document.getElementById('masConvBtn');
+    if (conv) conv.addEventListener('click', window.cerrarAjustes);
+})();
+</script>
 </body>
 </html>
