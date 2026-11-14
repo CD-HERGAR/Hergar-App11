@@ -466,6 +466,22 @@
         .area-top-small { top: 0; border-top: none; border-radius: 0 0 12px 12px; }
         .area-bottom-small { bottom: 0; border-bottom: none; border-radius: 12px 12px 0 0; }
 
+        /* v246 · ⚽ botones de posesión en las esquinas del campo */
+        .pos-btn { position: absolute; top: 6px; width: 86px; height: 80px; border-radius: 16px; color: #fff; opacity: .35; z-index: 4; pointer-events: none;
+            border: 2px solid rgba(255,255,255,0.15); display: none; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; font-family: 'Montserrat', sans-serif; }
+        .pos-btn .t { font-size: 11px; font-weight: 900; letter-spacing: .5px; }
+        .pos-btn .p { font-size: 20px; font-weight: 900; }
+        .pos-btn .barra { position: absolute; left: 9px; right: 9px; bottom: 7px; height: 5px; border-radius: 3px; background: rgba(0,0,0,0.35); overflow: hidden; }
+        .pos-btn .barra i { display: block; height: 100%; width: 0; background: #fff; }
+        #posBtnH { left: 6px; background: rgb(180,20,56); }
+        #posBtnR { right: 6px; background: #2563eb; }
+        .pos-btn.on { opacity: 1; z-index: 30; pointer-events: auto; border: 3px solid #fff; animation: posLatido .7s ease-in-out infinite; }
+        #posBtnH.on { box-shadow: 0 0 24px rgb(180,20,56); }
+        #posBtnR.on { box-shadow: 0 0 24px #2563eb; }
+        .pos-btn.ok { opacity: 1; z-index: 30; }
+        @keyframes posLatido { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+        #posRitmos button { min-height: 40px; padding: 0 14px; border-radius: 10px; font-size: 12px; font-weight: 800; background: rgba(30,41,59,0.8); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1); }
+        #posRitmos button.sel { background: rgba(46,213,115,0.15); color: #2ed573; border-color: #2ed573; }
         .field-canvas {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -1664,6 +1680,8 @@
                 <div class="area-bottom-small"></div>
             </div>
             <div class="field-canvas" id="fieldCanvas"></div>
+            <button type="button" id="posBtnH" class="pos-btn" aria-label="Posesión: balón nuestro"><span class="t">NUESTRA</span><span class="p">–</span><span class="barra"><i></i></span></button>
+            <button type="button" id="posBtnR" class="pos-btn" aria-label="Posesión: balón suyo"><span class="t">SUYA</span><span class="p">–</span><span class="barra"><i></i></span></button>
         </div>
 
         <div class="section-title">🟡 Jugadores Disponibles (Banquillo)</div>
@@ -1675,6 +1693,7 @@
 
         <div class="section-title" style="padding-left:0;">📊 Estadísticas Generales del Partido</div>
         <div id="statsGeneralesPostPartido" style="margin-bottom:14px;"></div>
+        <div id="posPostPartido" style="display:none; margin-bottom:14px; padding:12px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);"></div><!-- v246 -->
 
         <div class="section-title" style="padding-left:0;">⏱️ Historial Cronológico de Cambios</div>
         <div class="timeline-log" id="timelineLogContainer"></div>
@@ -1688,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v245</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v246</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2177,6 +2196,7 @@
         <button type="button" id="editPartidoAddGolBtn" style="width:100%; padding:8px; background:rgba(46,213,115,0.08); color:#2ed573; border:1px dashed rgba(46,213,115,0.45); border-radius:9px; font-weight:800; font-size:12px; margin-bottom:6px;">+ Añadir gol</button>
         <div style="font-size:9.5px; color:#52665c; margin-bottom:14px; line-height:1.4;">Si no sabes un minuto, déjalo vacío. En cada gol, «¿Cómo llegó?» y 📍 (desde dónde) son opcionales y no cambian el impacto. Esto solo añade el detalle de cada gol: el marcador y los goles de cada jugador se siguen cambiando arriba.</div>
 
+        <div id="editPosBox" style="display:none; margin-bottom:14px; padding:12px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08);"></div><!-- v246 -->
         <button id="guardarEditarPartidoBtn" style="width:100%; padding:12px; background:linear-gradient(135deg,#2980b9,#3498db); color:white; border-radius:12px; font-weight:900; font-size:13px; border:none; margin-bottom:8px;">💾 Guardar cambios</button>
         <div id="editPartidoStatus" style="text-align:center; font-size:11px; min-height:14px;"></div>
     </div>
@@ -2227,6 +2247,21 @@
                 </div>
                 <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:6px;">Depende de la normativa de tu competición. Al llegar a este número, la app pregunta si sancionar al guardar el partido.</div>
             </div>
+    </div></details>
+    <details class="aj-sec" id="ajSecPosesion"><summary><span class="aj-ic">⚽</span><span class="aj-tx"><b>Posesión</b><small>Botones rojo y azul en el directo · cada 30 o 45 s</small></span></summary><div class="aj-body"><!-- v246 -->
+            <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; margin-top:10px; cursor:pointer;">
+                <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Medir la posesión en el directo</span>
+                <input id="posOnChk" type="checkbox" onchange="posGuardarCfg({ on: this.checked })" style="width:22px; height:22px; accent-color:#2ed573;">
+            </label>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:48px;">
+                <span style="font-size:12.5px; color:#e2e8f0;">Cada cuánto avisa</span>
+                <div id="posRitmos" style="display:flex; gap:6px;"><button type="button" data-s="30" onclick="posGuardarCfg({ ritmo: 30 })">30 s</button><button type="button" data-s="45" onclick="posGuardarCfg({ ritmo: 45 })">45 s</button></div>
+            </div>
+            <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; cursor:pointer;">
+                <span style="font-size:12.5px; line-height:1.4; color:#e2e8f0;">Con la voz encendida, escuchar sola al avisar</span>
+                <input id="posAutoChk" type="checkbox" onchange="posGuardarCfg({ auto: this.checked })" style="width:22px; height:22px; accent-color:#2ed573;">
+            </label>
+            <div style="font-size:11px; line-height:1.45; color:#9db3a8; margin-top:4px;">Con el reloj en marcha, el móvil vibra y pita y durante 6 s se encienden los botones de las esquinas del campo: rojo si el balón es nuestro, azul si es suyo. Con la voz encendida vale decir «nuestra», «suya» o «no lo veo». Si no contestas, esa foto no cuenta. Al acabar decides si se ve en el visor. Si algo falla, apágalo aquí: el directo queda como siempre.</div>
     </div></details>
     <details class="aj-sec" id="ajSecFamilias"><summary><span class="aj-ic">📡</span><span class="aj-tx"><b>Lo que ven las familias</b><small>Acta PDF · resumen con rótulos · vídeos y permisos · sincronizar plantilla</small></span></summary><div class="aj-body">
             <div>
@@ -7327,6 +7362,13 @@
             c.sinergias = o; c.sinergiasInfo = { usados: S.usados, total: S.total, version: 224 };
         } catch (e) { console.error('sinergias visor v221', e); }
         c.resumenDatos = (typeof resumenDatosOn === 'function') ? resumenDatosOn() : true; // v203
+        // v246 · la posesión solo viaja si se marcó «Mostrar en el visor» (con la cifra ajustada y las fotos para los tramos)
+        if (Array.isArray(c.partidos)) c.partidos = c.partidos.map(p => {
+            if (!p || !p.posesion) return p;
+            const q = Object.assign({}, p); const z = p.posesion;
+            if (z.vis && z.med != null) q.posesion = { v: z.aj != null ? z.aj : z.med, n: z.n, mg: z.mg, m: z.m }; else delete q.posesion;
+            return q;
+        });
         // v119 · solo viaja el vídeo si se pueden ver vídeos, el gol no está oculto y el goleador tiene permiso
         const global = (typeof videosGlobalOn === 'function') ? videosGlobalOn() : true;
         if (Array.isArray(c.partidos)) c.partidos = c.partidos.map(p => {
@@ -8793,6 +8835,7 @@
         pizarraLog.push({ m, f, ids });
     }
     let palosNuestros = 0, palosRival = 0; // v205: tiros al palo (también cuentan como tiros a puerta)
+    let posMuestras = [], posAj = null, posVis = false; // v246: posesión por muestreo (fotos «<segundo><H|R|N>», ajuste y si se ve en el visor)
     let zonasRivales = {};
     let zonasEquipo = {};
     let momentumData = []; // [{min, delta, acum}] — histórico de momentum del partido
@@ -8939,6 +8982,7 @@
             tirosNuestrosPuerta, tirosNuestrosFuera, tirosRivalesPuerta, tirosRivalesFuera,
             faltasFavor, faltasContra, cornersFavor, cornersContra, fuerasJuegoNuestros, fuerasJuegoRival, tarjetasRival, pizarraLog, palosNuestros, palosRival, tirosTrasCambio, actaDescanso, zonasRivales, zonasEquipo, momentumData,
             analisisIACompleto, resumenIACompleto, notasIAPartido,
+            posMuestras, posAj, posVis, // v246
             tiroGolRival: true // v110
         }));
         publicarPartidoFirebase(); // ⚽ HERGAR LIVE
@@ -9007,6 +9051,7 @@
             tarjetasRival = Array.isArray(state.tarjetasRival) ? state.tarjetasRival : []; trPintarBadges(); // v220
             pizarraLog = Array.isArray(state.pizarraLog) ? state.pizarraLog : []; // v226
             palosNuestros = state.palosNuestros || 0; palosRival = state.palosRival || 0; // v205
+            posMuestras = Array.isArray(state.posMuestras) ? state.posMuestras : []; posAj = state.posAj != null ? state.posAj : null; posVis = !!state.posVis; // v246
             { const b = document.getElementById("lsb_palR"); if (b) b.innerText = palosRival; }
             tirosTrasCambio = state.tirosTrasCambio || { n: 0, r: 0 }; // v137
             actaDescanso = state.actaDescanso || null; // v139
@@ -10906,6 +10951,7 @@
     }
 
     document.getElementById("startPauseBtn").onclick = () => {
+        try { posGesto(); } catch (e) {} // v246: el toque permite pitar y vibrar
         if (matchRunning) pauseTimer(); else startTimer();
     };
 
@@ -13463,10 +13509,207 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
     };
 
+
+    // ── v246 · ⚽ POSESIÓN POR MUESTREO ─────────────────────────────────────────────
+    // Con el reloj en marcha, cada 30 s (o 45 s) el móvil vibra y pita, y durante 6 s se encienden los botones
+    // NUESTRA (rojo) y SUYA (azul) de las esquinas del campo. También vale la voz («nuestra» / «suya» / «no lo veo»).
+    // Cada foto se guarda como "<segundo del partido><H|R|N>" en posMuestras. Al acabar: ajuste dentro del margen
+    // de error e interruptor «Mostrar en el visor» (también después, en Editar partido).
+    const POS_KEY = 'hergar_F11_posesion';
+    const POS_VENTANA = 6000;
+    function posCfg() {
+        let c = {}; try { c = JSON.parse(localStorage.getItem(POS_KEY) || '{}') || {}; } catch (e) { c = {}; }
+        return { on: !!c.on, ritmo: Number(c.ritmo) === 45 ? 45 : 30, auto: !!c.auto };
+    }
+    function posGuardarCfg(cambio) {
+        const c = Object.assign(posCfg(), cambio);
+        try { localStorage.setItem(POS_KEY, JSON.stringify(c)); } catch (e) {}
+        if (cambio && cambio.ritmo) posProx = null;
+        if (c.on) posGesto();
+        posPintarAjustes(); posTick();
+    }
+    let posProx = null, posAbierta = null, posAc = null, posWl = null, posOk = null;
+    function posCuenta(m) {
+        let h = 0, r = 0, n = 0;
+        (m || []).forEach(x => { const v = String(x).slice(-1); if (v === 'H') h++; else if (v === 'R') r++; else n++; });
+        return { h, r, n, tot: h + r, pct: h + r ? Math.round(h * 100 / (h + r)) : null };
+    }
+    function posMargen(tot) { return tot ? Math.max(1, Math.round(98 / Math.sqrt(tot))) : null; }
+    function posGesto() { // un toque del usuario (INICIAR, encender en Ajustes) permite sonar y vibrar después
+        if (!posCfg().on) return;
+        try { if (!posAc) posAc = new (window.AudioContext || window.webkitAudioContext)(); if (posAc.state === 'suspended') posAc.resume(); } catch (e) {}
+        posPantalla();
+    }
+    async function posPantalla() {
+        try { if ('wakeLock' in navigator && !posWl && partidoEmpezado && !matchFinished) { posWl = await navigator.wakeLock.request('screen'); posWl.addEventListener('release', () => { posWl = null; }); } } catch (e) {}
+    }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && posCfg().on) { posPantalla(); try { if (posAc && posAc.state === 'suspended') posAc.resume(); } catch (e) {} } });
+    function posPitido() {
+        if (!posAc) return;
+        try {
+            if (posAc.state === 'suspended') posAc.resume();
+            const t0 = posAc.currentTime + 0.02;
+            [0, 0.22].forEach((d, k) => {
+                const o = posAc.createOscillator(), g = posAc.createGain();
+                o.type = 'sine'; o.frequency.value = k ? 1320 : 990;
+                g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.5, t0 + d + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.16);
+                o.connect(g).connect(posAc.destination); o.start(t0 + d); o.stop(t0 + d + 0.18);
+            });
+        } catch (e) {}
+    }
+    function posActivo() { return posCfg().on && partidoEmpezado && !matchFinished && !reproduciendoPrevio; }
+    function posAbrir() {
+        posAbierta = { real: Date.now(), seg: getElapsedSeconds() };
+        try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (e) {}
+        posPitido();
+        if (posCfg().auto && typeof window.posVozEscuchar === 'function') setTimeout(() => { if (posAbierta) window.posVozEscuchar(); }, 650);
+    }
+    function posCerrar(v) {
+        if (!posAbierta) return;
+        posMuestras.push(posAbierta.seg + (v || 'N'));
+        posAbierta = null;
+        try { saveState(); } catch (e) { console.error('Posesión:', e); }
+    }
+    function posContestar(v) {
+        if (!posAbierta) return false;
+        try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) {}
+        posOk = { v, hasta: Date.now() + 1200 };
+        posCerrar(v); posPintarBotones();
+        return true;
+    }
+    // Por voz: solo cuenta si lo dicho es únicamente la posesión («nuestra», «es suya», «no lo veo»…).
+    // Cualquier otra frase («tiro de ellos») sigue siendo una acción normal y esa foto se salta.
+    const POS_PAL = new Set('nuestra nuestro nuestras nuestros suya suyo suyas suyos ellos nosotros de la el es lo no veo se balon pelota posesion'.split(' '));
+    function posEntender(frases) {
+        for (const f of frases || []) {
+            const w = String(f || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]+/g, ' ').split(/\s+/).filter(Boolean);
+            if (!w.length || w.length > 4 || w.some(x => !POS_PAL.has(x))) continue;
+            if (w.includes('veo') || (w.includes('no') && w.includes('se'))) return 'N';
+            if (w.some(x => /^nuestr/.test(x) || x === 'nosotros')) return 'H';
+            if (w.some(x => /^suy/.test(x) || x === 'ellos')) return 'R';
+        }
+        return null;
+    }
+    window.posVozIntentar = function (alts) { if (!posAbierta) return false; const v = posEntender(alts); if (!v) return false; return posContestar(v); };
+    function posTick() {
+        if (!posActivo()) { if (posAbierta) posCerrar('N'); posProx = null; posPintarBotones(); return; }
+        if (posAbierta) {
+            const voz = typeof window.posVozOcupada === 'function' && window.posVozOcupada();
+            if (Date.now() - posAbierta.real >= POS_VENTANA + (voz ? 2500 : 0)) posCerrar('N');
+            posPintarBotones(); return;
+        }
+        if (matchRunning) {
+            const s = getElapsedSeconds(), r = posCfg().ritmo;
+            if (posProx == null || posProx > s + r) posProx = s + r;
+            if (s >= posProx) { posProx = s + r; posAbrir(); }
+        }
+        posPintarBotones();
+    }
+    function posPintarBotones() {
+        const bh = document.getElementById('posBtnH'), br = document.getElementById('posBtnR');
+        if (!bh || !br) return;
+        const ver = posActivo();
+        bh.style.display = br.style.display = ver ? 'flex' : 'none';
+        if (!ver) return;
+        const c = posCuenta(posMuestras), on = !!posAbierta;
+        const quedan = on ? Math.max(0, POS_VENTANA - (Date.now() - posAbierta.real)) : 0;
+        const ok = posOk && Date.now() < posOk.hasta ? posOk.v : '';
+        [[bh, 'H', 'NUESTRA', c.pct], [br, 'R', 'SUYA', c.pct == null ? null : 100 - c.pct]].forEach(([b, v, t, p]) => {
+            b.classList.toggle('on', on); b.classList.toggle('ok', ok === v);
+            const tt = (ok === v ? '✓ ' : '') + t, pp = p == null ? '–' : p + '%';
+            if (b.querySelector('.t').textContent !== tt) b.querySelector('.t').textContent = tt;
+            if (b.querySelector('.p').textContent !== pp) b.querySelector('.p').textContent = pp;
+            b.querySelector('.barra i').style.width = Math.round(quedan * 100 / POS_VENTANA) + '%';
+        });
+    }
+    setInterval(posTick, 250);
+    {
+        const bh = document.getElementById('posBtnH'), br = document.getElementById('posBtnR');
+        if (bh) bh.addEventListener('click', (e) => { e.stopPropagation(); posContestar('H'); });
+        if (br) br.addEventListener('click', (e) => { e.stopPropagation(); posContestar('R'); });
+    }
+
+    // ── Ajustes ──
+    function posPintarAjustes() {
+        const c = posCfg();
+        const chk = document.getElementById('posOnChk'); if (chk) chk.checked = c.on;
+        const au = document.getElementById('posAutoChk'); if (au) au.checked = c.auto;
+        document.querySelectorAll('#posRitmos button').forEach(b => b.classList.toggle('sel', Number(b.dataset.s) === c.ritmo));
+    }
+    window.posGuardarCfg = posGuardarCfg;
+    try { posPintarAjustes(); } catch (e) {}
+
+    // ── Al acabar el partido: ajuste dentro del margen y si se ve en el visor ──
+    function posLimites(med, mg) { return { min: Math.max(0, med - mg), max: Math.min(100, med + mg) }; }
+    function posTarjetaHTML(med, tot, mg, aj, vis, pre) {
+        if (med == null) return `<div style="font-size:12px; color:#94a3b8;">⚽ Posesión: ninguna foto contestada en este partido.</div>`;
+        const L = posLimites(med, mg);
+        const btn = (txt, d, dis) => `<button type="button" ${dis ? 'disabled' : ''} onclick="${pre}Ajustar(${d})" style="width:48px; min-height:44px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:${dis ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.08)'}; color:${dis ? '#475569' : '#e2e8f0'}; font-size:20px; font-weight:900;">${txt}</button>`;
+        return `<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                <span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; color:#f5a623; letter-spacing:.5px;">⚽ POSESIÓN</span>
+                <span style="font-size:11px; color:#94a3b8;">medida ${med} % · ${tot} fotos · margen ±${mg}</span></div>
+            <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+                ${btn('−', -1, aj <= L.min)}
+                <div style="flex:1; text-align:center;"><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:26px;"><span style="color:#ff6b7a;">${aj} %</span> <span style="font-size:14px; color:#64748b;">·</span> <span style="color:#60a5fa;">${100 - aj} %</span></div>
+                <div style="height:8px; border-radius:4px; background:#2563eb; overflow:hidden; margin-top:4px;"><div style="height:100%; width:${aj}%; background:rgb(180,20,56);"></div></div></div>
+                ${btn('+', 1, aj >= L.max)}
+            </div>
+            <div style="font-size:10.5px; color:#94a3b8; margin-top:6px;">${aj !== med ? `Ajustada por ti (medida ${med} %). ` : ''}Se puede mover entre ${L.min} y ${L.max} % (el margen de error).${tot < 40 ? ' ⚠️ Pocas fotos: poco fiable.' : ''}</div>
+            <label style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; margin-top:6px; cursor:pointer;">
+                <span style="font-size:12.5px; color:#e2e8f0;">Mostrar en el visor</span>
+                <input type="checkbox" ${vis ? 'checked' : ''} onchange="${pre}Visor(this.checked)" style="width:22px; height:22px; accent-color:#2ed573;">
+            </label>`;
+    }
+    function posPintarPost() {
+        const box = document.getElementById('posPostPartido'); if (!box) return;
+        if (!posMuestras.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        const c = posCuenta(posMuestras), mg = posMargen(c.tot);
+        let aj = c.pct;
+        if (c.pct != null && posAj != null) { const L = posLimites(c.pct, mg); aj = Math.max(L.min, Math.min(L.max, posAj)); }
+        box.style.display = 'block';
+        box.innerHTML = posTarjetaHTML(c.pct, c.tot, mg, aj, posVis, 'posPost')
+            + (partidoYaTransferido ? `<div style="font-size:10.5px; color:#f5a623; margin-top:4px;">El partido ya está en la temporada: los cambios de aquí no le llegan. Cámbialo en Partidos → ✏️ Editar partido.</div>` : '');
+    }
+    window.posPostAjustar = function (d) {
+        const c = posCuenta(posMuestras); if (c.pct == null) return;
+        const L = posLimites(c.pct, posMargen(c.tot));
+        posAj = Math.max(L.min, Math.min(L.max, (posAj != null ? posAj : c.pct) + d));
+        saveState(); posPintarPost();
+    };
+    window.posPostVisor = function (v) { posVis = !!v; saveState(); posPintarPost(); };
+    function posParaPartido() {
+        if (!posMuestras.length) return null;
+        const c = posCuenta(posMuestras), mg = posMargen(c.tot);
+        let aj = c.pct;
+        if (c.pct != null && posAj != null) { const L = posLimites(c.pct, mg); aj = Math.max(L.min, Math.min(L.max, posAj)); }
+        return { m: posMuestras.join(','), n: c.tot, med: c.pct, aj, mg, vis: !!posVis && c.pct != null, ritmo: posCfg().ritmo };
+    }
+
+    // ── Editar partido ──
+    let posEdit = null;
+    function posEditPintar(p) {
+        const box = document.getElementById('editPosBox'); if (!box) return;
+        posEdit = p && p.posesion ? Object.assign({}, p.posesion) : null;
+        if (!posEdit || posEdit.med == null) { box.style.display = 'none'; box.innerHTML = ''; return; }
+        box.style.display = 'block';
+        box.innerHTML = posTarjetaHTML(posEdit.med, posEdit.n, posEdit.mg, posEdit.aj != null ? posEdit.aj : posEdit.med, !!posEdit.vis, 'posEdit')
+            + `<div style="font-size:9.5px; color:#52665c; margin-top:2px;">Se aplica al pulsar «Guardar cambios».</div>`;
+    }
+    window.posEditAjustar = function (d) {
+        if (!posEdit) return;
+        const L = posLimites(posEdit.med, posEdit.mg);
+        posEdit.aj = Math.max(L.min, Math.min(L.max, (posEdit.aj != null ? posEdit.aj : posEdit.med) + d));
+        const tmp = { posesion: posEdit }; posEditPintar(tmp);
+    };
+    window.posEditVisor = function (v) { if (!posEdit) return; posEdit.vis = !!v; posEditPintar({ posesion: posEdit }); };
+    function posEditGuardar(p) { if (p && posEdit && p.posesion) p.posesion = Object.assign({}, p.posesion, { aj: posEdit.aj, vis: !!posEdit.vis }); }
+
     // ── M14 · ACTA FINAL ──────────────────────────────────────────────
     // FIX: bloque FIJO de estadísticas generales en el informe post-partido — antes solo
     // vivían en el banner temporal (que se cerraba y se perdían de vista sin recargar).
     function generarEstadisticasGeneralesPostPartido() {
+        try { posPintarPost(); } catch (e) { console.error('Posesión:', e); } // v246
         const container = document.getElementById("statsGeneralesPostPartido");
         if (!container) return;
         const totalN = tirosNuestrosPuerta + tirosNuestrosFuera;
@@ -15411,6 +15654,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         partido.reglaTirosFuera = 194; // v194: tiros fuera de más ya con la regla nueva
         partido.reglaDefensa = 207; // v207: defensa según el puesto ya aplicada en directo
         try { const mm = codificarMinutoV145(); if (mm) partido.minutos = mm; } catch (e) { console.error('Minuto a minuto:', e); } // v145
+        if (!sim) { try { const pz = posParaPartido(); if (pz) partido.posesion = pz; } catch (e) { console.error('Posesión:', e); } } // v246
         if (!sim) { try { const dp = dlgPendiente(); if (dp && dp.st && dp.code) { partido.dlg = dp.st; partido.dlgCode = dp.code; if (!dp.st.fjfc) partido.sinApuntar = ['fj', 'fc']; } } catch (e) {} } // v190: los apuntes del delegado se quedan con el partido (para revisarlos después)
         t.partidos.push(partido);
         registrarConvocatorias(t, convocadosPartido, titularesIniciales); // v68: convocados, jueguen o no
@@ -16017,6 +16261,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const pv = document.getElementById('egPegarVariosBox'); if (pv) { pv.style.display = 'none'; document.getElementById('egPegarVariosTxt').value = ''; document.getElementById('egPegarVariosRes').innerHTML = ''; }
 
         document.getElementById('editPartidoStatus').innerText = '';
+        try { posEditPintar(p); } catch (e) { console.error('Posesión:', e); } // v246
         document.getElementById('editarPartidoModal').style.display = 'flex';
     };
 
@@ -16654,6 +16899,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const t = getTemporada();
         const p = t.partidos[editandoPartidoIndex];
         if (!p) return;
+        try { posEditGuardar(p); } catch (e) { console.error('Posesión:', e); } // v246
 
         const fechaVieja = p.fecha, rivalViejo = p.rival;
         const vidsAntes = (Array.isArray(p.goles) ? p.goles : []).filter(g => esVideoGh(g.video)).map(g => g.video.slice(3)); // v181
@@ -17783,6 +18029,7 @@ ${separador}`;
         tarjetasRival = []; trPintarBadges(); // v220
         pizarraLog = []; // v226
         palosNuestros = 0; palosRival = 0; // v205
+        posMuestras = []; posAj = null; posVis = false; try { posProx = null; posAbierta = null; } catch (e) {} // v246
         { const b = document.getElementById("lsb_palR"); if (b) b.innerText = 0; }
         tirosTrasCambio = { n: 0, r: 0 }; // v137
         actaDescanso = null; // v139
@@ -23398,6 +23645,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     const ERRORES = []; // { ts, txt, oido }
     function procesarPartido(alts, error) {
         if (!alts || !alts.length) { if (error) { ERRORES.push({ ts: Date.now(), txt: error }); pintarTira(); } return reposo(); }
+        try { if (typeof window.posVozIntentar === 'function' && window.posVozIntentar(alts)) { $('vozBolUlt').textContent = '⚽ Posesión apuntada'; return reposo(); } } catch (e) {} // v246
         cargarJugadores();
         alts = alts.map(a => String(a || '').trim()).filter(Boolean);
         const pend = pendiente && Date.now() < pendiente.hasta ? pendiente : null;
@@ -23430,6 +23678,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         if (escuchando) { if (Date.now() - tEscucha > 800) { try { rec.abort(); } catch (e) {} } return; }
         escuchar(procesarPartido);
     }
+    window.posVozEscuchar = () => { if (vozOn && !escuchando) escuchar(procesarPartido); }; // v246
+    window.posVozOcupada = () => escuchando; // v246
 
     // ───────── Tira: últimas acciones (dichas o tocadas) ─────────
     function golPendiente(k, t) {
