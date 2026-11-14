@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v246</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v247</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -6756,6 +6756,33 @@
             ], { columnStyles: { 0: { halign: 'left', fontStyle: 'bold' } } });
             font('italic', 7); color(ACTA_GRIS); doc.text('El detalle por partes se guarda desde la v139.', M, y + 2); y += 4;
         }
+        // v246 · ⚽ posesión por muestreo (solo si el partido la tiene: los del delegado no la traen)
+        try {
+            const z = p.posesion, pv = z ? (z.aj != null ? z.aj : (z.v != null ? z.v : z.med)) : null;
+            if (pv != null) {
+                titulo('POSESIÓN (medida por muestreo)');
+                const ms = String(z.m || '').split(',').filter(Boolean).map(x => ({ s: parseInt(x, 10), v: x.slice(-1) })).filter(x => !isNaN(x.s) && x.v !== 'N');
+                const tramos = [[0, 12], [12, 24], [24, 35], [35, 47], [47, 59], [59, 999]].map(([a, b]) => {
+                    const xs = ms.filter(x => x.s >= a * 60 && x.s < b * 60), hh = xs.filter(x => x.v === 'H').length;
+                    return { lab: b === 999 ? `De ${a}' al final` : `De ${a}' a ${b}'`, n: xs.length, p: xs.length ? hh / xs.length : null };
+                });
+                const barraP = (label, v, fuerte) => {
+                    sitio(7); font(fuerte ? 'bold' : 'normal', 8); color(ACTA_TINTA); doc.text(actaTxt(label), M, y + 3.6);
+                    const x0 = M + 38, w = CW - 38, wn = Math.max(0, Math.min(1, v)) * w;
+                    fill(ACTA_ROJO); doc.rect(x0, y, wn, 5, 'F'); fill(ACTA_AZUL); doc.rect(x0 + wn, y, w - wn, 5, 'F');
+                    font('bold', 7.5); doc.setTextColor(255, 255, 255);
+                    if (wn > 9) doc.text(`${Math.round(v * 100)} %`, x0 + 2, y + 3.6);
+                    if (w - wn > 9) doc.text(`${Math.round((1 - v) * 100)} %`, x0 + w - 2, y + 3.6, { align: 'right' });
+                    y += 7;
+                };
+                barraP('Partido', pv / 100, true);
+                const conTramos = tramos.filter(f => f.n >= 3);
+                if (conTramos.length >= 2) conTramos.forEach(f => barraP(f.lab, f.p));
+                font('normal', 6.5); color(ACTA_GRIS);
+                doc.text(actaTxt(`Cada ${z.ritmo || 30} s se apuntó de quién era el balón (${z.n} fotos, margen de unos ${z.mg} puntos).${conTramos.length >= 2 ? ' Por tramos hay pocas fotos: orientativo.' : ''}`), M, y + 1);
+                y += 5;
+            }
+        } catch (e) { console.error('Posesión (acta):', e); }
         if (D.cuota) {
             titulo('CUOTA DE TIROS (parte de los tiros del partido que son del Hergar)');
             const barra = (label, v) => {
@@ -11513,7 +11540,7 @@ ${ctxNotas ? `NOTAS DE QUIEN REGISTRA EL PARTIDO: ${ctxNotas}\n` : ''}GOLES: ${g
 TIROS: Nuestros ${tirosNuestrosPuerta+tirosNuestrosFuera} (${tirosNuestrosPuerta} a puerta${palosNuestros ? `, de ellos ${palosNuestros} al palo` : ''}, ${tirosNuestrosFuera} sin peligro) | Rivales ${tirosRivalesPuerta+tirosRivalesFuera} (${tirosRivalesPuerta} a puerta${palosRival ? `, de ellos ${palosRival} al palo` : ''}, ${tirosRivalesFuera} sin peligro)
 FALTAS/CÓRNERS: F.Favor ${faltasFavor} F.Contra ${faltasContra} | C.Favor ${cornersFavor} C.Contra ${cornersContra}
 FUERAS DE JUEGO: Hergar ${fuerasJuegoNuestros} | Rival ${fuerasJuegoRival} (los del rival suelen indicar que la línea defensiva sube bien)
-${tarjetasRival.length ? `TARJETAS DEL RIVAL: ${tarjetasRival.map(x => (x.tipo === 'R' ? 'roja' : 'amarilla') + ' ' + x.min + "'").join(', ')}${tarjetasRival.some(x => x.tipo === 'R') ? ' (con una roja, el rival juega con uno menos desde ese minuto)' : ''}\n` : ''}TOP SINERGIAS: ${topSinergias || 'Sin datos'}
+${(() => { try { return posTextoIA(); } catch (e) { return ''; } })()}${tarjetasRival.length ? `TARJETAS DEL RIVAL: ${tarjetasRival.map(x => (x.tipo === 'R' ? 'roja' : 'amarilla') + ' ' + x.min + "'").join(', ')}${tarjetasRival.some(x => x.tipo === 'R') ? ' (con una roja, el rival juega con uno menos desde ese minuto)' : ''}\n` : ''}TOP SINERGIAS: ${topSinergias || 'Sin datos'}
 CAMBIOS (minuto del reloj del partido; la 2.ª parte empieza en el 35'): ${(() => { try { const cs = substitutionTimeline.filter(x => typeof x === 'string' && x.includes('🔄 Sale')).map(x => { const m = parseInt((/^\[(\d+)'\]/.exec(x) || [])[1], 10); const parte = isNaN(m) ? '' : (m < 35 ? ` (1.ª parte, min ${m})` : m === 35 ? ' (en el descanso)' : ` (2.ª parte, ${m - 35} min después de empezar)`); return x.replace(/^\[\d+'\]\s*🔄\s*/, `${isNaN(m) ? '' : m + "' "}`) + parte; }); return cs.length ? cs.join(' | ') : 'Ninguno'; } catch (e) { return 'Sin datos'; } })()}
 CRONOLOGÍA: ${priorizarCronologia(substitutionTimeline, 15).join(' | ')}
 ${(() => { try { return iaExtrasPartido(); } catch (e) { return ''; } })()}
@@ -13678,6 +13705,16 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         saveState(); posPintarPost();
     };
     window.posPostVisor = function (v) { posVis = !!v; saveState(); posPintarPost(); };
+    // Para el informe IA: la posesión del partido en curso (con el ajuste, si lo hay) y por tramos
+    function posTextoIA() {
+        const z = posParaPartido(); if (!z || z.med == null || z.n < 20) return '';
+        const ms = posMuestras.map(x => ({ s: parseInt(x, 10), v: String(x).slice(-1) })).filter(x => !isNaN(x.s) && x.v !== 'N');
+        const tr = [[0, 12], [12, 24], [24, 35], [35, 47], [47, 59], [59, 999]].map(([a, b]) => {
+            const xs = ms.filter(x => x.s >= a * 60 && x.s < b * 60); if (xs.length < 3) return '';
+            return (b === 999 ? a + "'-final" : a + '-' + b + "'") + ' ' + Math.round(xs.filter(x => x.v === 'H').length * 100 / xs.length) + ' %';
+        }).filter(Boolean);
+        return `POSESIÓN (aproximada: se apunta de quién es el balón cada ${z.ritmo} s; ${z.n} fotos, margen de unos ${z.mg} puntos): Hergar ${z.aj} % - Rival ${100 - z.aj} %${tr.length >= 2 ? ` | Por tramos (Hergar; orientativo, pocas fotos en cada uno): ${tr.join(', ')}` : ''}. Úsala como dato aproximado (sin decimales ni tono de dato exacto), sobre todo para ver quién tuvo más el balón y si cambió entre partes o tras los cambios.\n`;
+    }
     function posParaPartido() {
         if (!posMuestras.length) return null;
         const c = posCuenta(posMuestras), mg = posMargen(c.tot);
