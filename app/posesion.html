@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Hergar · Prueba de posesión</title>
+<meta name="theme-color" content="#0a0e14">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+<!--
+  HERGAR F11 · Prueba de posesión por muestreo
+  · Cada 30 s (o 45 s) vibra y pita por los cascos; durante 6 s se encienden NUESTRA (rojo) y SUYA (azul).
+  · Se contesta tocando o con la voz («nuestra» / «suya» / «no lo veo»), con el botón del auricular o escuchando sola.
+  · Apunta también si el aviso llegó tarde (pantalla apagada, móvil en el bolsillo…) para saber si es fiable.
+  · No toca nada de la app: lo apuntado se queda en esta página (clave propia "hergar_posesion_prueba").
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { overscroll-behavior-y: contain; }
+  body { font-family: 'Inter', sans-serif; background: #0a0e14; color: #e2e8f0; padding: 14px 14px 40px; min-height: 100vh; }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  h1 { font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 16px; letter-spacing: 1.5px; color: #ff5577; }
+  .sub { font-size: 11.5px; color: #94a3b8; margin: 4px 0 14px; line-height: 1.45; }
+  .card { background: #111827; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+  .ttl { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 10.5px; letter-spacing: 1px; color: #64748b; margin-bottom: 8px; }
+  button { font-family: 'Montserrat', sans-serif; font-weight: 800; border: none; cursor: pointer; border-radius: 12px; }
+  .btn-main { width: 100%; min-height: 56px; font-size: 14px; letter-spacing: .5px; background: rgb(180,20,56); color: #fff; }
+  .btn-sec { flex: 1; min-height: 46px; font-size: 12px; background: rgba(30,41,59,0.8); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1); }
+  .fila { display: flex; gap: 8px; margin-top: 10px; }
+  .chip { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: rgba(148,163,184,0.12); color: #94a3b8; margin: 0 4px 4px 0; }
+  .chip.on { background: rgba(46,213,115,0.15); color: #2ed573; }
+  .chip.mal { background: rgba(245,166,35,0.15); color: #f5c26b; }
+  .nota { font-size: 11px; color: #94a3b8; line-height: 1.45; margin-top: 6px; }
+
+  .campo { position: relative; height: 230px; border-radius: 18px; background: #1c5e35; border: 2px solid #2f6b46; overflow: hidden; }
+  .campo .area { position: absolute; left: 50%; transform: translateX(-50%); top: -2px; width: 34%; height: 60px; border: 2px solid rgba(255,255,255,0.18); border-top: none; border-radius: 0 0 14px 14px; }
+  .campo .medio { position: absolute; left: 0; right: 0; top: 70%; border-top: 2px solid rgba(255,255,255,0.18); }
+  .pos { position: absolute; top: 10px; width: 112px; height: 112px; border-radius: 18px; color: #fff; opacity: .35; border: 2px solid rgba(255,255,255,0.15);
+         display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: opacity .15s; }
+  .pos .t { font-size: 13px; letter-spacing: 1px; }
+  .pos .p { font-size: 26px; font-weight: 900; }
+  .pos .barra { position: absolute; left: 10px; right: 10px; bottom: 9px; height: 6px; border-radius: 3px; background: rgba(0,0,0,0.35); overflow: hidden; }
+  .pos .barra i { display: block; height: 100%; width: 0; background: #fff; }
+  #posH { left: 10px; background: rgb(180,20,56); }
+  #posR { right: 10px; background: #2563eb; }
+  .pos.on { opacity: 1; border: 3px solid #fff; animation: latido .7s ease-in-out infinite; }
+  #posH.on { box-shadow: 0 0 26px rgb(180,20,56); }
+  #posR.on { box-shadow: 0 0 26px #2563eb; }
+  .pos.ok { opacity: 1; }
+  @keyframes latido { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+  .centro { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; }
+  .centro .big { font-family: 'Montserrat', sans-serif; font-weight: 900; font-size: 30px; }
+  .centro .peq { font-size: 12px; color: #d1fae5; }
+  .oido { font-size: 12px; color: #94a3b8; min-height: 16px; font-style: italic; margin-top: 8px; text-align: center; }
+
+  .resumen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .dato { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 9px 6px; text-align: center; }
+  .dato b { display: block; font-family: 'Montserrat', sans-serif; font-size: 18px; }
+  .dato span { font-size: 10.5px; color: #94a3b8; }
+  .ajuste { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; font-size: 13px; }
+  .ajuste input[type=checkbox] { width: 22px; height: 22px; accent-color: #2ed573; }
+  .pills { display: flex; gap: 6px; }
+  .pills button { min-height: 38px; padding: 0 12px; font-size: 12px; background: rgba(30,41,59,0.8); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.1); }
+  .pills button.sel { background: rgba(46,213,115,0.15); color: #2ed573; border-color: #2ed573; }
+  .log-item { display: grid; grid-template-columns: 54px 1fr auto; gap: 8px; padding: 7px 0; border-top: 1px solid rgba(255,255,255,0.05); font-size: 12px; align-items: center; }
+  .log-item:first-child { border-top: none; }
+  .log-hora { color: #64748b; font-variant-numeric: tabular-nums; font-size: 11px; }
+  .vacio { font-size: 12px; color: #64748b; text-align: center; padding: 10px 0; }
+
+  #bolsillo { display: none; position: fixed; inset: 0; z-index: 9999; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #bolsillo.on { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+  #bolsilloInfo { font-size: 13px; color: #334155; text-align: center; padding: 0 24px; min-height: 18px; }
+  #candado { width: 96px; height: 96px; border-radius: 50%; border: 2px solid #1e293b; display: flex; align-items: center; justify-content: center; font-size: 34px; color: #334155; }
+  #candado.cargando { border-color: #64748b; color: #94a3b8; }
+  #bolsilloAyuda { font-size: 11px; color: #1e293b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚽ PRUEBA DE POSESIÓN</h1>
+  <div class="sub">Cada 30 s vibra y pita en los cascos. Durante 6 s se encienden los dos botones: rojo si el balón es nuestro, azul si es suyo. También vale la voz: «nuestra», «suya» o «no lo veo». No toca nada de la app.</div>
+
+  <div class="card">
+    <button id="btnActivar" class="btn-main">▶ EMPEZAR PRUEBA</button>
+    <div id="activoInfo" style="display:none;">
+      <div id="chips"></div>
+      <div class="fila">
+        <button class="btn-sec" id="btnPausa">⏸ Pausa (descanso)</button>
+        <button class="btn-sec" id="btnBolsillo">🔒 Modo bolsillo</button>
+      </div>
+      <div class="fila">
+        <button class="btn-sec" id="btnYa">🔔 Avisar ya</button>
+        <button class="btn-sec" id="btnParar">⏹ Terminar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="campo">
+      <div class="area"></div><div class="medio"></div>
+      <button id="posH" class="pos" aria-label="Balón nuestro"><span class="t" id="tH">NUESTRA</span><span class="p"><span id="pH">–</span>%</span><span class="barra"><i id="bH"></i></span></button>
+      <button id="posR" class="pos" aria-label="Balón suyo"><span class="t" id="tR">SUYA</span><span class="p"><span id="pR">–</span>%</span><span class="barra"><i id="bR"></i></span></button>
+      <div class="centro"><div class="big" id="cuenta">–</div><div class="peq" id="cuentaTxt">Pulsa EMPEZAR</div></div>
+    </div>
+    <div class="oido" id="oido"></div>
+  </div>
+
+  <div class="card">
+    <div class="ttl">CÓMO VA</div>
+    <div class="resumen">
+      <div class="dato"><b id="rFotos">0</b><span>fotos válidas</span></div>
+      <div class="dato"><b id="rMargen">–</b><span>margen</span></div>
+      <div class="dato"><b id="rContesta">–</b><span>avisos contestados</span></div>
+      <div class="dato"><b id="rRetraso">–</b><span>retraso medio del aviso</span></div>
+      <div class="dato"><b id="rTarde">0</b><span>avisos tarde (+3 s)</span></div>
+      <div class="dato"><b id="rVoz">0</b><span>por voz</span></div>
+    </div>
+    <div class="nota" id="veredicto"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;">
+      <div class="ttl" style="margin:0;">AVISOS</div>
+      <div style="display:flex; gap:6px;">
+        <button id="btnCopiar" style="min-height:34px; padding:0 10px; font-size:11px; background:rgba(46,213,115,0.12); color:#2ed573; border:1px solid rgba(46,213,115,0.35);">📋 Copiar</button>
+        <button id="btnVaciar" style="min-height:34px; padding:0 10px; font-size:11px; background:rgba(255,71,87,0.1); color:#ff6b7a; border:1px solid rgba(255,71,87,0.3);">Vaciar</button>
+      </div>
+    </div>
+    <div id="log"></div>
+    <div class="nota">«Copiar» lleva cada aviso con su retraso, si la pantalla estaba encendida y lo que oyó el móvil. Pégamelo y vemos si es fiable.</div>
+  </div>
+
+  <div class="card">
+    <div class="ttl">AJUSTES</div>
+    <div class="ajuste"><span>Cada cuánto</span><div class="pills" id="ritmos"><button data-s="30" class="sel">30 s</button><button data-s="45">45 s</button><button data-s="10">10 s (prueba)</button></div></div>
+    <label class="ajuste"><span>Vibrar</span><input type="checkbox" id="chkVibra" checked></label>
+    <label class="ajuste"><span>Pitar en los cascos</span><input type="checkbox" id="chkPita" checked></label>
+    <label class="ajuste"><span>Escuchar sola al avisar (sin tocar el auricular)</span><input type="checkbox" id="chkAuto"></label>
+    <div class="nota">Con la casilla apagada: al oír el pitido, toca el botón del auricular y di «nuestra» o «suya». Encendida: el micro se abre solo con cada aviso. Prueba las dos.</div>
+  </div>
+</div>
+
+<div id="bolsillo">
+  <div id="bolsilloInfo"></div>
+  <div id="candado">🔒</div>
+  <div id="bolsilloAyuda">Mantén pulsado el candado 2 s para salir</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const KEY = 'hergar_posesion_prueba';
+  const VENTANA = 6000;
+
+  let ritmo = 30, activo = false, pausado = false;
+  let proximo = 0;            // ms: cuándo toca el próximo aviso
+  let abierta = null;         // aviso en curso { prog, real, ... }
+  let rec = null, escuchando = false;
+  let AV = [];                // avisos de esta prueba
+  try { AV = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { AV = []; }
+  function guardar() { try { localStorage.setItem(KEY, JSON.stringify(AV.slice(-400))); } catch (e) {} }
+  function hora(ts) { const d = new Date(ts); return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  // ───────────── SONIDO Y VIBRACIÓN ─────────────
+  let ac = null;
+  function pitido() {
+    if (!$('chkPita').checked || !ac) return;
+    try {
+      if (ac.state === 'suspended') ac.resume();
+      const t0 = ac.currentTime + 0.02;
+      [0, 0.22].forEach((d, k) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = 'sine'; o.frequency.value = k ? 1320 : 990;
+        g.gain.setValueAtTime(0.0001, t0 + d); g.gain.exponentialRampToValueAtTime(0.5, t0 + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.16);
+        o.connect(g).connect(ac.destination); o.start(t0 + d); o.stop(t0 + d + 0.18);
+      });
+    } catch (e) {}
+  }
+  function vibrar(p) {
+    if (!$('chkVibra').checked || !navigator.vibrate) return false;
+    try { return navigator.vibrate(p); } catch (e) { return false; }
+  }
+
+  // ───────────── BOTÓN DEL AURICULAR (sonido silencioso + controles multimedia, como voz.html) ─────────────
+  let audio = null;
+  function wavSilencio(seg) {
+    const sr = 8000, n = sr * seg, b = new ArrayBuffer(44 + n), v = new DataView(b);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr, true);
+    v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([b], { type: 'audio/wav' }));
+  }
+  function pausarSilencio() { try { if (audio && !audio.paused) audio.pause(); } catch (e) {} }
+  function reanudarSilencio() {
+    if (!activo || !audio) return;
+    const p = audio.play(); if (p && p.catch) p.catch(() => {});
+    try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {}
+  }
+  function prepararAuricular() {
+    audio = new Audio(wavSilencio(10)); audio.loop = true;
+    if ('mediaSession' in navigator) {
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: 'Hergar · posesión', artist: 'Al pitido, toca el auricular', album: 'C.D. Hergar' }); } catch (e) {}
+      ['play', 'pause', 'nexttrack', 'previoustrack', 'stop'].forEach(a => {
+        try { navigator.mediaSession.setActionHandler(a, () => { if (abierta) escuchar('auricular'); }); } catch (e) {}
+      });
+    }
+    return audio.play();
+  }
+
+  // ───────────── PANTALLA ENCENDIDA ─────────────
+  let wl = null, wlEstado = 'Pantalla: sin comprobar';
+  async function pantallaEncendida() {
+    try {
+      if ('wakeLock' in navigator) {
+        wl = await navigator.wakeLock.request('screen'); wlEstado = '💡 Pantalla siempre encendida';
+        wl.addEventListener('release', () => { wlEstado = 'Pantalla: se puede apagar'; pintarChips(); });
+      } else wlEstado = 'Este móvil no deja mantener la pantalla';
+    } catch (e) { wlEstado = 'Pantalla: se puede apagar'; }
+    pintarChips();
+  }
+  let ocultaDesde = null, vecesOculta = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { ocultaDesde = Date.now(); vecesOculta++; }
+    else { ocultaDesde = null; if (activo) { pantallaEncendida(); reanudarSilencio(); } }
+    pintarChips();
+  });
+  function pintarChips() {
+    const c = [];
+    c.push(`<span class="chip ${wl && !wl.released ? 'on' : 'mal'}">${esc(wlEstado)}</span>`);
+    c.push(`<span class="chip ${navigator.vibrate ? 'on' : 'mal'}">${navigator.vibrate ? '📳 Vibración disponible' : '📳 Este navegador no vibra'}</span>`);
+    c.push(`<span class="chip ${SR ? 'on' : 'mal'}">${SR ? '🎙️ Voz disponible' : '🎙️ Sin voz (usa Chrome)'}</span>`);
+    if (vecesOculta) c.push(`<span class="chip mal">La página se ocultó ${vecesOculta} ${vecesOculta === 1 ? 'vez' : 'veces'}</span>`);
+    $('chips').innerHTML = c.join('');
+  }
+
+  // ───────────── VOZ ─────────────
+  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]+/g, ' ').trim(); }
+  function entender(frases) {
+    for (const f of frases) {
+      const t = ' ' + norm(f) + ' ';
+      if (/ no (lo )?(veo|se) |no se ve| nada /.test(t)) return 'N';
+      if (/ (nuestr[ao]s?|nosotros|hergar|mia|mio|roj[ao]) /.test(t)) return 'H';
+      if (/ (suy[ao]s?|ellos|rival|azul|de ellos|suya) /.test(t)) return 'R';
+    }
+    return null;
+  }
+  function escuchar(via) {
+    if (!SR || escuchando || !abierta) return;
+    pausarSilencio();
+    rec = new SR(); rec.lang = 'es-ES'; rec.interimResults = false; rec.maxAlternatives = 5; rec.continuous = false;
+    escuchando = true; abierta.escucha = via; $('oido').textContent = '🎙️ Escuchando…';
+    rec.onresult = (e) => {
+      const alts = []; const r = e.results[0];
+      for (let i = 0; i < r.length; i++) alts.push(r[i].transcript);
+      $('oido').textContent = '«' + (alts[0] || '') + '»';
+      const v = entender(alts);
+      if (abierta) { abierta.oido = alts.join(' / '); if (v) contestar(v, 'voz'); }
+    };
+    rec.onerror = (e) => { if (abierta) abierta.errVoz = e.error; };
+    rec.onend = () => { escuchando = false; if (abierta && !abierta.resp) $('oido').textContent += ' (no entendido)'; reanudarSilencio(); };
+    try { rec.start(); } catch (e) { escuchando = false; reanudarSilencio(); }
+  }
+
+  // ───────────── AVISOS ─────────────
+  function abrir(prog, forzado) {
+    const real = Date.now();
+    abierta = { prog, real, retraso: Math.max(0, real - prog), visible: document.visibilityState === 'visible', forzado: !!forzado, ritmo };
+    abierta.vibro = vibrar([250, 120, 250]);
+    pitido();
+    $('posH').classList.add('on'); $('posR').classList.add('on');
+    $('oido').textContent = '';
+    if ($('chkAuto').checked) setTimeout(() => { if (abierta && !abierta.resp) escuchar('sola'); }, 650);
+    $('bolsilloInfo').textContent = '¿De quién es el balón?';
+  }
+  function cerrar() {
+    if (!abierta) return;
+    if (!abierta.resp) abierta.resp = 'N', abierta.via = 'sin contestar';
+    AV.push(abierta); guardar();
+    abierta = null;
+    if (escuchando && rec) { try { rec.abort(); } catch (e) {} }
+    ['posH', 'posR'].forEach(id => $(id).classList.remove('on'));
+    $('bH').style.width = '0'; $('bR').style.width = '0';
+    pintar();
+  }
+  function contestar(v, via) {
+    if (!abierta || abierta.resp) return;
+    abierta.resp = v; abierta.via = via; abierta.tResp = Date.now() - abierta.real;
+    vibrar(40);
+    const id = v === 'H' ? 'posH' : v === 'R' ? 'posR' : null;
+    if (id) { $(id === 'posH' ? 'tH' : 'tR').textContent = '✓ ' + (v === 'H' ? 'NUESTRA' : 'SUYA'); $(id).classList.add('ok'); setTimeout(() => { $('tH').textContent = 'NUESTRA'; $('tR').textContent = 'SUYA'; $('posH').classList.remove('ok'); $('posR').classList.remove('ok'); }, 1200); }
+    $('bolsilloInfo').textContent = v === 'H' ? '✓ Nuestra' : v === 'R' ? '✓ Suya' : 'No cuenta';
+    cerrar();
+  }
+  $('posH').onclick = () => contestar('H', 'toque');
+  $('posR').onclick = () => contestar('R', 'toque');
+
+  function tick() {
+    if (!activo) return;
+    const ahora = Date.now();
+    if (abierta) {
+      const quedan = Math.max(0, VENTANA - (ahora - abierta.real));
+      const pct = Math.round(quedan * 100 / VENTANA) + '%';
+      $('bH').style.width = pct; $('bR').style.width = pct;
+      $('cuenta').textContent = Math.ceil(quedan / 1000) + ' s'; $('cuentaTxt').textContent = '¿De quién es el balón?';
+      // si la voz está a medias, se espera un poco a que termine
+      if (quedan <= 0 && !(escuchando && ahora - abierta.real < VENTANA + 2500)) cerrar();
+      return;
+    }
+    if (pausado) { $('cuenta').textContent = '⏸'; $('cuentaTxt').textContent = 'En pausa'; return; }
+    if (ahora >= proximo) { const prog = proximo; proximo = prog + ritmo * 1000; if (proximo < ahora) proximo = ahora + ritmo * 1000; abrir(prog); return; }
+    $('cuenta').textContent = Math.ceil((proximo - ahora) / 1000) + ' s'; $('cuentaTxt').textContent = 'próximo aviso';
+  }
+  setInterval(tick, 200);
+
+  // ───────────── RESUMEN ─────────────
+  function pintar() {
+    const h = AV.filter(a => a.resp === 'H').length, r = AV.filter(a => a.resp === 'R').length, tot = h + r;
+    const p = tot ? Math.round(h * 100 / tot) : null;
+    $('pH').textContent = p == null ? '–' : p; $('pR').textContent = p == null ? '–' : 100 - p;
+    $('rFotos').textContent = tot;
+    $('rMargen').textContent = tot ? '±' + Math.round(98 / Math.sqrt(tot)) : '–';
+    const auto = AV.filter(a => !a.forzado);
+    $('rContesta').textContent = AV.length ? Math.round(AV.filter(a => a.resp && a.via !== 'sin contestar').length * 100 / AV.length) + ' %' : '–';
+    $('rRetraso').textContent = auto.length ? (auto.reduce((s, a) => s + a.retraso, 0) / auto.length / 1000).toFixed(1).replace('.', ',') + ' s' : '–';
+    const tarde = auto.filter(a => a.retraso > 3000).length;
+    $('rTarde').textContent = tarde;
+    $('rVoz').textContent = AV.filter(a => a.via === 'voz').length;
+    let ver = '';
+    if (auto.length >= 5) {
+      if (tarde === 0) ver = '✅ Los avisos llegan a su hora.';
+      else if (tarde <= auto.length * 0.1) ver = '🟡 Algún aviso llegó tarde. Mira en la lista si fue con la pantalla apagada.';
+      else ver = '🔴 Muchos avisos llegan tarde: el móvil está frenando la página (pantalla apagada o ahorro de batería).';
+    }
+    $('veredicto').textContent = ver;
+    $('log').innerHTML = AV.length ? AV.slice().reverse().slice(0, 60).map(a => {
+      const res = a.resp === 'H' ? '<b style="color:#ff6b7a">Nuestra</b>' : a.resp === 'R' ? '<b style="color:#60a5fa">Suya</b>' : '<span style="color:#64748b">No cuenta</span>';
+      const det = [a.via, a.retraso > 3000 ? '⚠️ +' + Math.round(a.retraso / 1000) + ' s tarde' : '', a.visible ? '' : 'pantalla oculta', a.vibro === false ? 'no vibró' : '', a.oido ? '«' + a.oido.split(' / ')[0] + '»' : ''].filter(Boolean).join(' · ');
+      return `<div class="log-item"><span class="log-hora">${hora(a.real)}</span><span style="color:#94a3b8">${esc(det)}</span><span>${res}</span></div>`;
+    }).join('') : '<div class="vacio">Aún no hay avisos</div>';
+  }
+
+  // ───────────── MODO BOLSILLO ─────────────
+  const bol = $('bolsillo'), candado = $('candado');
+  let tCandado = null;
+  ['touchstart', 'touchmove', 'touchend', 'click', 'contextmenu'].forEach(ev => bol.addEventListener(ev, (e) => { if (e.target !== candado) e.preventDefault(); }, { passive: false }));
+  candado.addEventListener('pointerdown', (e) => { e.preventDefault(); candado.classList.add('cargando'); tCandado = setTimeout(() => { bol.classList.remove('on'); candado.classList.remove('cargando'); }, 2000); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => candado.addEventListener(ev, () => { clearTimeout(tCandado); candado.classList.remove('cargando'); }));
+  candado.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ───────────── BOTONES ─────────────
+  document.querySelectorAll('#ritmos button').forEach(b => b.onclick = () => {
+    ritmo = Number(b.dataset.s);
+    document.querySelectorAll('#ritmos button').forEach(x => x.classList.toggle('sel', x === b));
+    if (activo && !abierta) proximo = Date.now() + ritmo * 1000;
+  });
+  $('btnActivar').onclick = async () => {
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); await ac.resume(); } catch (e) {}
+    try { await prepararAuricular(); } catch (e) {}
+    await pantallaEncendida();
+    if (SR && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop()); } catch (e) {}
+    }
+    activo = true; pausado = false; proximo = Date.now() + ritmo * 1000;
+    vibrar(60); pitido();
+    $('btnActivar').style.display = 'none'; $('activoInfo').style.display = 'block';
+    pintarChips(); pintar();
+  };
+  $('btnPausa').onclick = () => {
+    pausado = !pausado;
+    if (pausado) { cerrar(); $('btnPausa').textContent = '▶ Reanudar'; }
+    else { proximo = Date.now() + ritmo * 1000; $('btnPausa').textContent = '⏸ Pausa (descanso)'; }
+  };
+  $('btnYa').onclick = () => { if (!abierta) { abrir(Date.now(), true); } };
+  $('btnParar').onclick = () => {
+    cerrar(); activo = false; pausarSilencio();
+    try { if (wl) wl.release(); } catch (e) {}
+    $('activoInfo').style.display = 'none'; $('btnActivar').style.display = 'block'; $('btnActivar').textContent = '▶ SEGUIR PROBANDO';
+    $('cuenta').textContent = '–'; $('cuentaTxt').textContent = 'Prueba parada';
+  };
+  $('btnBolsillo').onclick = () => { bol.classList.add('on'); };
+  $('btnVaciar').onclick = () => { if (!AV.length || !confirm('¿Vaciar todos los avisos de la prueba?')) return; AV = []; guardar(); pintar(); };
+  $('btnCopiar').onclick = async () => {
+    const h = AV.filter(a => a.resp === 'H').length, r = AV.filter(a => a.resp === 'R').length;
+    const txt = 'PRUEBA DE POSESIÓN · ' + new Date().toLocaleDateString('es-ES') + ' · ' + navigator.userAgent + '\n' +
+      'Nuestra ' + h + ' · Suya ' + r + ' · No cuenta ' + (AV.length - h - r) + '\n' +
+      AV.map(a => hora(a.real) + ' | ' + (a.resp || '-') + ' | ' + (a.via || '') + ' | retraso ' + (a.retraso / 1000).toFixed(1) + ' s | ' + (a.visible ? 'visible' : 'OCULTA') + ' | vibró ' + a.vibro + (a.forzado ? ' | a mano' : '') + ' | ritmo ' + a.ritmo + (a.escucha ? ' | escucha ' + a.escucha : '') + (a.oido ? ' | oído: «' + a.oido + '»' : '') + (a.errVoz ? ' | error voz ' + a.errVoz : '')).join('\n');
+    try { await navigator.clipboard.writeText(txt); $('btnCopiar').textContent = '✓ Copiado'; }
+    catch (e) { prompt('Copia el texto:', txt); }
+    setTimeout(() => { $('btnCopiar').textContent = '📋 Copiar'; }, 1800);
+  };
+  pintar();
+})();
+</script>
+</body>
+</html>
