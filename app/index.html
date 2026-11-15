@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v247</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v248</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -8567,7 +8567,7 @@
             // v92: goles con minuto para la probabilidad de ganar en directo del visor
             golesMin: (() => {
                 try {
-                    let gs = golesDesdeCronologia();
+                    let gs = golesPartidoActual(); // v248
                     // v108: si la cronología ya se había vaciado (partidos agregados a la temporada antes de la v108), se usan los goles guardados en la temporada
                     if (!gs.length && partidoYaTransferido && (goalsLocal + goalsRival) > 0) {
                         const tp = getTemporada().partidos, ult = tp[tp.length - 1];
@@ -11476,7 +11476,7 @@
         // Goles con minuto (de la cronología; si ya se vació, los del partido guardado)
         let golesTxt = '';
         try {
-            let gs = Array.isArray(iaGolesOverride) ? iaGolesOverride : golesDesdeCronologia(); // v190
+            let gs = Array.isArray(iaGolesOverride) ? iaGolesOverride : golesPartidoActual(); // v190 · v248
             if (!gs.length && partidoYaTransferido && (goalsLocal + goalsRival) > 0) {
                 const tp = getTemporada().partidos, ult = tp[tp.length - 1];
                 if (ult && Array.isArray(ult.goles)) gs = ult.goles;
@@ -15272,6 +15272,14 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     }
     function mgdBorrar() { try { localStorage.removeItem(MGD_KEY); } catch (e) {} }
     window.mgdGuardar = mgdGuardar;
+    // v248 · con el partido ya guardado en la temporada mandan sus goles (los corregidos en Editar partido),
+    //        no la cronología del directo, que no se toca al editar
+    function golesPartidoActual() {
+        if (partidoYaTransferido) {
+            try { const tp = getTemporada().partidos, ult = tp[tp.length - 1]; if (ult && Array.isArray(ult.goles) && ult.goles.length) return ult.goles; } catch (e) {}
+        }
+        return golesDesdeCronologia();
+    }
     function golesDesdeCronologia() {
         const porDorsal = {};
         Object.values(playersData).forEach(p => { if (p.dorsal != null) (porDorsal[String(p.dorsal)] = porDorsal[String(p.dorsal)] || []).push(p); });
@@ -16341,7 +16349,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     function egFilaHTML(g) {
         const esH = g.equipo !== 'rival';
         const est = 'padding:7px 4px; border-radius:7px; border:1px solid rgba(255,255,255,0.1); background:#1a2332; color:#e2e8f0; font-size:12px;';
-        return `<div class="eg-row" style="background:rgba(255,255,255,.03); border-radius:9px; padding:7px 8px; display:flex; flex-direction:column; gap:6px;">
+        return `<div class="eg-row" data-gol-prev="${esH && !g.propia && g.jugadorId != null ? g.jugadorId : ''}" style="background:rgba(255,255,255,.03); border-radius:9px; padding:7px 8px; display:flex; flex-direction:column; gap:6px;">
             <div style="display:flex; align-items:center; gap:6px;">
                 <input type="number" min="0" max="130" inputmode="numeric" class="eg-min" placeholder="min" value="${g.min != null ? g.min : ''}" style="width:58px; text-align:center; ${est} color:#f5a623; font-weight:800;">
                 <select class="eg-equipo" onchange="egCambiaEquipo(this)" style="${est} flex:1;"><option value="hergar" ${esH ? 'selected' : ''}>⚽ Hergar</option><option value="rival" ${esH ? '' : 'selected'}>🥅 Rival</option></select>
@@ -16349,7 +16357,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 <button type="button" onclick="egQuitar(this)" aria-label="Quitar gol" style="background:rgba(255,71,87,0.12); color:#ff4757; border:none; border-radius:7px; padding:6px 9px; font-weight:800;">✕</button>
             </div>
             <div class="eg-jug" style="display:${esH ? 'flex' : 'none'}; gap:6px;">
-                <select class="eg-goleador" onchange="egPintarVideo(this.closest('.eg-row')); egCuerpoVer(this.closest('.eg-row'))" style="${est} flex:1;">${egOpciones(g.propia ? null : g.jugadorId, '¿Quién marcó?')}<option value="propia" data-nombre="Gol en propia" ${g.propia ? 'selected' : ''}>⚽ En propia (del rival)</option></select>
+                <select class="eg-goleador" onchange="egGolSync(this.closest('.eg-row')); egPintarVideo(this.closest('.eg-row')); egCuerpoVer(this.closest('.eg-row'))" style="${est} flex:1;">${egOpciones(g.propia ? null : g.jugadorId, '¿Quién marcó?')}<option value="propia" data-nombre="Gol en propia" ${g.propia ? 'selected' : ''}>⚽ En propia (del rival)</option></select>
                 <select class="eg-asist" data-prev="${g.asistenteId != null ? g.asistenteId : ''}" onchange="egAsistCambia(this)" style="${est} flex:1;">${egOpciones(g.asistenteId, 'Sin asistencia')}</select>
                 <button type="button" class="eg-vbtn" onclick="egAbrirVideo(this)" aria-label="Vídeo del gol">🎥</button>
             </div>
@@ -16382,7 +16390,24 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         ajustar(sel.value, +1);
         sel.dataset.prev = sel.value;
     };
-    window.egCambiaEquipo = function (sel) { const row = sel.closest('.eg-row'); row.querySelector('.eg-jug').style.display = sel.value === 'rival' ? 'none' : 'flex'; if (sel.value === 'rival') row.querySelector('.eg-vbox').style.display = 'none'; egPintarVideo(row); egCuerpoVer(row); egPintarMapa(row); };
+    // v248 · al cambiar quién marcó (o pasarlo a «en propia» / rival / quitar el gol), «Goles por jugador» se pone al día solo
+    window.egGolSync = function (row, quitar) {
+        if (!row) return;
+        const eq = row.querySelector('.eg-equipo'), sg = row.querySelector('.eg-goleador');
+        const ahora = (quitar || !eq || eq.value === 'rival' || !sg || sg.value === 'propia') ? '' : (sg.value || '');
+        const ajustar = (id, d) => {
+            if (!id) return;
+            const inp = document.querySelector(`.edit-partido-goles-input[data-jugador-id="${id}"]`);
+            if (!inp) return;
+            inp.value = Math.max(0, (parseInt(inp.value) || 0) + d);
+            inp.style.borderColor = '#f5a623';
+        };
+        const antes = row.dataset.golPrev || '';
+        if (antes === ahora) return;
+        ajustar(antes, -1); ajustar(ahora, +1);
+        row.dataset.golPrev = ahora;
+    };
+    window.egCambiaEquipo = function (sel) { const row = sel.closest('.eg-row'); egGolSync(row); row.querySelector('.eg-jug').style.display = sel.value === 'rival' ? 'none' : 'flex'; if (sel.value === 'rival') row.querySelector('.eg-vbox').style.display = 'none'; egPintarVideo(row); egCuerpoVer(row); egPintarMapa(row); };
     // ── v236 · 🦶 CON QUÉ MARCÓ (solo nuestros goles): g.cuerpo = 'der' | 'izq' | 'cab' | 'otra' ──
     const GOL_CUERPO = [['der', '🦶 Derecha'], ['izq', '🦶 Izquierda'], ['cab', '🗣️ Cabeza'], ['otra', 'Otra']];
     function egCuerpoFilaHTML(g) {
@@ -16878,6 +16903,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const cont = document.getElementById('editPartidoGolesMinList');
         const selA = btn.closest('.eg-row').querySelector('.eg-asist'); // v123
         if (selA && selA.value && btn.closest('.eg-row').querySelector('.eg-equipo').value !== 'rival') { const v = selA.value; selA.value = ''; egAsistCambia(selA); selA.dataset.prev = v; selA.value = v; }
+        egGolSync(btn.closest('.eg-row'), true); // v248
         btn.closest('.eg-row').remove();
         if (!cont.querySelector('.eg-row')) cont.innerHTML = egVacioHTML();
         egResumenMapa(); // v169
@@ -16951,6 +16977,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         //    texto "⚽ goleadores" a partir de estos números para que nunca queden
         //    descoordinados.
         const partesGoleadores = [];
+        const esCargado = (() => { try { return cmPartidoEsElCargado(t, editandoPartidoIndex); } catch (e) { return false; } })(); // v248
+        const cambiosGoles = []; let cargadoTocado = false;
         document.querySelectorAll('.edit-partido-goles-input').forEach(input => {
             const jugId = input.dataset.jugadorId;
             const j = t.jugadores[jugId];
@@ -16958,12 +16986,28 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const nuevoValor = Math.max(0, parseInt(input.value) || 0);
             const idxHist = (j.historial || []).findIndex(h => h.fecha === fechaVieja && h.rival === rivalViejo);
             const valorAnterior = idxHist >= 0 ? (j.historial[idxHist].goles || 0) : 0;
+            const dG = idxHist >= 0 ? nuevoValor - valorAnterior : 0;
             if (idxHist >= 0) {
                 j.historial[idxHist].goles = nuevoValor;
                 j.historial[idxHist].fecha = nuevaFecha;
                 j.historial[idxHist].rival = nuevoRival;
             }
             j.goles = Math.max(0, (j.goles || 0) - valorAnterior + nuevoValor);
+            // v248 · el gol quitado (o añadido) también le quita (o suma) sus puntos de impacto y cuenta en su eficacia
+            if (dG) {
+                let dImp = 0;
+                try { dImp = cambiarImpactoGolesJugador(j, idxHist, dG); } catch (e) { console.error('Impacto gol:', e); }
+                if (!p.manual && j.golesConTiros !== undefined) j.golesConTiros = Math.max(0, (j.golesConTiros || 0) + dG);
+                cambiosGoles.push(`${(j.name || '').split(' ')[0]}: ${dG > 0 ? '+' : ''}${dG} ${Math.abs(dG) === 1 ? 'gol' : 'goles'} (${dImp >= 0 ? '+' : '−'}${Math.abs(dImp).toFixed(2).replace('.', ',')} de impacto)`);
+            }
+            // v248 · el partido que sigue en la pantalla Partido (informe IA, acta, visor) queda con los mismos goles que la temporada
+            const pd = (esCargado && idxHist >= 0) ? playersData[String(jugId)] : null;
+            if (pd && (pd.goles || 0) !== nuevoValor) {
+                let v = REGLAS_IMPACTO.acciones.gol;
+                try { v = golValorImpacto(j.historial[idxHist]); } catch (e) {}
+                pd.impacto = (pd.impacto || 0) + (nuevoValor - (pd.goles || 0)) * v;
+                pd.goles = nuevoValor; cargadoTocado = true;
+            }
             if (nuevoValor > 0) partesGoleadores.push(`${j.name.split(' ')[0]} (${nuevoValor})`);
         });
 
@@ -17003,7 +17047,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const golesMin = egLeerFilas();
         // v122 · si cambian las asistencias del detalle de goles, se suman o restan al jugador (total, partido e impacto)
         let avisoAsist = '';
-        try { avisoAsist = aplicarAsistenciasPorJugador(t, golesMin, { fechaVieja, rivalViejo, nuevaFecha, nuevoRival }); } catch (e) { console.error('Asistencias:', e); } // v123
+        try { avisoAsist = aplicarAsistenciasPorJugador(t, golesMin, { fechaVieja, rivalViejo, nuevaFecha, nuevoRival, cargado: esCargado }); } catch (e) { console.error('Asistencias:', e); } // v123 · v248
+        if (cambiosGoles.length) avisoAsist = '⚽ Goles actualizados:\n' + cambiosGoles.join('\n') + (avisoAsist ? '\n\n' + avisoAsist : '');
         if (golesMin.length) p.goles = golesMin; else delete p.goles;
         { const tr = trEditLeer(); if (tr.length || Array.isArray(p.tarjetasRival)) p.tarjetasRival = tr; } // v220 (partido antiguo sin tocar: sigue «sin datos»)
 
@@ -17021,7 +17066,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         } catch (e) { console.warn('v181 vídeos:', e); }
         egVideosSubidos = [];
         // v103: si es el partido que sigue cargado en la pantalla Partido, su marcador (y el del visor en vivo) también cambia
-        try { if (cmPartidoEsElCargado(t, editandoPartidoIndex) && (goalsLocal !== gl || goalsRival !== gr)) aplicarMarcadorCorregido(gl, gr); } catch (e) {}
+        try { if (cmPartidoEsElCargado(t, editandoPartidoIndex) && (goalsLocal !== gl || goalsRival !== gr)) aplicarMarcadorCorregido(gl, gr); else if (esCargado && (cargadoTocado || avisoAsist)) saveState(); } catch (e) {} // v248
 
         document.getElementById('editarPartidoModal').style.display = 'none';
         renderPartidos();
@@ -17056,6 +17101,36 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         j.impactoAcum = (j.impactoAcum || 0) + dImp;
         h.imp = r2(impAntes + dImp);
         h.impPond = mins > 0 ? r2(h.imp / mins * 70) : 0;
+        if (h.accImp !== undefined && h.accImp !== null) h.accImp = r2((Number(h.accImp) || 0) + dImp); // v248
+        return dImp;
+    }
+    // v248 · igual que las asistencias, pero con el valor del gol (más el extra de defensa o centrocampista según su línea)
+    function golValorImpacto(h) {
+        const li = lineaPrincipal(h.lineas || lineasDesdePuestos(h.puestos || {})) || '';
+        const A = REGLAS_IMPACTO.acciones;
+        return A.gol + (li === 'defensa' ? A.golExtraDefensa : li === 'centrocampista' ? A.golExtraMedio : 0);
+    }
+    function cambiarImpactoGolesJugador(j, k, d) {
+        const r2 = (x) => Math.round(x * 100) / 100;
+        const h = j.historial[k];
+        const g = lineasGuardadasDePartido(j, k);
+        const valor = golValorImpacto(h);
+        const dImp = d * valor, mins = h.mins || 0;
+        const impAntes = (h.imp !== undefined) ? h.imp : (h.impPond || 0) * mins / 70;
+        const totL = Object.values(g.lineas).reduce((a, v) => a + v, 0) || 1;
+        if (!j.impactoPorPosicion) j.impactoPorPosicion = {};
+        Object.keys(g.lineas).forEach(l => { j.impactoPorPosicion[l] = (j.impactoPorPosicion[l] || 0) + dImp * g.lineas[l] / totL; });
+        if (h.impLineas) Object.keys(h.impLineas).forEach(l => { h.impLineas[l] = r2((h.impLineas[l] || 0) + dImp * ((h.lineas || {})[l] || 0) / totL); });
+        if (h.puestos && Object.keys(h.puestos).length) {
+            const totP = Object.values(h.puestos).reduce((a, v) => a + v, 0) || 1;
+            if (!j.impactoPorPuesto) j.impactoPorPuesto = {};
+            if (!h.impPuestos) h.impPuestos = {};
+            Object.keys(h.puestos).forEach(pu => { const parte = dImp * h.puestos[pu] / totP; j.impactoPorPuesto[pu] = (j.impactoPorPuesto[pu] || 0) + parte; h.impPuestos[pu] = r2((h.impPuestos[pu] || 0) + parte); });
+        }
+        j.impactoAcum = (j.impactoAcum || 0) + dImp;
+        h.imp = r2(impAntes + dImp);
+        h.impPond = mins > 0 ? r2(h.imp / mins * 70) : 0;
+        if (h.accImp !== undefined && h.accImp !== null) h.accImp = r2((Number(h.accImp) || 0) + dImp); // «Sus acciones» (MVP, evolución)
         return dImp;
     }
     function aplicarAsistenciasPorJugador(t, golesNuevos, f) {
@@ -17068,6 +17143,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const d = Math.max(0, parseInt(inp.value) || 0) - (j.historial[k].asistencias || 0);
             if (!d) return;
             const dImp = cambiarAsistenciasJugador(j, k, d);
+            if (f.cargado && playersData[String(j.id)]) { const pd = playersData[String(j.id)]; pd.asistencias = Math.max(0, (pd.asistencias || 0) + d); pd.impacto = (pd.impacto || 0) + dImp; } // v248
             cambios.push(`${(j.name || '').split(' ')[0]}: ${d > 0 ? '+' : ''}${d} ${Math.abs(d) === 1 ? 'asistencia' : 'asistencias'} (${d > 0 ? '+' : '−'}${Math.abs(dImp).toFixed(2).replace('.', ',')} de impacto)`);
         });
         // asistentes del detalle que no tienen ficha en este partido
