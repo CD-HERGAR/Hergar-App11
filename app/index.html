@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v248</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v249</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -11225,6 +11225,32 @@
     // para enviarlos a la IA: prioriza goles > rojas/doble amarilla > paradas difíciles
     // > amarillas > fallos importantes > asistencias, y el resto solo si sobra hueco.
     // El resultado se devuelve en orden cronológico para que el relato tenga sentido.
+    // v249 · con el partido ya guardado, los goles (y asistencias) de la cronología salen de los goles corregidos en
+    //        Editar partido; la cronología del directo no se toca, así que antes la IA seguía viendo los goles viejos
+    function cronologiaParaIA() {
+        const lineas = (substitutionTimeline || []).filter(x => typeof x === 'string');
+        if (!partidoYaTransferido) return lineas.slice();
+        let gs = null;
+        try { const tp = getTemporada().partidos, ult = tp[tp.length - 1]; if (ult && Array.isArray(ult.goles) && ult.goles.length) gs = ult.goles; } catch (e) {}
+        if (!gs) return lineas.slice();
+        const esGolNuestro = (l) => /^\[\d+'\]\s*(⚽ Gol (de penalti )?#|⚽ Gol en propia|👟 Asistencia)/.test(l);
+        const resto = lineas.filter(l => !esGolNuestro(l));
+        const minDe = (l) => { const m = /^\[(\d+)'\]/.exec(l); return m ? parseInt(m[1], 10) : 999; };
+        const nuevas = gs.filter(g => g && g.equipo !== 'rival').map(g => {
+            const min = g.min != null ? Number(g.min) : 999;
+            let txt;
+            if (g.propia) txt = '⚽ Gol en propia puerta del rival';
+            else {
+                const pd = g.jugadorId != null ? playersData[String(g.jugadorId)] : null;
+                txt = `⚽ Gol${g.penalti ? ' de penalti' : ''} ${pd && pd.dorsal != null ? '#' + pd.dorsal + ' ' : ''}${g.nombre || '¿?'}${g.asistente ? ` (asist. ${g.asistente})` : ''}`;
+            }
+            return { min, l: `[${g.min != null ? g.min : '?'}'] ${txt}` };
+        }).sort((a, b) => a.min - b.min);
+        const out = [];
+        resto.forEach(l => { const m = minDe(l); while (nuevas.length && nuevas[0].min <= m) out.push(nuevas.shift().l); out.push(l); });
+        nuevas.forEach(n => out.push(n.l));
+        return out;
+    }
     function priorizarCronologia(timeline, max = 15) {
         if (timeline.length <= max) return timeline;
         const prioridad = (linea) => {
@@ -11542,7 +11568,7 @@ FALTAS/CÓRNERS: F.Favor ${faltasFavor} F.Contra ${faltasContra} | C.Favor ${cor
 FUERAS DE JUEGO: Hergar ${fuerasJuegoNuestros} | Rival ${fuerasJuegoRival} (los del rival suelen indicar que la línea defensiva sube bien)
 ${(() => { try { return posTextoIA(); } catch (e) { return ''; } })()}${tarjetasRival.length ? `TARJETAS DEL RIVAL: ${tarjetasRival.map(x => (x.tipo === 'R' ? 'roja' : 'amarilla') + ' ' + x.min + "'").join(', ')}${tarjetasRival.some(x => x.tipo === 'R') ? ' (con una roja, el rival juega con uno menos desde ese minuto)' : ''}\n` : ''}TOP SINERGIAS: ${topSinergias || 'Sin datos'}
 CAMBIOS (minuto del reloj del partido; la 2.ª parte empieza en el 35'): ${(() => { try { const cs = substitutionTimeline.filter(x => typeof x === 'string' && x.includes('🔄 Sale')).map(x => { const m = parseInt((/^\[(\d+)'\]/.exec(x) || [])[1], 10); const parte = isNaN(m) ? '' : (m < 35 ? ` (1.ª parte, min ${m})` : m === 35 ? ' (en el descanso)' : ` (2.ª parte, ${m - 35} min después de empezar)`); return x.replace(/^\[\d+'\]\s*🔄\s*/, `${isNaN(m) ? '' : m + "' "}`) + parte; }); return cs.length ? cs.join(' | ') : 'Ninguno'; } catch (e) { return 'Sin datos'; } })()}
-CRONOLOGÍA: ${priorizarCronologia(substitutionTimeline, 15).join(' | ')}
+CRONOLOGÍA: ${priorizarCronologia(cronologiaParaIA(), 15).join(' | ')}
 ${(() => { try { return iaExtrasPartido(); } catch (e) { return ''; } })()}
 ESTADÍSTICAS INDIVIDUALES DE ESTE PARTIDO (ordenadas por impacto /70):
 ${jugadoresData}
