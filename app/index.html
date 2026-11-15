@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v249</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v250</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -15298,6 +15298,32 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     }
     function mgdBorrar() { try { localStorage.removeItem(MGD_KEY); } catch (e) {} }
     window.mgdGuardar = mgdGuardar;
+    // v250 · al corregir los goles del partido que sigue cargado, la cronología del directo se reescribe con ellos
+    //        (goles nuestros, en propia, del rival y asistencias), para que narración, acta, informe IA y visor cuenten lo mismo.
+    //        Devuelve los goles con minuto, en el mismo orden que sus líneas.
+    function cronologiaReescribirGoles(goles) {
+        const esGol = (l) => /^\[\d+'\]\s*(⚽ Gol|🥅 Gol rival|👟 Asistencia #)/.test(String(l));
+        const minDe = (l) => { const m = /^\[(\d+)'\]/.exec(String(l)); return m ? parseInt(m[1], 10) : 999; };
+        const viejas = substitutionTimeline.filter(esGol), resto = substitutionTimeline.filter(l => !esGol(l));
+        const etq = (id, nombre) => { const pd = id != null ? playersData[String(id)] : null; return `#${pd && pd.dorsal != null ? pd.dorsal : '?'} ${pd ? (pd.name || '').split(' ')[0] : (nombre || '¿?')}`; };
+        const conMin = (goles || []).filter(g => g && g.min != null);
+        const nuevas = [];
+        conMin.forEach(g => {
+            const pre = `[${g.min}'] `;
+            if (g.equipo === 'rival') { nuevas.push({ min: g.min, l: pre + (g.penalti ? '🥅 Gol rival de penalti' : '🥅 Gol rival') }); return; }
+            if (g.propia) { nuevas.push({ min: g.min, l: pre + '⚽ Gol en propia puerta del rival' }); return; }
+            let l = pre + (g.penalti ? '⚽ Gol de penalti ' : '⚽ Gol ') + etq(g.jugadorId, g.nombre);
+            const k = viejas.findIndex(v => v.indexOf(l) === 0); // la línea original, si era la misma (conserva «provocado por…»)
+            if (k >= 0) l = viejas.splice(k, 1)[0];
+            nuevas.push({ min: g.min, l });
+            if (g.asistenteId != null || g.asistente) nuevas.push({ min: g.min, l: pre + '👟 Asistencia ' + etq(g.asistenteId, g.asistente) });
+        });
+        const out = [];
+        resto.forEach(l => { const m = minDe(l); while (nuevas.length && nuevas[0].min < m) out.push(nuevas.shift().l); out.push(l); });
+        nuevas.forEach(n => out.push(n.l));
+        substitutionTimeline.length = 0; out.forEach(l => substitutionTimeline.push(l));
+        return conMin;
+    }
     // v248 · con el partido ya guardado en la temporada mandan sus goles (los corregidos en Editar partido),
     //        no la cronología del directo, que no se toca al editar
     function golesPartidoActual() {
@@ -15606,13 +15632,13 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         return res;
     }
     // Narración del partido en pantalla (la que se publica en el visor y se guarda con el partido)
-    function narracionPartido(rivalName) {
+    function narracionPartido(rivalName, golesFijos) {
         const lineas = (substitutionTimeline || []).slice();
         if (!lineas.length && partidoYaTransferido) {
             const tp = getTemporada().partidos, ult = tp[tp.length - 1];
             return (ult && Array.isArray(ult.narracion)) ? ult.narracion : [];
         }
-        const goles = golesDesdeCronologia();
+        const goles = Array.isArray(golesFijos) ? golesFijos : golesDesdeCronologia(); // v250
         const hechos = narrHechos(lineas, goles);
         const res = narrConstruir(hechos, {
             rival: rivalName || (document.getElementById('rivalNameInput') || {}).value || 'RIVAL',
@@ -16991,6 +17017,11 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         try { posEditGuardar(p); } catch (e) { console.error('Posesión:', e); } // v246
 
         const fechaVieja = p.fecha, rivalViejo = p.rival;
+        // v250 · para saber si la edición cambia lo que cuenta el partido (informe IA, MVP, narración)
+        const firmaGoles = (gs) => JSON.stringify((Array.isArray(gs) ? gs : []).map(g => [g.min, g.equipo, g.jugadorId == null ? null : String(g.jugadorId), g.asistenteId == null ? null : String(g.asistenteId), !!g.penalti, !!g.propia, g.origen || '']));
+        const firmaAntes = [p.golesLocal, p.golesRival, firmaGoles(p.goles)].join('|');
+        const mvpAntes = (p.mvp && p.mvp !== '-') ? p.mvp : '-';
+        let tarjetasTocadas = false;
         const vidsAntes = (Array.isArray(p.goles) ? p.goles : []).filter(g => esVideoGh(g.video)).map(g => g.video.slice(3)); // v181
         const nuevoRival = document.getElementById('editPartidoRival').value.trim() || p.rival;
         const nuevaFecha = document.getElementById('editPartidoFecha').value.trim() || p.fecha;
@@ -17049,6 +17080,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             if (!h.acc) h.acc = {};
             const key = esAm ? 'am' : 'ro', tot = esAm ? 'amarillas' : 'rojas';
             if (nuevo > 0) h.acc[key] = nuevo; else delete h.acc[key];
+            tarjetasTocadas = true; // v250
             j[tot] = Math.max(0, (j[tot] || 0) - ini + nuevo);
         });
         // 2) v114 · Goles recibidos: solo si cambia el marcador del rival, y al portero que jugó de verdad ese
@@ -17076,6 +17108,34 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         try { avisoAsist = aplicarAsistenciasPorJugador(t, golesMin, { fechaVieja, rivalViejo, nuevaFecha, nuevoRival, cargado: esCargado }); } catch (e) { console.error('Asistencias:', e); } // v123 · v248
         if (cambiosGoles.length) avisoAsist = '⚽ Goles actualizados:\n' + cambiosGoles.join('\n') + (avisoAsist ? '\n\n' + avisoAsist : '');
         if (golesMin.length) p.goles = golesMin; else delete p.goles;
+        // v250 · 🔁 si la edición cambia lo que pasó en el partido, se pone al día todo lo que sale de ahí
+        let avisoRecalc = '';
+        try {
+            const cambia = firmaAntes !== [gl, gr, firmaGoles(p.goles)].join('|') || cambiosGoles.length > 0 || !!avisoAsist || tarjetasTocadas;
+            if (cambia) {
+                const partes = [];
+                // MVP: se vuelve a elegir con los números corregidos, salvo que lo hayas escrito tú a mano en esta edición
+                if (nuevoMvp === mvpAntes && (p.mvpId != null || mvpAntes === '-')) { // el MVP puesto a mano se respeta
+                    const filas = [];
+                    Object.values(t.jugadores || {}).forEach(j => { const h = ptsHistDe(j, p); if (h && (h.mins || 0) > 0) filas.push({ ref: j, h, mins: h.mins, imp: pesoImpDe(h), acc: accionesPartidoDe(p, j, h) }); });
+                    const b = filas.length ? mvpElegir(filas, REGLAS_IMPACTO.minMinutosMVP) : null;
+                    if (b) {
+                        const j = b.ref, h = b.h, txt = `#${j.dorsal} ${(j.name || '').split(' ')[0]}`;
+                        if (p.mvpId == null || String(p.mvpId) !== String(j.id)) partes.push(`🏅 MVP: ${mvpAntes !== '-' ? mvpAntes : '—'} → ${txt}`);
+                        p.mvp = txt; p.mvpId = j.id;
+                        p.mvpStats = { name: j.name, dorsal: j.dorsal, posLabel: pesoEsPortero(j) ? 'POR' : 'JUG', minutos: h.mins, goles: h.goles || 0, asistencias: h.asistencias || 0 };
+                    }
+                }
+                // Cronología y minuto a minuto: solo del partido que sigue cargado (de los anteriores ya no se guarda la cronología)
+                if (esCargado && Array.isArray(substitutionTimeline) && substitutionTimeline.length) {
+                    const gsNarr = cronologiaReescribirGoles(golesMin);
+                    try { p.narracion = narracionPartido(nuevoRival, gsNarr); partes.push('📝 Cronología y minuto a minuto, rehechos con los goles corregidos.'); } catch (e) { console.error('Minuto a minuto:', e); }
+                    cargadoTocado = true;
+                }
+                if (p.analisisIA) { p.analisisIADesactualizado = true; partes.push('🤖 El informe IA es de antes de esta corrección: vuelve a generarlo' + (esCargado ? ' desde la pantalla Partido' : '') + ' para que cuente lo mismo.'); }
+                avisoRecalc = partes.join('\n');
+            }
+        } catch (e) { console.error('Recalcular partido:', e); }
         { const tr = trEditLeer(); if (tr.length || Array.isArray(p.tarjetasRival)) p.tarjetasRival = tr; } // v220 (partido antiguo sin tocar: sigue «sin datos»)
 
         saveTemporada(t);
@@ -17097,7 +17157,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         document.getElementById('editarPartidoModal').style.display = 'none';
         renderPartidos();
         renderRanking();
-        alert('✅ Partido actualizado correctamente.' + (avisoAsist ? '\n\n' + avisoAsist : '') + (avisoVid ? '\n\n' + avisoVid : ''));
+        alert('✅ Partido actualizado correctamente.' + (avisoAsist ? '\n\n' + avisoAsist : '') + (avisoRecalc ? '\n\n' + avisoRecalc : '') + (avisoVid ? '\n\n' + avisoVid : ''));
     };
 
     // ── v122 · ASISTENCIAS CORREGIDAS EN "EDITAR PARTIDO" ─────────────────────
