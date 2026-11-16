@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v252</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v253</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4198,7 +4198,7 @@
         if (!E || !E.jugados) return '';
         const esc = momEsc;
         const fila = (k, nombre, me, sub, valor, color, peque) => `<div style="display:grid; grid-template-columns:22px 1fr auto; gap:8px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:1px solid rgba(255,255,255,.05); font-size:12.5px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><div style="font-family:'Montserrat',sans-serif; font-weight:800; color:#94a3b8; text-align:center;">${k}</div><div style="min-width:0; color:#e2e8f0;">${esc(nombre)}<div style="font-size:10.5px; color:#94a3b8;">${sub}</div></div><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; text-align:right; color:${color};">${valor}<div style="font-size:9.5px; font-weight:600; color:#94a3b8; font-family:Inter,sans-serif;">${peque}</div></div></div>`;
-        const eloFilas = E.equipos.map((x, k) => fila(k + 1, x.e.nombre, !!x.e.esHergar, `última jornada: <span style="color:${x.ult >= 0 ? '#2ed573' : '#ff6b7a'};">${proFmt(x.ult, 0)}</span>`, Math.round(x.elo), '#e2e8f0', 'puntos de ranking')).join('');
+        const eloFilas = E.equipos.map((x, k) => fila(k + 1, x.e.nombre, !!x.e.esHergar, `última jornada: <span style="color:${x.ult >= 0 ? '#2ed573' : '#ff6b7a'};">${proFmt(x.ult, 0)}</span>`, Math.round(x.elo), '#e2e8f0', 'puntos Elo')).join('');
         // gráfica del Hergar
         let graf = '';
         if (E.histH.length > 2) {
@@ -4216,7 +4216,7 @@
             suerte = `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">🍀 Tabla de la suerte</summary>
                 <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Puntos que "debería" tener cada equipo por sus goles a favor y en contra, frente a los que tiene. Verde: le ha faltado suerte; rojo: le ha sobrado.${S.maxPj < PITA_FIABLE_PJ ? ` <b style="color:#f5a623;">Aún van pocas jornadas: tómalo como una pista.</b>` : ''}</div>${sf}</details>`;
         }
-        return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">📊 Ranking</summary>
+        return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">📊 Ranking Elo</summary>
             <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Todos empiezan con ${ELO_BASE}, como en el ranking FIFA. Cada partido suben o bajan según lo esperado: ganar al de arriba da mucho y ganar al de abajo, poco. Las goleadas cuentan algo más y se tiene en cuenta jugar en casa (con la ventaja medida en esta Liga: ${E.casa} puntos).${E.jugados < 20 ? ' Las primeras jornadas se mueve mucho.' : ''}</div>${eloFilas}${graf}</details>${suerte}${casaHTML(liga, acento)}`; // v252: sin 🧭 Dificultad del calendario
     }
     // ── v153 · 🍀 SUERTE Y NIVEL (misma función en la app y en el visor) ──
@@ -5489,7 +5489,7 @@
             <p style="margin:0 0 8px;"><strong>Tiempo por marcador:</strong> minutos que se pasan ganando, empatando y perdiendo. Sale del minuto de cada gol.</p>
             <p style="margin:0 0 8px;"><strong>Cuota de tiros:</strong> tiros del Hergar entre los tiros de los dos equipos. Con los córners, aproxima cuánto se juega en el campo rival. <strong>Con cada niño en el campo:</strong> lo mismo, contando solo los tiros mientras él juega (desde la v135).</p>
             <p style="margin:0 0 8px;"><strong>Victorias añadidas:</strong> cuánto subió cada gol la probabilidad de ganar en ese momento, con el mismo cálculo que el directo del visor. +1,00 es una victoria entera. La asistencia se lleva la mitad.</p>
-            <p style="margin:0 0 8px;"><strong>Ranking (sistema Elo, como el ranking FIFA):</strong> todos empiezan con ${ELO_BASE}. Tras cada partido se compara lo esperado con lo que pasó: ganar al de arriba sube mucho, perder con el de abajo baja mucho. Las goleadas cuentan algo más y jugar en casa se tiene en cuenta, con la ventaja que se mide en la propia Liga.</p>
+            <p style="margin:0 0 8px;"><strong>Ranking Elo (como el ranking FIFA):</strong> todos empiezan con ${ELO_BASE}. Tras cada partido se compara lo esperado con lo que pasó: ganar al de arriba sube mucho, perder con el de abajo baja mucho. Las goleadas cuentan algo más y jugar en casa se tiene en cuenta, con la ventaja que se mide en la propia Liga.</p>
             <p style="margin:0;"><strong>Tabla de la suerte:</strong> con los goles a favor (GF) y en contra (GC), la parte de los puntos que "tocaría" es GF<sup>1,2</sup> ÷ (GF<sup>1,2</sup> + GC<sup>1,2</sup>). Se compara con los puntos reales. Es poco fiable las primeras ${PITA_FIABLE_PJ} jornadas.</p>
         </div>`;
     }
@@ -21556,7 +21556,7 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
         const ord = [...Array(NT).keys()].sort((x, y) => S.bp[y] - S.bp[x] || (S.bg[y] - S.bc[y]) - (S.bg[x] - S.bc[x]) || S.bg[y] - S.bg[x]);
         const pj = i => jug.filter(q => q.l === i || q.v === i).length;
         let elo = {}; try { const E = eloLiga(liga); if (E) E.equipos.forEach(x => { elo[x.i] = Math.round(x.elo); }); } catch (e) {}
-        L.push(`\nCLASIFICACIÓN ACTUAL (tras la jornada ${J}; puesto · equipo · puntos · partidos jugados · goles a favor-en contra · puntos de ranking):`);
+        L.push(`\nCLASIFICACIÓN ACTUAL (tras la jornada ${J}; puesto · equipo · puntos · partidos jugados · goles a favor-en contra · puntos Elo):`);
         ord.forEach((i, k) => L.push(`${k + 1}. ${nom(i)} · ${S.bp[i]} pts · ${pj(i)} PJ · ${S.bg[i]}-${S.bc[i]}${elo[i] != null ? ' · ranking ' + elo[i] : ''}`));
         L.push('(El ranking mide el nivel según los resultados: base 1000; más alto, mejor.)');
         const jgP = ((p.vuelta || 1) - 1) * Math.max(1, ...liga.partidos.filter(q => q && q.vuelta === 1).map(q => q.jornada || 1)) + (p.jornada || 1);
