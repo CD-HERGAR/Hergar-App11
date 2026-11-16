@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v251</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v252</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4126,7 +4126,7 @@
                 return `<div style="display:grid; grid-template-columns:1fr 50px 50px 44px; gap:6px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:${n ? '1px solid rgba(255,255,255,.05)' : '0'}; font-size:12px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><span style="min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:${me ? '#ff5577' : '#e2e8f0'}; font-weight:${me ? 800 : 500};">${esc(x.e.nombre)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(c)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:800;">${num(f)}</span><span style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:900; color:${col};">${d == null ? '—' : Math.abs(d) < 0.05 ? '0,0' : (d > 0 ? '+' : '−') + difFmt1(Math.abs(d))}</span></div>`;
             }).join('');
         return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">🏠 Lo que vale jugar en casa</summary>
-            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0 10px;">Cómo les va a los locales en esta Liga y cuánto pesa eso en el Elo.</div>
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0 10px;">Cómo les va a los locales en esta Liga y cuánto pesa eso en el ranking.</div>
             <div style="font-size:12px; font-weight:700; color:#e2e8f0;">${N} ${N === 1 ? 'partido jugado' : 'partidos jugados'}: así acaban para el local</div>
             <div style="display:flex; height:26px; border-radius:8px; overflow:hidden; margin-top:6px;">${seg(C.V, '#2ed573')}${seg(C.E, '#94a3b8')}${seg(C.D, '#ff6b7a')}</div>
             <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:10.5px; color:#94a3b8; margin-top:6px;"><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#2ed573; margin-right:4px;"></i>Gana el local ${C.V}</span><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#94a3b8; margin-right:4px;"></i>Empate ${C.E}</span><span><i style="display:inline-block; width:9px; height:9px; border-radius:3px; background:#ff6b7a; margin-right:4px;"></i>Gana el visitante ${C.D}</span></div>
@@ -4135,9 +4135,9 @@
                 ${caja(`${hc == null ? '—' : difFmt1(hc)} / ${hf == null ? '—' : difFmt1(hf)}`, '#ff5577', 'puntos por partido del Hergar en casa / fuera')}
             </div>
             <div style="margin-top:12px; background:rgba(255,255,255,.04); border-radius:12px; padding:12px;">
-                <div style="font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Ventaja de casa en el Elo</div>
+                <div style="font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:8px;">Ventaja de casa en el ranking</div>
                 ${barraV('Antes', CASA_PRIOR, '#64748b')}${barraV('Medida', C.medida, '#ff5577')}${barraV('Se usa', C.usada, acento, true)}
-                <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:8px;">Con estos ${N} partidos, la ventaja que mejor explica los resultados es de <b style="color:#e2e8f0;">${C.medida} puntos</b>.${N < 135 ? ` Como aún ${N < CASA_PESO ? 'son pocos' : 'no ha acabado la Liga'}, se mezcla con los ${CASA_PRIOR} de partida y el Elo usa <b style="color:${acento};">${C.usada}</b>.` : ''} Contra un rival de su nivel, el Elo da al local un ${pUs} % (antes, un ${p100} %), contando el empate como medio.${C.hGoles != null ? ` En el Pronóstico, que mide la ventaja con los goles, el local marca un ${Math.round((C.hGoles * C.hGoles - 1) * 100)} % más que el visitante.` : ''}</div>
+                <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:8px;">Con estos ${N} partidos, la ventaja que mejor explica los resultados es de <b style="color:#e2e8f0;">${C.medida} puntos</b>.${N < 135 ? ` Como aún ${N < CASA_PESO ? 'son pocos' : 'no ha acabado la Liga'}, se mezcla con los ${CASA_PRIOR} de partida y el ranking usa <b style="color:${acento};">${C.usada}</b>.` : ''} Contra un rival de su nivel, el ranking da al local un ${pUs} % (antes, un ${p100} %), contando el empate como medio.${C.hGoles != null ? ` En el Pronóstico, que mide la ventaja con los goles, el local marca un ${Math.round((C.hGoles * C.hGoles - 1) * 100)} % más que el visitante.` : ''}</div>
             </div>
             <div style="font-size:11px; font-weight:800; color:#cbd5e1; margin:14px 0 4px;">Puntos por partido, en casa y fuera</div>
             <div style="display:grid; grid-template-columns:1fr 50px 50px 44px; gap:6px; font-size:9.5px; font-weight:800; color:#64748b; padding-bottom:4px;"><span>EQUIPO</span><span style="text-align:right;">CASA</span><span style="text-align:right;">FUERA</span><span style="text-align:right;">DIF.</span></div>
@@ -4145,9 +4145,9 @@
             <div style="font-size:10.5px; color:#94a3b8; line-height:1.45; margin-top:8px;">«Casa» es el campo que pone el calendario de la Liga. El Hergar juega casi siempre en La Aldehuela por las obras, y cuenta como en casa.</div>
             <details style="margin-top:8px;"><summary style="font-size:11.5px; font-weight:700; color:${acento}; cursor:pointer;">ℹ️ Cómo se calcula</summary>
                 <div style="font-size:12px; line-height:1.55; color:#e2e8f0; padding-top:6px;">
-                <p style="margin:0 0 6px;">Se busca qué ventaja de casa hace que el Elo acierte mejor los resultados ya jugados en la Liga: esa es la ventaja medida.</p>
+                <p style="margin:0 0 6px;">Se busca qué ventaja de casa hace que el ranking acierte mejor los resultados ya jugados en la Liga: esa es la ventaja medida.</p>
                 <p style="margin:0 0 6px;">Con pocos partidos la cifra baila, así que se mezcla con los ${CASA_PRIOR} puntos de partida: con ${CASA_PESO} partidos jugados pesan igual lo medido y los ${CASA_PRIOR}; a final de temporada lo medido pesa más de cuatro veces más.</p>
-                <p style="margin:0;">El Elo usa la ventaja que sale de esa mezcla. El Pronóstico ya medía la suya con los goles de los locales y los visitantes.</p></div></details>
+                <p style="margin:0;">El ranking usa la ventaja que sale de esa mezcla. El Pronóstico ya medía la suya con los goles de los locales y los visitantes.</p></div></details>
         </details>`;
     }
     function eloLiga(liga) {
@@ -4198,7 +4198,7 @@
         if (!E || !E.jugados) return '';
         const esc = momEsc;
         const fila = (k, nombre, me, sub, valor, color, peque) => `<div style="display:grid; grid-template-columns:22px 1fr auto; gap:8px; align-items:center; padding:7px ${me ? '4px' : '0'}; border-top:1px solid rgba(255,255,255,.05); font-size:12.5px;${me ? ' background:rgba(180,20,56,.18); border-radius:8px;' : ''}"><div style="font-family:'Montserrat',sans-serif; font-weight:800; color:#94a3b8; text-align:center;">${k}</div><div style="min-width:0; color:#e2e8f0;">${esc(nombre)}<div style="font-size:10.5px; color:#94a3b8;">${sub}</div></div><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:15px; text-align:right; color:${color};">${valor}<div style="font-size:9.5px; font-weight:600; color:#94a3b8; font-family:Inter,sans-serif;">${peque}</div></div></div>`;
-        const eloFilas = E.equipos.map((x, k) => fila(k + 1, x.e.nombre, !!x.e.esHergar, `última jornada: <span style="color:${x.ult >= 0 ? '#2ed573' : '#ff6b7a'};">${proFmt(x.ult, 0)}</span>`, Math.round(x.elo), '#e2e8f0', 'puntos Elo')).join('');
+        const eloFilas = E.equipos.map((x, k) => fila(k + 1, x.e.nombre, !!x.e.esHergar, `última jornada: <span style="color:${x.ult >= 0 ? '#2ed573' : '#ff6b7a'};">${proFmt(x.ult, 0)}</span>`, Math.round(x.elo), '#e2e8f0', 'puntos de ranking')).join('');
         // gráfica del Hergar
         let graf = '';
         if (E.histH.length > 2) {
@@ -4208,7 +4208,7 @@
             let g = `<line x1="${L}" x2="${W - Rr}" y1="${Y(ELO_BASE)}" y2="${Y(ELO_BASE)}" stroke="rgba(255,255,255,.2)" stroke-dasharray="3 3"/><text x="${L - 4}" y="${Y(ELO_BASE) + 4}" font-size="9" fill="#94a3b8" text-anchor="end">${ELO_BASE}</text>`;
             g += `<polyline fill="none" stroke="rgb(180,20,56)" stroke-width="2.5" points="${E.histH.map((x, k) => X(k).toFixed(1) + ',' + Y(x.elo).toFixed(1)).join(' ')}"/>`;
             E.histH.forEach((x, k) => { g += `<circle cx="${X(k).toFixed(1)}" cy="${Y(x.elo).toFixed(1)}" r="3" fill="rgb(180,20,56)"/>`; if (k && (E.histH.length < 12 || k % 2 === 0)) g += `<text x="${X(k).toFixed(1)}" y="${H - 5}" font-size="9" fill="#94a3b8" text-anchor="middle">J${x.jg}</text>`; });
-            graf = `<div style="font-size:11px; font-weight:800; color:#cbd5e1; margin:10px 0 2px;">EL HERGAR JORNADA A JORNADA</div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Elo del Hergar jornada a jornada">${g}</svg>`;
+            graf = `<div style="font-size:11px; font-weight:800; color:#cbd5e1; margin:10px 0 2px;">EL HERGAR JORNADA A JORNADA</div><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Ranking del Hergar jornada a jornada">${g}</svg>`;
         }
         let suerte = '';
         if (S) {
@@ -4216,8 +4216,8 @@
             suerte = `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">🍀 Tabla de la suerte</summary>
                 <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Puntos que "debería" tener cada equipo por sus goles a favor y en contra, frente a los que tiene. Verde: le ha faltado suerte; rojo: le ha sobrado.${S.maxPj < PITA_FIABLE_PJ ? ` <b style="color:#f5a623;">Aún van pocas jornadas: tómalo como una pista.</b>` : ''}</div>${sf}</details>`;
         }
-        return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">📊 Ranking Elo</summary>
-            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Todos empiezan con ${ELO_BASE}, como en el ranking FIFA. Cada partido suben o bajan según lo esperado: ganar al de arriba da mucho y ganar al de abajo, poco. Las goleadas cuentan algo más y se tiene en cuenta jugar en casa (con la ventaja medida en esta Liga: ${E.casa} puntos).${E.jugados < 20 ? ' Las primeras jornadas se mueve mucho.' : ''}</div>${eloFilas}${graf}</details>${suerte}${dificultadHTML(liga, acento)}${casaHTML(liga, acento)}`;
+        return `<details style="margin-top:12px;"><summary style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12.5px; color:${acento}; cursor:pointer;">📊 Ranking</summary>
+            <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:6px 0;">Todos empiezan con ${ELO_BASE}, como en el ranking FIFA. Cada partido suben o bajan según lo esperado: ganar al de arriba da mucho y ganar al de abajo, poco. Las goleadas cuentan algo más y se tiene en cuenta jugar en casa (con la ventaja medida en esta Liga: ${E.casa} puntos).${E.jugados < 20 ? ' Las primeras jornadas se mueve mucho.' : ''}</div>${eloFilas}${graf}</details>${suerte}${casaHTML(liga, acento)}`; // v252: sin 🧭 Dificultad del calendario
     }
     // ── v153 · 🍀 SUERTE Y NIVEL (misma función en la app y en el visor) ──
     //  · Termómetro de la suerte (PDO del hockey): % de tiros a puerta del Hergar que son gol + % de tiros a puerta del
@@ -5109,7 +5109,7 @@
             if (liga && liga.equipos) {
                 const rv = proRivalLiga(liga, { rival: rivalName, contexto: {} });
                 const G = iaRivalTop4(liga, rv.i);
-                if (G && G.grande) { const c = iaSeCrecen(t, liga); L.push(`PARTIDO GRANDE: el rival es el ${G.puesto}.º de los rivales por Elo (uno de los 4 más fuertes).${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
+                if (G && G.grande) { const c = iaSeCrecen(t, liga); L.push(`PARTIDO GRANDE: el rival es el ${G.puesto}.º de los rivales en el ranking (uno de los 4 más fuertes).${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
             }
         } catch (e) { console.error('IA partido grande:', e); }
         try {
@@ -5124,7 +5124,7 @@
         let t = null; try { t = getTemporada(); } catch (e) {}
         try {
             const G = iaRivalTop4(liga, riv);
-            if (G && G.grande) { const c = t ? iaSeCrecen(t, liga) : []; L.push(`- Es un partido grande: el rival es uno de los 4 equipos con más Elo.${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
+            if (G && G.grande) { const c = t ? iaSeCrecen(t, liga) : []; L.push(`- Es un partido grande: el rival es uno de los 4 primeros del ranking.${c.length ? ` En los partidos grandes de la temporada se crecen: ${c.join(', ')}.` : ''}`); }
         } catch (e) {}
         try { // v228 · el box-to-box solo si alguien lo consiguió en el partido anterior
             const ps = (t && t.partidos) || [], ult = ps[ps.length - 1];
@@ -5489,7 +5489,7 @@
             <p style="margin:0 0 8px;"><strong>Tiempo por marcador:</strong> minutos que se pasan ganando, empatando y perdiendo. Sale del minuto de cada gol.</p>
             <p style="margin:0 0 8px;"><strong>Cuota de tiros:</strong> tiros del Hergar entre los tiros de los dos equipos. Con los córners, aproxima cuánto se juega en el campo rival. <strong>Con cada niño en el campo:</strong> lo mismo, contando solo los tiros mientras él juega (desde la v135).</p>
             <p style="margin:0 0 8px;"><strong>Victorias añadidas:</strong> cuánto subió cada gol la probabilidad de ganar en ese momento, con el mismo cálculo que el directo del visor. +1,00 es una victoria entera. La asistencia se lleva la mitad.</p>
-            <p style="margin:0 0 8px;"><strong>Elo:</strong> todos empiezan con ${ELO_BASE}. Tras cada partido se compara lo esperado con lo que pasó: ganar al de arriba sube mucho, perder con el de abajo baja mucho. Las goleadas cuentan algo más y jugar en casa se tiene en cuenta, con la ventaja que se mide en la propia Liga.</p>
+            <p style="margin:0 0 8px;"><strong>Ranking (sistema Elo, como el ranking FIFA):</strong> todos empiezan con ${ELO_BASE}. Tras cada partido se compara lo esperado con lo que pasó: ganar al de arriba sube mucho, perder con el de abajo baja mucho. Las goleadas cuentan algo más y jugar en casa se tiene en cuenta, con la ventaja que se mide en la propia Liga.</p>
             <p style="margin:0;"><strong>Tabla de la suerte:</strong> con los goles a favor (GF) y en contra (GC), la parte de los puntos que "tocaría" es GF<sup>1,2</sup> ÷ (GF<sup>1,2</sup> + GC<sup>1,2</sup>). Se compara con los puntos reales. Es poco fiable las primeras ${PITA_FIABLE_PJ} jornadas.</p>
         </div>`;
     }
@@ -20753,7 +20753,7 @@ ${separador}`;
   function rcBloque(R, selector) {
     const HC = '#ff5577', RC = '#4dabf7';
     const nA = rcEsc(R.nombreA), nB = rcEsc(R.nombreB);
-    const cab = `<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:9px;"><span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:11.5px; color:#e2e8f0;">🔁 Rivales en común</span><span style="font-size:11px; color:#94a3b8;">${R.recortado ? 'los ' + R.comunes.length + ' más fuertes (Elo)' : R.comunes.length ? (R.comunes.length === 1 ? '1 equipo' : R.comunes.length + ' equipos') : ''}</span></div>${selector}`;
+    const cab = `<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:9px;"><span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:11.5px; color:#e2e8f0;">🔁 Rivales en común</span><span style="font-size:11px; color:#94a3b8;">${R.recortado ? 'los ' + R.comunes.length + ' más fuertes (ranking)' : R.comunes.length ? (R.comunes.length === 1 ? '1 equipo' : R.comunes.length + ' equipos') : ''}</span></div>${selector}`;
     if (!R.comunes.length) {
       if (!R.soloA.length || !R.soloB.length) return '';
       return cab + `<div style="font-size:12px; color:#94a3b8; line-height:1.45;">Todavía no habéis jugado contra ningún equipo en común.</div>`;
@@ -20803,7 +20803,7 @@ ${separador}`;
         <div class="rc-g"><div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">${resumenG}</div>${barras('g')}</div>
         <div class="rc-p" style="display:none;"><div style="font-size:11.5px; color:#cbd5e1; margin-bottom:4px;">${resumenPts}</div>${barras('p')}</div>
         ${campo}${sinComun}
-        <div style="font-size:10.5px; color:#94a3b8; margin-top:8px; line-height:1.4;">Contra cada equipo cuentan como mucho los ${RC_MAX_PARTIDOS} últimos partidos de cada uno, y su media, para que todos los rivales pesen igual.${R.recortado ? ` Con más de ${RC_MAX_RIVALES} rivales en común se usan los ${RC_MAX_RIVALES} con más Elo.` : ''}</div>
+        <div style="font-size:10.5px; color:#94a3b8; margin-top:8px; line-height:1.4;">Contra cada equipo cuentan como mucho los ${RC_MAX_PARTIDOS} últimos partidos de cada uno, y su media, para que todos los rivales pesen igual.${R.recortado ? ` Con más de ${RC_MAX_RIVALES} rivales en común se usan los ${RC_MAX_RIVALES} mejores del ranking.` : ''}</div>
       </div>`;
     return (`<div class="rc-box">${cab}
       <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
@@ -21556,9 +21556,9 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
         const ord = [...Array(NT).keys()].sort((x, y) => S.bp[y] - S.bp[x] || (S.bg[y] - S.bc[y]) - (S.bg[x] - S.bc[x]) || S.bg[y] - S.bg[x]);
         const pj = i => jug.filter(q => q.l === i || q.v === i).length;
         let elo = {}; try { const E = eloLiga(liga); if (E) E.equipos.forEach(x => { elo[x.i] = Math.round(x.elo); }); } catch (e) {}
-        L.push(`\nCLASIFICACIÓN ACTUAL (tras la jornada ${J}; puesto · equipo · puntos · partidos jugados · goles a favor-en contra · Elo):`);
-        ord.forEach((i, k) => L.push(`${k + 1}. ${nom(i)} · ${S.bp[i]} pts · ${pj(i)} PJ · ${S.bg[i]}-${S.bc[i]}${elo[i] != null ? ' · Elo ' + elo[i] : ''}`));
-        L.push('(El Elo mide el nivel según los resultados: base 1000; más alto, mejor.)');
+        L.push(`\nCLASIFICACIÓN ACTUAL (tras la jornada ${J}; puesto · equipo · puntos · partidos jugados · goles a favor-en contra · puntos de ranking):`);
+        ord.forEach((i, k) => L.push(`${k + 1}. ${nom(i)} · ${S.bp[i]} pts · ${pj(i)} PJ · ${S.bg[i]}-${S.bc[i]}${elo[i] != null ? ' · ranking ' + elo[i] : ''}`));
+        L.push('(El ranking mide el nivel según los resultados: base 1000; más alto, mejor.)');
         const jgP = ((p.vuelta || 1) - 1) * Math.max(1, ...liga.partidos.filter(q => q && q.vuelta === 1).map(q => q.jornada || 1)) + (p.jornada || 1);
         const m = S.rest.findIndex(q => q.jg === jgP && q.l === IDX[p.local] && q.v === IDX[p.visitante]);
         if (m >= 0) {
@@ -21574,7 +21574,7 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
         }
         const resDe = (i) => jug.filter(q => q.l === i || q.v === i).sort((a, b) => a.jg - b.jg).map(q => {
             const casa = q.l === i, o = casa ? q.v : q.l, gf = casa ? q.gl : q.gv, gc = casa ? q.gv : q.gl;
-            return `J${q.jg} · ${casa ? 'en casa' : 'fuera'} contra ${nom(o)} (ahora ${ord.indexOf(o) + 1}.º${elo[o] != null ? ', Elo ' + elo[o] : ''}): ${gf}-${gc} ${gf > gc ? '(ganó)' : gf < gc ? '(perdió)' : '(empató)'}`;
+            return `J${q.jg} · ${casa ? 'en casa' : 'fuera'} contra ${nom(o)} (ahora ${ord.indexOf(o) + 1}.º${elo[o] != null ? ', ranking ' + elo[o] : ''}): ${gf}-${gc} ${gf > gc ? '(ganó)' : gf < gc ? '(perdió)' : '(empató)'}`;
         });
         L.push(`\nRESULTADOS DE ${nom(riv).toUpperCase()} EN LA LIGA (del más antiguo al más reciente; primero sus goles):`);
         resDe(riv).forEach(x => L.push('- ' + x));
@@ -21586,7 +21586,7 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
             const R = rcCalcular(liga, H, riv, RC_MAX_RIVALES);
             if (R.comunes.length) {
                 const n1 = x => String(Math.round(x * 10) / 10).replace('.', ',');
-                L.push(`\nRIVALES EN COMÚN (${R.comunes.length}${R.recortado ? ', los de más Elo' : ''}): el Hergar ${R.regA.V}V ${R.regA.E}E ${R.regA.D}D; ${nom(riv)} ${R.regB.V}V ${R.regB.E}E ${R.regB.D}D. Diferencia de goles media por rival: Hergar ${n1(R.dgA / R.comunes.length)}, ${nom(riv)} ${n1(R.dgB / R.comunes.length)}.`);
+                L.push(`\nRIVALES EN COMÚN (${R.comunes.length}${R.recortado ? ', los mejores del ranking' : ''}): el Hergar ${R.regA.V}V ${R.regA.E}E ${R.regA.D}D; ${nom(riv)} ${R.regB.V}V ${R.regB.E}E ${R.regB.D}D. Diferencia de goles media por rival: Hergar ${n1(R.dgA / R.comunes.length)}, ${nom(riv)} ${n1(R.dgB / R.comunes.length)}.`);
                 R.comunes.forEach(cc => L.push(`- contra ${nom(cc.x)}: Hergar ${cc.A.rs.map(r => r.gf + '-' + r.gc).join(', ')}; ${nom(riv)} ${cc.B.rs.map(r => r.gf + '-' + r.gc).join(', ')}`));
             }
         } catch (e) {}
@@ -21597,7 +21597,7 @@ Responde SOLO con este JSON: {"localId":null,"visitanteId":null,"golesLocal":nul
             const iL = IDX[cap.localId], iV = IDX[cap.visitanteId];
             let h = 0, a = 0;
             const secuencia = cap.goles.filter(g => g.min != null).slice().sort((x, y) => x.min - y.min).map(g => { if (g.eq === 'L') h++; else a++; return `${g.min}': gol de ${nom(g.eq === 'L' ? iL : iV)} (${h}-${a})`; });
-            L.push(`\nÚLTIMO PARTIDO DE ${nom(riv).toUpperCase()} (captura de la federación${cap.fecha ? ', ' + cap.fecha : ''}): ${nom(iL)} ${cap.golesLocal}-${cap.golesVisitante} ${nom(iV)}. ${nom(iL)} jugaba en casa. Su rival en ese partido va ahora ${ord.indexOf(iL === riv ? iV : iL) + 1}.º${elo[iL === riv ? iV : iL] != null ? ' (Elo ' + elo[iL === riv ? iV : iL] + ')' : ''}.`);
+            L.push(`\nÚLTIMO PARTIDO DE ${nom(riv).toUpperCase()} (captura de la federación${cap.fecha ? ', ' + cap.fecha : ''}): ${nom(iL)} ${cap.golesLocal}-${cap.golesVisitante} ${nom(iV)}. ${nom(iL)} jugaba en casa. Su rival en ese partido va ahora ${ord.indexOf(iL === riv ? iV : iL) + 1}.º${elo[iL === riv ? iV : iL] != null ? ' (ranking ' + elo[iL === riv ? iV : iL] + ')' : ''}.`);
             if (secuencia.length) L.push('Goles por orden: ' + secuencia.join('; ') + '. Los partidos duran 70 minutos.');
         }
         return L.join('\n');
@@ -21621,9 +21621,9 @@ REGLAS:
 - Usa SOLO estos datos. Si algo no está, no lo menciones ni lo deduzcas (nada de lesiones, bajas, estilos de juego, entrenadores, tiempo o ambiente).
 - Del rival no nombres a ningún niño.
 - Del Hergar puedes nombrar a 2 o 3 niños como mucho, solo por su nombre de pila y solo con lo que venga en DATOS INDIVIDUALES Y RACHAS DEL HERGAR. Siempre en positivo: nunca compares a un niño para mal ni menciones a nadie por algo negativo.
-- Los números (puntos, puestos, Elo, porcentajes, marcadores, minutos) se copian tal cual.
+- Los números (puntos, puestos, ranking, porcentajes, marcadores, minutos) se copian tal cual.
 - Los minutos de los goles solo existen para el último partido del rival que viene en la captura; de los demás partidos solo hay resultados.
-- Busca lo más jugoso cruzando los datos: contra quién sacó cada resultado (su puesto y su Elo), rachas que se vean en los resultados, lo que está en juego, la ida si la hubo. Si dices que algo es "una racha" o "un patrón", tiene que verse claramente en los datos.
+- Busca lo más jugoso cruzando los datos: contra quién sacó cada resultado (su puesto y su ranking), rachas que se vean en los resultados, lo que está en juego, la ida si la hubo. Si dices que algo es "una racha" o "un patrón", tiene que verse claramente en los datos.
 - No inventes predicciones: si hablas de quién es favorito, usa el pronóstico.
 - Tono cercano y positivo, sin lemas ni frases de ánimo al final, sin exclamaciones de más. Español de España.
 - Formato: un titular de 6 a 12 palabras y 2 o 3 párrafos cortos (máximo 130 palabras en total).
@@ -22956,7 +22956,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                     const jtxt = js.length === 1 ? `de la jornada ${js[0]}` : `de las jornadas ${js.slice(0, -1).join(', ')} y ${js[js.length - 1]}`;
                     items.push({ key: `liga|${js.join(',')}|${sinRes.length}`, g: 'liga', gsub: js.length === 1 ? `Jornada ${js[0]}` : '', imp: true,
                         titulo: `${plural(sinRes.length, 'resultado', 'resultados')} ${jtxt} sin meter`,
-                        det: 'Sin ellos, la clasificación, el Pronóstico y el Elo de la Liga no están al día.', donde: 'Liga → Partidos → Importar de la federación',
+                        det: 'Sin ellos, la clasificación, el Pronóstico y el ranking de la Liga no están al día.', donde: 'Liga → Partidos → Importar de la federación',
                         accion: 'Importar', fn: () => pendAbrirLiga('importar') });
                 }
                 const pend = ligaPendientesHergar(liga).slice().sort((a, b) => (fechaLigaAISO(a.fechaPartido || a.fecha) || '9') < (fechaLigaAISO(b.fechaPartido || b.fecha) || '9') ? -1 : 1);
@@ -24093,7 +24093,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             const t2 = Object.assign({}, t, { partidos: ps });
             const G = grandesTemporada(t2, liga);
             P.grandes = G.jug.filter(x => x.ok && x.dif != null && x.dif > 0.05).sort((a, b) => b.dif - a.dif)
-                .map(x => ({ ids: [String(x.j.id)], v: x.dif, dato: sg(x.dif), lab: 'más peso en el equipo en los grandes', extras: [[String(x.ng), x.ng === 1 ? 'partido grande' : 'partidos grandes']], txt: 'Contra los 4 rivales de más Elo, el que más sube su peso en el equipo.' }));
+                .map(x => ({ ids: [String(x.j.id)], v: x.dif, dato: sg(x.dif), lab: 'más peso en el equipo en los grandes', extras: [[String(x.ng), x.ng === 1 ? 'partido grande' : 'partidos grandes']], txt: 'Contra los 4 primeros del ranking, el que más sube su peso en el equipo.' }));
         } catch (e) { console.error('Premios · grandes:', e); P.grandes = []; }
         // 📈 El que más ha mejorado: sus acciones por 70' del último tercio de sus partidos frente al primero
         P.mejorado = fila.filter(x => x.per.length >= 6).map(x => {
@@ -24112,7 +24112,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 const rv = proRivalLiga(liga, p), pos = otros.findIndex(x => x.i === rv.i);
                 return { p, k: R0.desde + k, pos, res: p.resultado, gf: Number(p.golesLocal) || 0, gc: Number(p.golesRival) || 0 };
             }).filter(x => x.res === 'V' || x.res === 'E').sort((a, b) => (a.res === b.res ? 0 : a.res === 'V' ? -1 : 1) || (a.pos < 0 ? 99 : a.pos) - (b.pos < 0 ? 99 : b.pos) || (b.gf - b.gc) - (a.gf - a.gc))
-                .map(x => ({ ids: [], partido: x.k, v: x.pos, dato: `${x.gf}-${x.gc}`, lab: `${x.res === 'V' ? 'victoria' : 'empate'} ante ${x.p.rival}`, extras: [[`J${x.k + 1}`, 'jornada']].concat(x.pos >= 0 ? [[`${x.pos + 1}.º`, 'rival más fuerte']] : []), txt: x.pos >= 0 ? `${x.res === 'V' ? 'La victoria' : 'El empate'} con más mérito: contra el ${x.pos + 1}.º rival más fuerte de la Liga por Elo.` : 'El mejor resultado de la vuelta.', nom: `J${x.k + 1} · vs ${x.p.rival}` }));
+                .map(x => ({ ids: [], partido: x.k, v: x.pos, dato: `${x.gf}-${x.gc}`, lab: `${x.res === 'V' ? 'victoria' : 'empate'} ante ${x.p.rival}`, extras: [[`J${x.k + 1}`, 'jornada']].concat(x.pos >= 0 ? [[`${x.pos + 1}.º`, 'rival más fuerte']] : []), txt: x.pos >= 0 ? `${x.res === 'V' ? 'La victoria' : 'El empate'} con más mérito: contra el ${x.pos + 1}.º rival más fuerte de la Liga en el ranking.` : 'El mejor resultado de la vuelta.', nom: `J${x.k + 1} · vs ${x.p.rival}` }));
         } catch (e) { console.error('Premios · partido:', e); P.partido = []; }
         // 🔄 El comodín (v241): el más polivalente de la vuelta. Un puesto o una línea cuenta con 35' o más en la vuelta;
         //   hace falta 3 puestos en 2 líneas, o 3 líneas. Gana quien toca más líneas y, a igualdad, más puestos (como el visor).
