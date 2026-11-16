@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v250</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v251</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -5733,7 +5733,6 @@
     // A ese impacto se le quita la parte del propio niño (su impacto medio por minuto × el tiempo juntos) y queda lo de
     // los compañeros. "Sin él" = lo que hacen los compañeros en los partidos que jugó, menos lo que hicieron con él.
     const COMP_MIN_JUGADOS = 70, COMP_MIN_SIN = 35;
-    function compImp(h) { const m = h.mins || 0; return h.imp !== undefined ? (Number(h.imp) || 0) : (Number(h.impPond) || 0) * m / 70; }
     function compFmt(v) { return v == null ? '—' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ','); }
     function compDec(v) { return v == null ? '—' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace('.', ','); }
     function compEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -6263,30 +6262,6 @@
         part = ((h.goles || 0) + (h.asistencias || 0)) > 0 ? part + 1 : 0; partMax = Math.max(partMax, part);
       });
       return { recs: out, rachas: { gol: golMax, part: partMax, tit: j.rachaMaxTitular || 0 }, H };
-    }
-    // Récords batidos en el partido i de la temporada, de todos los niños
-    function recordsDelPartido(t, i) {
-      const res = [];
-      Object.values((t && t.jugadores) || {}).forEach(j => {
-        const R = recordsJugador(t, j);
-        Object.values(R.recs).forEach(r => {
-          const b = r.batidos.find(x => x.i === i);
-          if (b) res.push({ j, d: r.d, v: b.v, antes: b.antes });
-        });
-      });
-      const ord = REC_DEF.map(d => d.k);
-      return res.sort((a, b) => ord.indexOf(a.d.k) - ord.indexOf(b.d.k) || (Number(a.j.dorsal) || 99) - (Number(b.j.dorsal) || 99));
-    }
-    function recordsDelPartidoHTML(t, i, acento) {
-      const L = recordsDelPartido(t, i);
-      if (!L.length) return '';
-      acento = acento || '#f5a623';
-      return `<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;"><span style="font-size:11px; font-weight:800; color:${acento}; letter-spacing:.5px;">🏅 RÉCORDS PERSONALES DE HOY</span><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:${acento};">${L.length}</span></div>
-        <div style="font-size:11px; color:#94a3b8; margin-bottom:4px;">Cada uno contra sí mismo: su mejor marca en un partido esta temporada.</div>
-        ${L.map(x => `<div style="display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 0; border-top:1px solid rgba(255,255,255,.06);">
-          <span style="width:34px; height:34px; border-radius:50%; background:${acento}22; color:${acento}; display:flex; align-items:center; justify-content:center; font-family:'Montserrat',sans-serif; font-weight:900; font-size:12px;">${estEsc(x.j.dorsal ?? '')}</span>
-          <span style="min-width:0;"><span style="font-size:13px; font-weight:700; color:#e2e8f0;">${estEsc(estNom(x.j))}</span><br><span style="font-size:11px; color:#cbd5e1;">${estEsc(x.d.n)}</span></span>
-          <span style="text-align:right;"><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:18px; color:${acento};">${recFmt(x.d, x.v)}</span><br><span style="font-size:10px; color:#94a3b8;">antes ${recFmt(x.d, x.antes)}</span></span></div>`).join('')}`;
     }
     // «🏅 Sus récords» en la ficha del niño
     function recordsJugadorHTML(t, j, acento) {
@@ -7067,11 +7042,6 @@
         if (rA == null || rB == null || minsT < 1) return null;
         const sinMedir = Math.max(0, minsT - d.minsN);
         return (d.impN + sinMedir * (rA + rB)) / Math.max(minsT, d.minsN) * 70;
-    }
-    function ritmosTemporada(t) {
-        const r = {};
-        Object.values((t && t.jugadores) || {}).forEach(j => { if ((j.minutos || 0) > 0) r[j.id] = (j.impactoAcum || 0) / j.minutos; });
-        return r;
     }
 
     // Lista de sinergias (Temporada y partido en vivo). pares = { clave: { segs, segsN, impN } }
@@ -14740,30 +14710,6 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         });
     }
 
-    // ── TEMPORADA ──
-    // ── UTILIDAD: BLOQUEO DE SCROLL DEL BODY (fix "no puedo subir" en modales) ──
-    // En iOS, "overflow:hidden" en el body NO impide que la página de fondo
-    // siga haciendo scroll táctil detrás de un modal fixed. Eso provoca que,
-    // dentro del modal, bajar funcione pero subir se quede "atascado" (el gesto
-    // se lo come el scroll de fondo). La solución robusta es fijar el body con
-    // position:fixed durante el modal y restaurar el scroll exacto al cerrar.
-    let _scrollLockY = 0;
-    function lockBodyScroll() {
-        _scrollLockY = window.scrollY || document.documentElement.scrollTop || 0;
-        document.body.style.position = 'fixed';
-        document.body.style.top = `-${_scrollLockY}px`;
-        document.body.style.left = '0';
-        document.body.style.right = '0';
-        document.body.style.width = '100%';
-    }
-    function unlockBodyScroll() {
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.left = '';
-        document.body.style.right = '';
-        document.body.style.width = '';
-        window.scrollTo(0, _scrollLockY);
-    }
 
     // ── M17 · TEMPORADA ───────────────────────────────────────────────
     function getTemporada() {
@@ -17239,51 +17185,6 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (sinFicha.length) txt += (txt ? '\n\n' : '') + `⚠️ ${sinFicha.join(', ')} no tiene minutos registrados en este partido: su asistencia se queda solo en el detalle del gol.`;
         return txt;
     }
-    function sincronizarAsistenciasEditadas(t, golesViejos, golesNuevos, f) {
-        const cuenta = (lista) => { const c = {}; lista.forEach(g => { if (g && g.equipo !== 'rival' && g.asistenteId != null) c[g.asistenteId] = (c[g.asistenteId] || 0) + 1; }); return c; };
-        const antes = cuenta(golesViejos), despues = cuenta(golesNuevos);
-        const ids = new Set([...Object.keys(antes), ...Object.keys(despues)]);
-        const valor = REGLAS_IMPACTO.acciones.asistencia;
-        const r2 = (x) => Math.round(x * 100) / 100;
-        const cambios = [], sinFicha = [];
-        ids.forEach(id => {
-            const viejo = antes[id] || 0, nuevo = despues[id] || 0;
-            if (viejo === nuevo) return;
-            const j = t.jugadores[id];
-            const k = j ? (j.historial || []).findIndex(h => (h.fecha === f.nuevaFecha && h.rival === f.nuevoRival) || (h.fecha === f.fechaVieja && h.rival === f.rivalViejo)) : -1;
-            if (!j || k < 0) { const g = golesNuevos.concat(golesViejos).find(x => String(x.asistenteId) === String(id)); sinFicha.push(g && g.asistente ? g.asistente : 'un jugador'); return; }
-            const h = j.historial[k];
-            const ya = h.asistencias || 0;
-            const fin = nuevo > viejo ? Math.max(ya, nuevo) : Math.max(0, ya - (viejo - nuevo));
-            const d = fin - ya;
-            if (!d) return;
-            h.asistencias = fin;
-            j.asistencias = Math.max(0, (j.asistencias || 0) + d);
-            // impacto: total del jugador, el del partido y su reparto por líneas y puestos (como en la v105)
-            const dImp = d * valor;
-            const mins = h.mins || 0;
-            const impAntes = (h.imp !== undefined) ? h.imp : (h.impPond || 0) * mins / 70;
-            const g = lineasGuardadasDePartido(j, k);
-            const totL = Object.values(g.lineas).reduce((a, v) => a + v, 0) || 1;
-            if (!j.impactoPorPosicion) j.impactoPorPosicion = {};
-            Object.keys(g.lineas).forEach(l => { j.impactoPorPosicion[l] = (j.impactoPorPosicion[l] || 0) + dImp * g.lineas[l] / totL; });
-            if (h.impLineas) Object.keys(h.impLineas).forEach(l => { h.impLineas[l] = r2((h.impLineas[l] || 0) + dImp * ((h.lineas || {})[l] || 0) / totL); });
-            if (h.puestos && Object.keys(h.puestos).length) {
-                const totP = Object.values(h.puestos).reduce((a, v) => a + v, 0) || 1;
-                if (!j.impactoPorPuesto) j.impactoPorPuesto = {};
-                if (!h.impPuestos) h.impPuestos = {};
-                Object.keys(h.puestos).forEach(pu => { const parte = dImp * h.puestos[pu] / totP; j.impactoPorPuesto[pu] = (j.impactoPorPuesto[pu] || 0) + parte; h.impPuestos[pu] = r2((h.impPuestos[pu] || 0) + parte); });
-            }
-            j.impactoAcum = (j.impactoAcum || 0) + dImp;
-            h.imp = r2(impAntes + dImp);
-            h.impPond = mins > 0 ? r2(h.imp / mins * 70) : 0;
-            cambios.push(`${(j.name || '').split(' ')[0]}: ${d > 0 ? '+' : ''}${d} ${Math.abs(d) === 1 ? 'asistencia' : 'asistencias'} (${d > 0 ? '+' : '−'}${Math.abs(dImp).toFixed(2).replace('.', ',')} de impacto)`);
-        });
-        let txt = '';
-        if (cambios.length) txt += '👟 Asistencias actualizadas:\n' + cambios.join('\n');
-        if (sinFicha.length) txt += (txt ? '\n\n' : '') + `⚠️ No se ha podido sumar la asistencia a ${sinFicha.join(', ')}: no tiene minutos registrados en este partido. Se queda solo en el detalle del gol.`;
-        return txt;
-    }
 
     function renderSinergias() {
         const t = getTemporada();
@@ -18963,7 +18864,6 @@ ${separador}`;
     .fd-tarjeta-box { flex:1; display:flex; align-items:center; justify-content:center; gap:6px; background: rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.05); border-radius:10px; padding:8px; }
     .fd-tarjeta-box .cuad { width:11px; height:15px; border-radius:2px; }
     .fd-tarjeta-box .num { font-family:'Montserrat',sans-serif; font-weight:900; font-size:13px; color:#e2e8f0; }
-    .fd-aviso { font-size:9px; color:#52665c; margin-top:8px; padding:0 2px; line-height:1.4; }
 </style>
 
 <!-- MODAL CROMO DE JUGADOR / FICHA DE DATOS -->
