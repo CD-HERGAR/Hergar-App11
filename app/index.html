@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v255</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v256</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -14725,8 +14725,23 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             return JSON.parse(json || '{"partidos":[],"jugadores":{}}');
         } catch(e) { return { partidos: [], jugadores: {} }; }
     }
+    // v256: racha de titularidad a partir de los partidos (en orden). Se corta en cualquier partido en que el niño
+    // no sale de titular, esté en el banquillo o ni siquiera convocado. Los partidos sin titulares apuntados no cuentan.
+    function recalcularRachasTitular(t) {
+        if (!t || !t.jugadores) return;
+        const conTit = (t.partidos || []).filter(p => Array.isArray(p.titulares) && p.titulares.length);
+        if (!conTit.length) return;
+        Object.values(t.jugadores).forEach(j => {
+            let act = 0, max = 0;
+            conTit.forEach(p => {
+                if (p.titulares.map(String).includes(String(j.id))) { act++; if (act > max) max = act; } else act = 0;
+            });
+            j.rachaActualTitular = act; j.rachaMaxTitular = max;
+        });
+    }
     function saveTemporada(t) {
         try { calcularStatsPorteros(t); } catch (e) { console.error('v114 stats portero:', e); }
+        try { recalcularRachasTitular(t); } catch (e) { console.error('v256 rachas titular:', e); }
         try {
             const json = JSON.stringify(t);
             const compressed = LZString.compressToUTF16(json);
@@ -17231,6 +17246,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 if (!t.jugadores[p.id].partidosPorPosicion) t.jugadores[p.id].partidosPorPosicion = {};
             }
         });
+        try { recalcularRachasTitular(t); } catch (e) {} // v256
         const jugadores = Object.values(t.jugadores).filter(j => j.partidos > 0);
         jugadores.sort((a,b) => (b.rachaActualTitular||0) - (a.rachaActualTitular||0));
 
