@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v253</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v254</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -19783,7 +19783,7 @@ ${separador}`;
                 <div class="liga-equipo-nombre ${eq.esHergar?'hergar':''}" style="flex:1; cursor:pointer;" onclick="abrirFichaRival('${eq.id}')">${eq.nombre}${pendiente ? '<div style="font-size:9.5px; color:#f5a623; font-weight:700; margin-top:2px;">Escudo pendiente de enviar al visor</div>' : ''}<div style="font-size:10px; font-weight:600; margin-top:2px; color:${eq.campo ? '#64748b' : '#f5a623'};">${eq.campo ? ctxEsc([eq.campo.nombre, CTX_CESPED[eq.campo.cesped], eq.campo.lat == null ? 'sin ubicación' : ''].filter(Boolean).join(' · ')) : 'Sin campo todavía'}</div></div>
                 <button onclick="abrirCampoEquipo('${eq.id}')" style="${btn} background:${eq.campo ? 'rgba(46,213,115,0.1)' : 'rgba(245,166,35,0.1)'}; color:${eq.campo ? '#2ed573' : '#f5a623'}; border:1px solid ${eq.campo ? 'rgba(46,213,115,0.4)' : 'rgba(245,166,35,0.45)'};">🏟️</button>
                 ${eq.esHergar ? '' : `
-                <button onclick="abrirColorEquipo('${eq.id}')" aria-label="Color de sus barras en el visor" style="${btn} background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); display:inline-flex; align-items:center;"><span style="width:15px; height:15px; border-radius:50%; display:inline-block; background:${eq.color || '#64748b'}; border:2px solid ${eq.color ? '#fff' : 'rgba(255,255,255,0.3)'};"></span></button>
+                <button onclick="abrirColorEquipo('${eq.id}')" aria-label="Color de sus barras en el visor" style="${btn} background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); display:inline-flex; align-items:center;"><span style="width:15px; height:15px; border-radius:50%; display:inline-block; background:${eq.color ? fondoColorEquipo(eq.color, eq.color2, 3) : '#64748b'}; border:2px solid ${eq.color ? '#fff' : 'rgba(255,255,255,0.3)'};"></span></button>
                 <label for="escudoEquipoInput" onclick="escudoEquipoPendiente='${eq.id}'" style="${btn} background:rgba(46,213,115,0.1); color:#2ed573; border:1px solid rgba(46,213,115,0.4);">📷 ${tiene ? 'Cambiar' : 'Escudo'}</label>
                 ${tiene ? `<button onclick="quitarEscudoEquipo('${eq.id}')" aria-label="Quitar escudo" style="${btn} background:rgba(255,255,255,0.05); color:#94a3b8; border:1px solid rgba(255,255,255,0.1);">🗑</button>` : ''}
                 <button class="liga-equipo-del" onclick="eliminarEquipoLiga('${eq.id}')">✕</button>`}
@@ -19798,6 +19798,11 @@ ${separador}`;
         ['#16a34a', 'Verde', '#16a34a', '#fff'], ['#eab308', 'Amarillo', '#eab308', '#0a0e14'], ['#f97316', 'Naranja', '#f97316', '#0a0e14'],
         ['#7c3aed', 'Morado', '#7c3aed', '#fff'], ['#e5e7eb', 'Blanco', '#e5e7eb', '#0a0e14'], ['#8b1d3a', 'Granate', '#8b1d3a', '#fff'], ['#dc2626', 'Rojo', '#dc2626', '#fff']
     ];
+    // v254 · combinados: el 1.º es el color "liso" (textos y gráficos del visor) y el 2.º el de las rayas en diagonal
+    const COLORES_EQUIPO_COMBO = [
+        ['#e5e7eb|#dc2626', 'Rojo y blanco', '#0a0e14'], ['#111827|#dc2626', 'Rojo y negro', '#fff']
+    ];
+    function fondoColorEquipo(c, c2, w) { w = w || 5; return c2 ? `repeating-linear-gradient(135deg, ${c2} 0 ${w}px, ${c} ${w}px ${2 * w}px)` : c; }
     // ¿Se confunde con el rojo del Hergar (180,20,56)? Tono rojizo y bastante saturado.
     function colorPareceRojoHergar(hex) {
         const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return false;
@@ -19811,7 +19816,7 @@ ${separador}`;
     function abrirColorEquipo(id) {
         const eq = getLiga().equipos.find(e => e.id === id);
         if (!eq) return;
-        colorEquipoTmp = { id, color: eq.color || '' };
+        colorEquipoTmp = { id, color: eq.color || '', color2: (eq.color && eq.color2) || '' };
         let m = document.getElementById('colorEquipoModal');
         if (!m) {
             m = document.createElement('div');
@@ -19827,18 +19832,25 @@ ${separador}`;
         const m = document.getElementById('colorEquipoModal'); if (!m) return;
         eq = eq || getLiga().equipos.find(e => e.id === colorEquipoTmp.id);
         if (!eq) return;
-        const sel = colorEquipoTmp.color || '';
-        const libre = sel && !COLORES_EQUIPO.some(c => c[0].toLowerCase() === sel.toLowerCase());
+        const sel = colorEquipoTmp.color || '', sel2 = colorEquipoTmp.color2 || '';
+        const selV = (sel + (sel2 ? '|' + sel2 : '')).toLowerCase();
+        const libre = sel && !sel2 && !COLORES_EQUIPO.some(c => c[0].toLowerCase() === sel.toLowerCase());
         const muestras = COLORES_EQUIPO.map(([v, nom, hex, txt]) => {
-            const on = (v || '').toLowerCase() === sel.toLowerCase();
+            const on = (v || '').toLowerCase() === selV;
             return `<button type="button" onclick="elegirColorEquipo('${v}')" aria-label="${nom}" style="height:46px; border-radius:10px; background:${hex}; border:${on ? '3px solid #fff' : '1px solid rgba(255,255,255,.15)'}; color:${txt}; font-size:9px; font-weight:800; display:flex; align-items:flex-end; justify-content:center; padding-bottom:3px; cursor:pointer;">${nom}</button>`;
         }).join('');
-        const muestra = sel || '#64748b';
-        const filaBarra = (l, h, r) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px;"><span style="color:#ff5577;">${h}</span><span style="font-family:Inter,sans-serif; font-size:11px; font-weight:700; color:#cbd5e1;">${l}</span><span style="color:${sel ? muestra : '#94a3b8'};">${r}</span></div><div style="display:flex; gap:3px; height:7px; margin-top:4px; border-radius:4px; overflow:hidden;"><div style="flex:${h}; background:rgb(180,20,56);"></div><div style="flex:${r}; background:${muestra};"></div></div></div>`;
+        const combos = COLORES_EQUIPO_COMBO.map(([v, nom, txt]) => {
+            const [a, b] = v.split('|'), on = v.toLowerCase() === selV;
+            return `<button type="button" onclick="elegirColorEquipo('${v}')" aria-label="${nom}" style="height:46px; border-radius:10px; background:${fondoColorEquipo(a, b, 9)}; border:${on ? '3px solid #fff' : '1px solid rgba(255,255,255,.15)'}; display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px; cursor:pointer;"><span style="background:rgba(10,14,20,.78); color:#fff; font-size:10px; font-weight:800; border-radius:6px; padding:2px 7px;">${nom}</span></button>`;
+        }).join('');
+        const muestra = sel || '#64748b', fondoMuestra = sel ? fondoColorEquipo(sel, sel2) : '#64748b';
+        const filaBarra = (l, h, r) => `<div style="margin-top:8px;"><div style="display:flex; justify-content:space-between; font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px;"><span style="color:#ff5577;">${h}</span><span style="font-family:Inter,sans-serif; font-size:11px; font-weight:700; color:#cbd5e1;">${l}</span><span style="color:${sel ? muestra : '#94a3b8'};">${r}</span></div><div style="display:flex; gap:3px; height:7px; margin-top:4px; border-radius:4px; overflow:hidden;"><div style="flex:${h}; background:rgb(180,20,56);"></div><div style="flex:${r}; background:${fondoMuestra};"></div></div></div>`;
         m.innerHTML = `<div style="background:linear-gradient(145deg,#111827,#0f172a); border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:16px; width:100%; max-width:360px; max-height:88vh; overflow-y:auto;">
             <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:14px; color:#fff;">🎨 COLOR · ${ctxEsc(String(eq.nombre).toUpperCase())}</div>
             <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin:4px 0 12px;">El visor pintará con este color sus barras (estadísticas del partido, cara a cara, medias, Modo TV y resumen). El Hergar sigue siempre en rojo.</div>
             <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:8px;">${muestras}</div>
+            <div style="font-size:12px; font-weight:700; color:#cbd5e1; margin:12px 0 6px;">Dos colores (rayas en diagonal):</div>
+            <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px;">${combos}</div>
             <label style="display:flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; font-weight:700; color:#cbd5e1;">Otro color: <input type="color" value="${libre ? sel : '#2563eb'}" onchange="elegirColorEquipo(this.value)" style="width:52px; height:36px; border:${libre ? '3px solid #fff' : '1px solid rgba(255,255,255,.2)'}; border-radius:8px; background:none; padding:0;"></label>
             ${colorPareceRojoHergar(sel) ? `<div style="margin-top:10px; font-size:11.5px; line-height:1.45; color:#f5a623; background:rgba(245,166,35,.1); border:1px solid rgba(245,166,35,.4); border-radius:9px; padding:8px 10px;">⚠️ Este color se parece mucho al rojo del Hergar: en las barras no se distinguirían bien. Puedes guardarlo igualmente.</div>` : ''}
             <div style="margin-top:12px; background:rgba(0,0,0,.25); border-radius:12px; padding:10px 12px;">
@@ -19852,13 +19864,14 @@ ${separador}`;
             </div>
         </div>`;
     }
-    function elegirColorEquipo(v) { colorEquipoTmp.color = v || ''; pintarColorEquipo(); }
+    function elegirColorEquipo(v) { const [a, b] = String(v || '').split('|'); colorEquipoTmp.color = a || ''; colorEquipoTmp.color2 = (a && b) || ''; pintarColorEquipo(); }
     function cerrarColorEquipo() { const m = document.getElementById('colorEquipoModal'); if (m) m.style.display = 'none'; }
     function guardarColorEquipo() {
         const liga = getLiga();
         const eq = liga.equipos.find(e => e.id === colorEquipoTmp.id);
         if (!eq) { cerrarColorEquipo(); return; }
         if (colorEquipoTmp.color) eq.color = colorEquipoTmp.color; else delete eq.color;
+        if (colorEquipoTmp.color && colorEquipoTmp.color2) eq.color2 = colorEquipoTmp.color2; else delete eq.color2;
         saveLiga(liga); // se publica con la Liga
         cerrarColorEquipo();
         renderLigaEquipos();
