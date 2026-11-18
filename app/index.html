@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v258</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v259</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -19218,8 +19218,8 @@ ${separador}`;
                 <div><div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:30px; color:#e2e8f0;">${d.t} °C</div>
                 <div style="font-size:12px; color:#94a3b8; font-weight:700;">${d.sens != null ? 'Sensación ' + d.sens + ' °C' : ''}${cielo ? (d.sens != null ? ' · ' : '') + cielo : ''}</div></div>
             </div>
-            <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px;">
-                ${dato(d.prob != null ? d.prob + ' %' : '—', 'LLUVIA')}${dato(d.mm != null ? String(d.mm).replace('.', ',') + ' mm' : '—', 'CANTIDAD')}${dato(d.racha != null ? d.racha + ' km/h' : (d.viento != null ? d.viento + ' km/h' : '—'), 'VIENTO')}
+            <div style="display:grid; grid-template-columns:repeat(${d.racha != null ? 4 : 3},1fr); gap:6px; margin-top:10px;">
+                ${dato(d.prob != null ? d.prob + ' %' : '—', 'LLUVIA')}${dato(d.mm != null ? String(d.mm).replace('.', ',') + ' mm' : '—', 'CANTIDAD')}${dato(d.viento != null ? d.viento + ' km/h' : '—', 'VIENTO')}${d.racha != null ? dato(d.racha + ' km/h', 'RACHAS') : ''}
             </div>
             <div style="text-align:right; font-size:9.5px; color:#64748b; margin-top:6px;">Datos del tiempo: <a href="https://open-meteo.com/" target="_blank" rel="noopener" style="color:#64748b;">Open-Meteo</a></div>`, lineaCampo);
     }
