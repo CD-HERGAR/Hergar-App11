@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v257</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v258</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -24046,6 +24046,13 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     const VUELTAS = [['1', '1.ª vuelta'], ['2', '2.ª vuelta'], ['3', '3.ª vuelta'], ['T', 'temporada']];
     const PM_EVO_R = { gol: .75, asist: .40, dp: .30, df: .10, pal: .30, pc: .25, pa: .15, reg: .10, def: .30, defC: 1.00, par: .30, parD: 1.00, fj: -.05 }; // como «Sus acciones» del visor
     const PM_B2B_N = 4, PM_B2B_T = 6;
+    const PM_FRANCO_MIN = 3, PM_REV_MIN = 3; // v258
+    function pmGzIndice(pos) { // v258 · índice golazo (0-10), el mismo cálculo que el visor (gzIndice)
+        const a = Math.max(0.3, pos.y), b = Math.abs(pos.x - 34), d = Math.sqrt(a * a + b * b), PO = 7.32;
+        let ang = Math.atan2(PO * a, a * a + b * b - (PO / 2) ** 2); if (ang < 0) ang += Math.PI;
+        const xg = 1 / (1 + Math.exp(-(-1.2 + 1.6 * ang - 0.08 * d)));
+        return Math.min(10, Math.max(0, 10 * Math.log(1 / xg) / Math.log(50)));
+    }
 
     function leer() { try { return JSON.parse(localStorage.getItem(PM_KEY) || '{}') || {}; } catch (e) { return {}; } }
     function guardar(d) { try { localStorage.setItem(PM_KEY, JSON.stringify(d)); } catch (e) {} }
@@ -24163,12 +24170,81 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             }).filter(r => (r.nl >= 2 && r.np >= 3) || r.nl >= 3).sort((a, b) => b.nl - a.nl || b.np - a.np || b.x.mins - a.x.mins)
                 .map(r => ({ ids: [r.x.id], v: r.nl * 100 + r.np, dato: `${r.np} puestos`, lab: `en ${r.nl} líneas`, extras: [[r.pus.length ? r.pus.join(' · ') : r.lin.map(l => LIN_C[l]).join(' · '), 'donde ha jugado']], txt: 'El más polivalente: el que ha jugado en más líneas y más puestos distintos (35 minutos o más en cada uno).' }));
         } catch (e) { console.error('Premios · comodín:', e); P.comodin = []; }
+        // ── v258 · siete premios nuevos ──
+        // 🎯 Francotirador: goles ÷ tiros (a puerta, fuera y al palo) en los partidos en directo; mínimo 3 goles
+        try {
+            P.franco = fila.map(x => {
+                let g = 0, tr = 0;
+                x.L.forEach(({ p, h }) => { if (p.manual || !h.acc) return; const a = h.acc; tr += (Number(a.dp) || 0) + (Number(a.df) || 0); g += Number(h.goles) || 0; });
+                g = Math.min(g, tr);
+                return { x, g, tr };
+            }).filter(r => r.g >= PM_FRANCO_MIN && r.tr > 0).sort((a, b) => b.g / b.tr - a.g / a.tr || b.g - a.g)
+                .map(r => ({ ids: [r.x.id], v: r.g / r.tr, dato: Math.round(r.g / r.tr * 100) + ' %', lab: 'de sus tiros acaban en gol', extras: [[String(r.g), r.g === 1 ? 'gol' : 'goles'], [String(r.tr), 'tiros']], txt: `El de mejor puntería: el que más tiros convierte en gol (${PM_FRANCO_MIN} goles o más; solo partidos en directo).` }));
+        } catch (e) { console.error('Premios · francotirador:', e); P.franco = []; }
+        // 🦊 El oportunista: más goles de rechace (mínimo 2); a igualdad, en menos minutos
+        try {
+            const c = {};
+            ps.forEach(p => (Array.isArray(p.goles) ? p.goles : []).forEach(g => { if (g && g.equipo !== 'rival' && g.origen === 'rechace' && !g.penalti && g.jugadorId != null) c[String(g.jugadorId)] = (c[String(g.jugadorId)] || 0) + 1; }));
+            P.oport = fila.filter(x => (c[x.id] || 0) >= 2).sort((a, b) => c[b.id] - c[a.id] || a.mins - b.mins)
+                .map(x => ({ ids: [x.id], v: c[x.id], dato: String(c[x.id]), lab: 'goles de rechace', extras: [[String(x.goles), x.goles === 1 ? 'gol en total' : 'goles en total'], [x.mins + "'", 'minutos']], txt: 'El que siempre está donde cae el balón: el que más goles ha marcado de rechace.' }));
+        } catch (e) { console.error('Premios · oportunista:', e); P.oport = []; }
+        // 💥 El golazo de la vuelta: el gol con más índice golazo (sin penaltis ni faltas); uno por niño, el mejor
+        try {
+            const L = [];
+            ps.forEach((p, k) => (Array.isArray(p.goles) ? p.goles : []).forEach((g, gi) => {
+                if (!g || g.equipo === 'rival' || g.jugadorId == null || g.penalti || g.propia || g.origen === 'penalti' || g.origen === 'falta' || g.origen === 'propia') return;
+                if (!g.pos || g.pos.x == null || g.pos.y == null) return;
+                const pos = { x: Number(g.pos.x), y: Number(g.pos.y) };
+                const vid = g.video && !g.videoOculto && (typeof permisoVideo !== 'function' || permisoVideo(g.jugadorId));
+                L.push({ id: String(g.jugadorId), i: R0.desde + k, k: gi, p, g, v: pmGzIndice(pos), dist: Math.round(Math.hypot(pos.y, pos.x - 34)), vid });
+            }));
+            const visto = new Set();
+            P.golazo = L.sort((a, b) => b.v - a.v || b.dist - a.dist).filter(x => !visto.has(x.id) && visto.add(x.id))
+                .map(x => ({ ids: [x.id], v: x.v, dato: f1(x.v), lab: 'de índice golazo (de 0 a 10)', extras: [[x.dist + ' m', 'desde la portería'], [`J${x.i + 1}`, 'vs ' + x.p.rival]].concat(x.g.min != null ? [[x.g.min + "'", 'minuto']] : []).slice(0, 2),
+                    video: x.vid ? { i: x.i, k: x.k } : null, txt: 'El gol más difícil de la vuelta: desde el sitio más complicado para marcar (sin penaltis ni faltas).' }));
+        } catch (e) { console.error('Premios · golazo:', e); P.golazo = []; }
+        const t2 = Object.assign({}, t, { partidos: ps });
+        // ⚡ El revulsivo: de los que salen de suplente (3 veces o más), cómo le va al equipo desde que entra frente a antes
+        try {
+            const B = banquilloTemporada(t2), r = {};
+            B.cambios.forEach(c => {
+                if (!c.dato) return;
+                const sec = momSecuencia(c.p); if (!sec || sec.some(s => s.min == null)) return;
+                const id = String(c.entra.id), o = r[id] = r[id] || { n: 0, gfA: 0, gcA: 0, mA: 0, gfD: 0, gcD: 0, mD: 0 };
+                o.n++; o.gfD += c.dato.gf; o.gcD += c.dato.gc; o.mD += c.mins;
+                sec.forEach(s => { if (s.min < c.min) { if (s.equipo === 'hergar') o.gfA++; else o.gcA++; } }); o.mA += c.min;
+            });
+            P.revulsivo = Object.entries(r).filter(([, o]) => o.n >= PM_REV_MIN && o.mA > 0 && o.mD > 0).map(([id, o]) => {
+                const a = (o.gfA - o.gcA) / o.mA * 70, d = (o.gfD - o.gcD) / o.mD * 70;
+                return { id, o, a, d, v: d - a };
+            }).filter(x => x.v > 0).sort((a, b) => b.v - a.v)
+                .map(x => ({ ids: [x.id], v: x.v, dato: sg(x.v), lab: "goles de diferencia por 70' desde que entra", extras: [[String(x.o.n), 'veces de suplente'], [`${x.o.gfD}-${x.o.gcD}`, 'con él en el campo']], txt: `El que mejor cambia los partidos desde el banquillo: cuando entra, al equipo le va mejor que antes (${PM_REV_MIN} entradas o más).` }));
+        } catch (e) { console.error('Premios · revulsivo:', e); P.revulsivo = []; }
+        // ➕ El amuleto: mejor más/menos por 70' con él en el campo (mínimo, la mitad de los minutos posibles, como el MVP)
+        try {
+            const MM = masMenosTemporada(t2);
+            P.amuleto = Object.values(MM).filter(r => r.minOn >= minMvp && r.minOn > 0 && r.on != null && r.on > 0).sort((a, b) => b.on - a.on)
+                .map(r => ({ ids: [String(r.id)], v: r.on, dato: sg(r.on), lab: "goles de diferencia por 70' con él", extras: [[`${r.gfOn}-${r.gcOn}`, 'con él en el campo'], [r.minOn + "'", 'minutos']], txt: 'Con él en el campo, el equipo saca la mejor diferencia de goles por cada 70 minutos.' }));
+        } catch (e) { console.error('Premios · amuleto:', e); P.amuleto = []; }
+        // 🔋 El incombustible: más minutos como jugador de campo (no cuentan los partidos de portero)
+        P.incomb = fila.map(x => ({ x, m: x.L.reduce((s, { h }) => s + (jugoDePortero(h) ? 0 : Number(h.mins) || 0), 0), pj: x.L.filter(({ h }) => !jugoDePortero(h)).length }))
+            .filter(r => r.m > 0).sort((a, b) => b.m - a.m)
+            .map(r => ({ ids: [r.x.id], v: r.m, dato: r.m + "'", lab: 'jugados', extras: [[String(r.pj), 'partidos'], [(Math.round(r.m / 60 * 10) / 10).toString().replace('.', ',') + ' h', 'en el campo']], txt: 'El que nunca se cansa: el jugador de campo que más minutos ha jugado.' }));
+        // 📅 El fijo: la racha más larga de partidos seguidos de titular en la vuelta (partidos sin titulares guardados se saltan)
+        P.fijo = fila.map(x => {
+            let cur = 0, max = 0, nt = 0;
+            ps.forEach(p => { if (!(Array.isArray(p.titulares) && p.titulares.length)) return; if (p.titulares.map(String).includes(x.id)) { cur++; nt++; if (cur > max) max = cur; } else cur = 0; });
+            return { x, max, nt };
+        }).filter(r => r.max >= 2).sort((a, b) => b.max - a.max || b.x.mins - a.x.mins)
+            .map(r => ({ ids: [r.x.id], v: r.max, dato: String(r.max), lab: 'partidos seguidos de titular', extras: [[String(r.nt), 'veces titular'], [r.x.mins + "'", 'minutos']], txt: 'El fijo del once: la racha más larga de partidos seguidos saliendo de titular.' }));
         return { P, ps, R0, posibles };
     }
     const LISTA = [
-        ['mvp', '⭐', 'MVP de la vuelta'], ['pichichi', '🎯', 'Pichichi'], ['asistente', '🅰️', 'El asistente'], ['muro', '🧤', 'El muro'],
+        ['mvp', '⭐', 'MVP de la vuelta'], ['pichichi', '⚽', 'Pichichi'], ['asistente', '🅰️', 'El asistente'],
+        ['franco', '🎯', 'Francotirador'], ['oport', '🦊', 'El oportunista'], ['golazo', '💥', 'El golazo de la vuelta'], ['muro', '🧤', 'El muro'],
         ['pegamento', '🧩', 'El pegamento'], ['grandes', '🔥', 'Se crece en los grandes'], ['mejorado', '📈', 'El que más ha mejorado'],
-        ['b2b', '📦', 'Rey del box-to-box'], ['comodin', '🔄', 'El comodín'], ['pareja', '🔗', 'La pareja de la vuelta'], ['partido', '🏟️', 'El partido de la vuelta']
+        ['revulsivo', '⚡', 'El revulsivo'], ['amuleto', '➕', 'El amuleto'], ['b2b', '📦', 'Rey del box-to-box'], ['comodin', '🔄', 'El comodín'],
+        ['incomb', '🔋', 'El incombustible'], ['fijo', '📅', 'El fijo'], ['pareja', '🔗', 'La pareja de la vuelta'], ['partido', '🏟️', 'El partido de la vuelta']
     ];
     function nomOpc(t, o) { return o.nom || o.ids.map(id => nombre(t, id)).join(' + '); }
     function golesConVideo(t, R0) {
@@ -24241,8 +24317,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             if (sel === 'no' || !L.length) return;
             const g = (sel != null ? L.find(o => nomOpc(t, o) === sel) : null) || L[0];
             const podio = L.filter(o => o !== g).slice(0, 2);
-            premios.push({ k, e, t: k === 'mvp' ? `MVP de la ${d.nombre}` : k === 'pareja' ? `La pareja de la ${d.nombre}` : k === 'partido' ? `El partido de la ${d.nombre}` : tit,
-                ids: g.ids.map(String), nombre: nomOpc(t, g), dato: g.dato, lab: g.lab, extras: g.extras || [], txt: g.txt || '', partido: g.partido != null ? g.partido : null,
+            premios.push({ k, e, t: k === 'mvp' ? `MVP de la ${d.nombre}` : k === 'pareja' ? `La pareja de la ${d.nombre}` : k === 'partido' ? `El partido de la ${d.nombre}` : k === 'golazo' ? `El golazo de la ${d.nombre}` : tit,
+                ids: g.ids.map(String), nombre: nomOpc(t, g), dato: g.dato, lab: g.lab, extras: g.extras || [], txt: g.txt || '', partido: g.partido != null ? g.partido : null, video: g.video || null,
                 podio: [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) });
         });
         let gol = null;
