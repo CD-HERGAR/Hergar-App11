@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v260</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v261</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -2375,6 +2375,11 @@
     </div></details>
     <details class="aj-sec" id="ajSecVoz"><summary><span class="aj-ic">🎙️</span><span class="aj-tx"><b>Control por voz</b><small>Probar los cascos · apodos de cada niño</small></span></summary><div class="aj-body">
         <div id="ajVozSlot"></div>
+    </div></details>
+    <details class="aj-sec" id="ajSecDlgPrueba"><summary><span class="aj-ic">🧪</span><span class="aj-tx"><b>Probar el delegado</b><small>Enlace de prueba · no sale en el visor</small></span></summary><div class="aj-body"><!-- v261 -->
+        <div style="font-size:11.5px; line-height:1.5; color:#94a3b8;">Crea un partido de prueba (HERGAR vs PRUEBA) con toda la plantilla disponible y manda el enlace del delegado en modo prueba: se puede apuntar todo, pero el visor de las familias no cambia y no toca el partido real del delegado. Sirve en cualquier momento, aunque no haya convocatoria.</div>
+        <button type="button" onclick="probarDelegado()" style="width:100%; margin-top:10px; min-height:46px; border-radius:12px; background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.45); color:#f5c26b; font-weight:800; font-size:13px;">🧪 Crear enlace de PRUEBA del delegado</button>
+        <div id="dlgPruebaStatus" style="font-size:11px; line-height:1.45; margin-top:6px; min-height:14px;"></div>
     </div></details>
     <details class="aj-sec" id="ajSecMant"><summary><span class="aj-ic">🧹</span><span class="aj-tx"><b>Mantenimiento</b><small>Fotos en GitHub · espacio · vídeos sin usar · pantallas de análisis</small></span></summary><div class="aj-body">
         <div style="font-size:10.5px; line-height:1.45; color:#94a3b8;">Las fotos y los vídeos usan el token de GitHub de «Claves y conexiones».</div>
@@ -12361,11 +12366,51 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 <div style="font-size:11px; color:#64748b; word-break:break-all; margin-top:4px;">${ltEsc(url)}</div>
             </div>
             <a href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" style="display:block; margin-top:12px; text-align:center; background:#25d366; color:#fff; text-decoration:none; padding:13px; border-radius:12px; font-weight:800; font-size:14px;">📲 Mandar por WhatsApp</a>
-            <a href="https://wa.me/?text=${encodeURIComponent(`🧪 PRUEBA (no sale en el visor) · HERGAR vs ${rival}:\n${url}&prueba=1\n\nCódigo: ${cfg.pin}`)}" target="_blank" style="display:block; margin-top:8px; text-align:center; background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.45); color:#f5c26b; text-decoration:none; padding:11px; border-radius:12px; font-weight:800; font-size:13px;">🧪 Mandar enlace de PRUEBA (no sale en el visor)</a>
+            <!-- v261: el enlace de prueba está ahora en Ajustes → 🧪 Probar el delegado -->
             <div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Si cambias la convocatoria o el once antes del partido, vuelve a pulsar «Pasar al delegado»: se actualiza con el mismo enlace y código. En el campo, el delegado también puede quitar a quien no venga y convocar a cualquier niño de la plantilla. Después del partido, pulsa «📥 Partido del delegado» en la pantalla de partido.</div>
             <button onclick="dlgCerrar()" style="margin-top:12px; width:100%; min-height:46px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#e2e8f0; font-weight:700;">Cerrar</button>`);
     }
     window.pasarAlDelegado = pasarAlDelegado;
+
+    // v261 · Ajustes → 🧪 Probar el delegado: partido de prueba aparte (otro código), con la plantilla disponible y sin once.
+    // El enlace lleva &prueba=1: el delegado no cambia lastMatchCode, así que el visor de las familias no se entera.
+    async function probarDelegado() {
+        const st = document.getElementById('dlgPruebaStatus');
+        const pon = (t, c) => { if (st) { st.textContent = t; st.style.color = c || '#94a3b8'; } };
+        if (!window.__hergarFirebaseSet) { pon('La conexión con la nube aún no está lista. Espera unos segundos y vuelve a pulsar.', '#ff6b7a'); return; }
+        const conv = Object.values(playersData).filter(p => p && p.id != null && !p.invitado && estadoDe(p) === 'disponible')
+            .sort((a, b) => (a.dorsal || 99) - (b.dorsal || 99)).map(p => ({ id: p.id, name: p.name || '', dorsal: p.dorsal == null ? '' : p.dorsal }));
+        if (!conv.length) { pon('No hay niños disponibles en la plantilla.', '#ff6b7a'); return; }
+        pon('Preparando la prueba en la nube…');
+        const cfg = { code: generarCodigoPartido(), pin: String(1000 + Math.floor(Math.random() * 9000)) };
+        const rival = 'PRUEBA', form = document.getElementById('formationSelector')?.value || '4-2-3-1';
+        const jug = {};
+        conv.forEach(p => { jug[p.id] = { name: p.name, dorsal: p.dorsal, enCampo: false, enBanquillo: true, esPortero: false, minutos: 0, goles: 0, asistencias: 0, impacto: 0, impactoPond: 0 }; });
+        const payload = {
+            secret: HERGAR_LIVE_SECRET, actualizado: Date.now(), rival, golesLocal: 0, golesRival: 0, minuto: 0, parte: 1,
+            matchRunning: false, matchFinished: false, previa: true, prueba: true, formacion: form,
+            onFieldIds: [], benchIds: conv.map(p => p.id), jugadores: jug, eventos: [],
+            delegado: { v: 1, pin: cfg.pin, rival, fecha: '', hora: '', campo: '', formacion: form, once: [], convocados: conv, plantilla: plantillaDelegado(), creado: Date.now(), prueba: true }
+        };
+        const res = await window.__hergarFirebaseSet('matches/' + cfg.code, payload);
+        if (!res || !res.ok) { pon('❌ No se pudo preparar en la nube: ' + ((res && res.error) || 'error desconocido'), '#ff6b7a'); return; }
+        pon('');
+        const url = `${DLG_URL}?m=${cfg.code}&prueba=1`;
+        const texto = `🧪 PRUEBA del delegado (no sale en el visor):\n${url}\n\nCódigo: ${cfg.pin}`;
+        dlgModal(`
+            <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:#f5c26b;">🧪 Prueba del delegado lista</div>
+            <div style="color:#94a3b8; margin:4px 0 12px;">HERGAR vs PRUEBA · ${conv.length} niños · sin alineación: la hace el delegado · no sale en el visor</div>
+            <div style="background:#0b1220; border:1px solid rgba(245,166,35,.3); border-radius:12px; padding:12px; text-align:center;">
+                <div style="font-size:11px; color:#94a3b8;">CÓDIGO DE LA PRUEBA</div>
+                <div style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:34px; letter-spacing:8px; color:#fff;">${cfg.pin}</div>
+                <div style="font-size:11px; color:#64748b; word-break:break-all; margin-top:4px;">${ltEsc(url)}</div>
+            </div>
+            <a href="${ltEsc(url)}" target="_blank" style="display:block; margin-top:12px; text-align:center; background:rgba(245,166,35,.12); border:1px solid rgba(245,166,35,.45); color:#f5c26b; text-decoration:none; padding:12px; border-radius:12px; font-weight:800; font-size:14px;">▶ Abrirla yo en este móvil</a>
+            <a href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" style="display:block; margin-top:8px; text-align:center; background:#25d366; color:#fff; text-decoration:none; padding:12px; border-radius:12px; font-weight:800; font-size:14px;">📲 Mandar por WhatsApp</a>
+            <div style="font-size:11.5px; color:#94a3b8; margin-top:10px;">Cada vez que pulses «Crear enlace de PRUEBA» sale un partido de prueba nuevo, con otro código. El partido real del delegado («Pasar al delegado» en Convocatoria) no se toca.</div>
+            <button onclick="dlgCerrar()" style="margin-top:12px; width:100%; min-height:46px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:transparent; color:#e2e8f0; font-weight:700;">Cerrar</button>`);
+    }
+    window.probarDelegado = probarDelegado;
 
     // Aplica un suceso del delegado con las mismas funciones que en directo
     function dlgAplicar(e) {
