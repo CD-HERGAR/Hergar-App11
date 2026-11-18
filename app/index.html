@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v259</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v260</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -24666,18 +24666,29 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 <div class="vis-nota">Cada móvil cuenta como estaba la última vez que entró. Si muchos no instalan, toca explicar cómo; si no activan los avisos, recordarlo en el grupo.</div>
             </div>`;
     }
-    function bloqueMiHijo(U) {
+    let vMh = '30'; // v260: «Mi hijo» de cada niño — '30' (últimos 30 días), 'hoy', 'ayer' o un día 'AAAA-MM-DD'
+    window.visMh = (k) => { vMh = k; render(); };
+    function bloqueMiHijo(U, dias, hoy) {
         const N = ninos(), cnt = {}; let conDato = 0, sinSaber = 0;
-        U.ult.forEach(r => { if (r.mhi) { cnt[r.mhi] = (cnt[r.mhi] || 0) + 1; conDato++; } else if (r.mh) sinSaber++; });
-        let h = `<div class="vis-card"><div class="vis-tit">«Mi hijo» de cada niño <small>· móviles que lo tienen elegido</small></div>`;
-        if (!conDato) return h + sinDatos268('Aún no se sabe qué niño tiene elegido cada móvil.') + '</div>';
+        const ayer = masDias(hoy, -1);
+        const dia = vMh === 'hoy' ? hoy : vMh === 'ayer' ? ayer : /^\d{4}-\d{2}-\d{2}$/.test(vMh) ? vMh : null;
+        const regs = dia ? Object.values((dias && dias[dia]) || {}).filter(r => r && typeof r === 'object') : U.ult;
+        regs.forEach(r => { if (r.mhi) { cnt[r.mhi] = (cnt[r.mhi] || 0) + 1; conDato++; } else if (r.mh) sinSaber++; });
+        // chips: hoy, ayer, el día marcado en el gráfico (si es otro) y los 30 días
+        const selDia = vSel && vModo === '14' && /^\d{4}-\d{2}-\d{2}$/.test(vSel) && vSel !== hoy && vSel !== ayer ? vSel : null;
+        const chips = [['hoy', 'Hoy'], ['ayer', 'Ayer']].concat(selDia ? [[selDia, '📅 ' + fechaCorta(selDia)]] : []).concat(dia && dia !== hoy && dia !== ayer && dia !== selDia ? [[dia, '📅 ' + fechaCorta(dia)]] : []).concat([['30', '30 días']]);
+        let h = `<div class="vis-card"><div class="vis-tit">«Mi hijo» de cada niño <small>· ${dia ? 'móviles que entraron ' + (dia === hoy ? 'hoy' : dia === ayer ? 'ayer' : 'el ' + esc(fechaCorta(dia))) : 'móviles que lo tienen elegido'}</small></div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;">${chips.map(([k, t]) => `<button type="button" class="vis-chip${vMh === k || (k === dia && vMh !== 'hoy' && vMh !== 'ayer' && vMh !== '30') ? ' on' : ''}" onclick="visMh('${k}')">${esc(t)}</button>`).join('')}</div>`;
+        if (!conDato) return h + sinDatos268(dia ? 'Ese día no entró nadie con «Mi hijo» elegido (o aún no se sabía qué niño).' : 'Aún no se sabe qué niño tiene elegido cada móvil.') + '</div>';
         const lista = Object.keys(cnt).map(k => ({ k, n: cnt[k], j: N[k] || { name: '¿?', dorsal: null } })).sort((a, b) => b.n - a.n || String(a.j.name).localeCompare(b.j.name));
         const max = Math.max(...lista.map(x => x.n));
         h += lista.map(x => `<div class="vis-nino">${dorsalHTML(x.j)}<div>${esc(x.j.name)}</div>${puntos(x.n, Math.max(4, max), '#f5a623')}<b style="text-align:right; font-family:'Montserrat',sans-serif; font-weight:900;">${x.n}</b></div>`).join('');
-        const huecos = Object.values(N).filter(j => j.pl && !cnt[j.k]).sort((a, b) => (Number(a.dorsal) || 99) - (Number(b.dorsal) || 99));
-        if (huecos.length) h += `<div class="vis-tit" style="font-size:12.5px; color:#f5a623; margin-top:4px;">Nadie lo tiene elegido todavía</div><div class="vis-hueco">${huecos.map(j => `<span>${j.dorsal != null && j.dorsal !== '' ? esc(j.dorsal) + ' · ' : ''}${esc(j.name)}</span>`).join('')}</div>`;
+        if (!dia) {
+            const huecos = Object.values(N).filter(j => j.pl && !cnt[j.k]).sort((a, b) => (Number(a.dorsal) || 99) - (Number(b.dorsal) || 99));
+            if (huecos.length) h += `<div class="vis-tit" style="font-size:12.5px; color:#f5a623; margin-top:4px;">Nadie lo tiene elegido todavía</div><div class="vis-hueco">${huecos.map(j => `<span>${j.dorsal != null && j.dorsal !== '' ? esc(j.dorsal) + ' · ' : ''}${esc(j.name)}</span>`).join('')}</div>`;
+        }
         if (sinSaber) h += `<div class="vis-nota">Además, ${pl(sinSaber, 'móvil tiene', 'móviles tienen')} niño elegido pero aún no ha${sinSaber === 1 ? '' : 'n'} entrado con el visor nuevo, así que no se sabe cuál.</div>`;
-        return h + `<div class="vis-nota">Pista de qué familias aún no usan el visor (o lo miran sin elegir niño). Cada móvil cuenta una vez, con el último niño que eligió en los últimos 30 días. Solo lo ves tú.</div></div>`;
+        return h + `<div class="vis-nota">${dia ? `Cada móvil cuenta una vez ese día (${conDato} con niño elegido). Para ver otro día, toca su barra en el gráfico de arriba.` : 'Pista de qué familias aún no usan el visor (o lo miran sin elegir niño). Cada móvil cuenta una vez, con el último niño que eligió en los últimos 30 días.'} Solo lo ves tú.</div></div>`;
     }
     function bloqueQuien(dias, hoy, fp) {
         const desde = masDias(hoy, -29), P = primeros(dias), pd = {};
@@ -24922,7 +24933,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             return;
         }
         const fp = partidosFechas(), U = ultimos30(dias, hoy);
-        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
+        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
         html += `<div style="border:1px dashed rgba(255,255,255,0.2); border-radius:14px; padding:12px 14px; font-size:12px; line-height:1.5; color:#cbd5e1;">Cuenta móviles, no personas: quien entra con el móvil y con la tableta cuenta dos veces, y si alguien borra los datos del navegador cuenta como nuevo. No se guarda ningún nombre de quien entra; desde la v268 del visor sí qué niño tiene en «Mi hijo» y de qué niños abre la ficha (solo lo ves tú).</div>` + noContarHTML();
         cont.innerHTML = html;
     }
@@ -24948,7 +24959,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     };
     window.cerrarVisitas = function () { document.getElementById('visModal').style.display = 'none'; };
     window.visModo = (m) => { vModo = m; vSel = null; render(); };
-    window.visSel = (k) => { vSel = vSel === k ? null : k; render(); };
+    window.visSel = (k) => { vSel = vSel === k ? null : k; if (vSel && vModo === '14' && /^\d{4}-\d{2}-\d{2}$/.test(vSel)) vMh = vSel; else if (/^\d{4}-/.test(vMh)) vMh = '30'; render(); }; // v260: «Mi hijo» sigue al día marcado
     window.visTodas = () => { vTodas = !vTodas; render(); };
     window.visCurva = (d) => { const n = (V && V.curvas ? V.curvas.length : 0); vCurva = Math.max(0, Math.min(n - 1, vCurva + d)); render(); };
     window.visCopiarReglas = (btn) => {
