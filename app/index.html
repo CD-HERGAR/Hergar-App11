@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v262</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v263</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -8639,7 +8639,14 @@
     const ONESIGNAL_KEY_STORAGE = 'hergar_F11_onesignalKey'; // v138: la clave de OneSignal se mete en Ajustes, no va en el código
     function oneSignalKey() { try { return (localStorage.getItem(ONESIGNAL_KEY_STORAGE) || '').trim(); } catch (e) { return ''; } }
 
-    async function notificarGolPush(jugadorNombre, texto) {
+    // v263 · 📸 aviso de gol con la foto del goleador (Android): icono redondo con su cara y, al desplegar, la foto grande.
+    // Solo si la foto está en GitHub (fotoUrl). Sin foto, gol en propia o sin goleador: el escudo del Hergar de icono.
+    function golPushFoto(jugadorId) {
+        const p = jugadorId != null ? playersData[jugadorId] : null;
+        const url = p && typeof p.fotoUrl === 'string' && /^https:\/\//.test(p.fotoUrl) ? p.fotoUrl : null;
+        return url ? { chrome_web_icon: url, firefox_icon: url, chrome_web_image: url } : { chrome_web_icon: LIVE_VIEWER_BASE_URL + 'icon-192.png', firefox_icon: LIVE_VIEWER_BASE_URL + 'icon-192.png' };
+    }
+    async function notificarGolPush(jugadorNombre, texto, jugadorId) {
         if (reproduciendoPrevio) return; // v129: los goles del tramo previo no mandan notificación
         if (!oneSignalKey()) return; // v138: sin clave de OneSignal en Ajustes no se manda el aviso
         const rivalName = document.getElementById("rivalNameInput")?.value || "RIVAL";
@@ -8650,13 +8657,13 @@
                     'Content-Type': 'application/json',
                     'Authorization': `Key ${oneSignalKey()}`
                 },
-                body: JSON.stringify({
+                body: JSON.stringify(Object.assign({
                     app_id: ONESIGNAL_APP_ID,
                     included_segments: ['Subscribed Users'],
                     headings: { en: '⚽ ¡GOOOL!' },
                     contents: { en: `${texto ? texto + ' ' : (jugadorNombre ? jugadorNombre + ' marca. ' : '')}HERGAR ${goalsLocal}-${goalsRival} ${rivalName}` },
                     url: matchShareCode ? `${LIVE_VIEWER_BASE_URL}?m=${matchShareCode}` : LIVE_VIEWER_BASE_URL
-                })
+                }, golPushFoto(jugadorId))) // v263
             });
         } catch (e) { console.error('Error notificando gol:', e); }
     }
@@ -10443,7 +10450,7 @@
                 tirosNuestrosPuerta++; tirosEnCampoV135('n');
                 goalsLocal++;
                 document.getElementById("scoreLocal").innerText = goalsLocal;
-                notificarGolPush(p.name); // ⚽ HERGAR LIVE: notificación push a los padres
+                notificarGolPush(p.name, '', p.id); // ⚽ HERGAR LIVE: notificación push a los padres (v263: con su foto)
                 let puntosBaseGol = 0.75;
                 if (lineaActual === 'defensa') puntosBaseGol += 1.25; 
                 else if (lineaActual === 'centrocampista') puntosBaseGol += 0.15; 
@@ -11979,7 +11986,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             tirosNuestrosPuerta++; tirosEnCampoV135('n');
             goalsLocal++;
             document.getElementById("scoreLocal").innerText = goalsLocal;
-            notificarGolPush(p.name); // ⚽ HERGAR LIVE: notificación push a los padres
+            notificarGolPush(p.name, '', p.id); // ⚽ HERGAR LIVE: notificación push a los padres (v263: con su foto)
             p.impacto += PENALTI_PUNTOS_MARCADO; // v105: sin descuento por goleada
             sumarGolEquipoEnCampo();
             registrarMomentum(min, 3); registrarMomentum(min, 3); // igual que un gol normal (case GOL + momentumMap)
@@ -23774,7 +23781,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         try { renderPlayers(); } catch (e) {}
         try { actualizarLiveStats(); } catch (e) {}
         try { if (typeof actualizarLiveMatchStatsBar === 'function') actualizarLiveMatchStatsBar(); } catch (e) {}
-        try { if (golDe) notificarGolPush(golDe.name); else if (golPropia) notificarGolPush('', 'Gol en propia puerta del rival.'); } catch (e) {}
+        try { if (golDe) notificarGolPush(golDe.name, '', golDe.id); else if (golPropia) notificarGolPush('', 'Gol en propia puerta del rival.'); } catch (e) {}
         if (substitutionTimeline.length === t0 && actionHistory.length === h0) return { msg: 'No se ha podido apuntar', mal: true };
         return { msg: textoLog(r), voz: textoVoz(r) };
     }
