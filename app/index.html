@@ -1707,7 +1707,7 @@
             <div id="statsTable"></div>
         </div>
     </div>
-    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v261</span></footer>
+    <footer>HERGAR F11 · Reglamento 70 Minutos<br><span style="font-size:9px;opacity:0.6;">© Javi García Blanco · CC BY-NC-SA 4.0 · Hergar Fut11 v262</span></footer>
 </div>
 
 <!-- MODAL DE TEMPORADA CON COMPARATIVA -->
@@ -4164,6 +4164,7 @@
         const maxJ = jug.length ? jug[jug.length - 1].jg : 0;
         const casa = eloCasaUsada(liga);
         const histH = [{ jg: 0, elo: ELO_BASE }];
+        const histT = [{ jg: 0, elo: elo.slice() }]; // v262: Elo de todos al final de cada jornada (como el visor; lo usa el MVP de la vuelta)
         jug.forEach(p => {
             const dr = elo[p.l] + casa - elo[p.v];
             const we = 1 / (1 + Math.pow(10, -dr / 400));
@@ -4173,8 +4174,10 @@
             elo[p.l] += d; elo[p.v] -= d;
             if (p.jg === maxJ) { ult[p.l] += d; ult[p.v] -= d; }
             if (p.l === D.H || p.v === D.H) histH.push({ jg: p.jg, elo: elo[D.H] });
+            const u = histT[histT.length - 1];
+            if (u.jg === p.jg) u.elo = elo.slice(); else histT.push({ jg: p.jg, elo: elo.slice() });
         });
-        return { equipos: liga.equipos.map((e, i) => ({ e, i, elo: elo[i], ult: ult[i] })).sort((a, b) => b.elo - a.elo), histH, jugados: jug.length, casa };
+        return { equipos: liga.equipos.map((e, i) => ({ e, i, elo: elo[i], ult: ult[i] })).sort((a, b) => b.elo - a.elo), histH, histT, jugados: jug.length, casa };
     }
     function suerteLiga(liga) {
         if (!liga || !liga.equipos || !liga.partidos || typeof pronPreparar !== 'function') return null;
@@ -24106,9 +24109,11 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
 
     function nombre(t, id) { const j = (t.jugadores || {})[id] || (typeof playersData !== 'undefined' ? playersData[id] : null); return j ? String(j.name || '').split(' ')[0] : '¿?'; }
     function hist(j, p) { return (j.historial || []).find(x => x.fecha === p.fecha && x.rival === p.rival) || null; }
-    function susAcc(h) { // «sus acciones» del niño en un partido (sin la parte de equipo); null si el partido no tiene detalle
+    function susAcc(h, p, j) { // «sus acciones» del niño en un partido (sin la parte de equipo); null si el partido no tiene detalle
         if (!h) return null;
         if (h.accImp !== undefined && h.accImp !== null) return Number(h.accImp) || 0;
+        const M = p && j && p.minutos && Number(p.minutos.v) === 1 && p.minutos.j ? p.minutos.j[String(j.id)] : null; // v262: como el visor (registro minuto a minuto)
+        if (M && M.a !== undefined) return String(M.a || '').split(',').reduce((s, x) => s + (Number(x) || 0), 0);
         if (!h.acc) return null;
         let s = (h.goles || 0) * PM_EVO_R.gol + (h.asistencias || 0) * PM_EVO_R.asist;
         ['dp', 'df', 'pal', 'pc', 'pa', 'reg', 'def', 'defC', 'par', 'parD', 'fj'].forEach(k => s += (Number(h.acc[k]) || 0) * PM_EVO_R[k]);
@@ -24137,20 +24142,52 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         const fila = js.map(j => {
             const L = ps.map(p => ({ p, h: hist(j, p) })).filter(x => x.h && (x.h.mins || 0) > 0);
             const mins = L.reduce((s, x) => s + (Number(x.h.mins) || 0), 0);
-            let sa = 0, saMin = 0; L.forEach(x => { const v = susAcc(x.h); if (v != null) { sa += v; saMin += Number(x.h.mins) || 0; } });
+            let sa = 0, saMin = 0; L.forEach(x => { const v = susAcc(x.h, x.p, j); if (v != null) { sa += v; saMin += Number(x.h.mins) || 0; } });
             const nMvp = ps.filter(p => p.mvpId != null && String(p.mvpId) === String(j.id)).length;
             const goles = L.reduce((s, x) => s + (Number(x.h.goles) || 0), 0), asis = L.reduce((s, x) => s + (Number(x.h.asistencias) || 0), 0);
             const par = L.reduce((s, x) => s + (x.h.acc ? (Number(x.h.acc.par) || 0) + (Number(x.h.acc.parD) || 0) : 0), 0);
             const nb = L.filter(x => b2b(x.h) >= 1).length, nbT = L.filter(x => b2b(x.h) === 2).length;
-            const per = L.map(x => ({ v: susAcc(x.h), m: Number(x.h.mins) || 0 })).filter(x => x.v != null && x.m >= 20).map(x => x.v / x.m * 70);
-            return { j, id: String(j.id), L, mins, sa, saMin, nMvp, goles, asis, par, nb, nbT, per, pj: L.length };
+            const per = L.map(x => ({ v: susAcc(x.h, x.p, j), m: Number(x.h.mins) || 0 })).filter(x => x.v != null && x.m >= 20).map(x => x.v / x.m * 70);
+            const LM = L.filter(x => !x.p.manual).map(x => ({ p: x.p, mins: Number(x.h.mins) || 0, v: susAcc(x.h, x.p, j) })).filter(x => x.v != null); // v262: para el MVP
+            return { j, id: String(j.id), L, LM, mins, sa, saMin, nMvp, goles, asis, par, nb, nbT, per, pj: L.length };
         }).filter(x => x.pj > 0);
         const top = (arr, f, filt, ord) => arr.filter(filt || (() => true)).map(x => Object.assign({ v: f(x) }, x)).filter(x => x.v != null).sort(ord || ((a, b) => b.v - a.v));
 
-        // ⭐ MVP: sus acciones por 70', con la mitad de los minutos posibles como mínimo; desempatan las veces MVP
-        const minMvp = Math.round(posibles * 0.5);
-        P.mvp = top(fila, x => x.saMin > 0 ? x.sa / x.saMin * 70 : null, x => x.saMin >= minMvp && x.saMin > 0, (a, b) => b.v - a.v || b.nMvp - a.nMvp)
-            .map(x => ({ ids: [x.id], v: x.v, dato: sg(x.v), lab: "sus acciones por 70'", extras: [[x.mins + "'", 'minutos'], [String(x.nMvp), x.nMvp === 1 ? 'vez MVP' : 'veces MVP']], txt: `El que más ha hecho con sus acciones por cada 70 minutos (goles, pases, regates, defensas…). Jugó ${x.pj} de ${ps.length} partidos.` }));
+        // ⭐ MVP (v262): el mismo cálculo que el «🏅 Ranking MVP» del visor (v285), solo con los partidos de la vuelta:
+        //   sus acciones individuales EN BRUTO (juegue lo que juegue, sin mínimo de minutos), cada partido multiplicado por lo bueno que era el rival:
+        //   jornadas 1-3 ×1 · 4-8 por la clasificación antes del partido (6 % por puesto) · desde la 9 por el Elo antes del partido (60 puntos = 10 %) · tope ×0,5 a ×1,5
+        const minMvp = Math.round(posibles * 0.5); // (lo sigue usando El amuleto)
+        try {
+            let E = null; try { E = eloLiga(liga); } catch (e) {}
+            const facC = new Map();
+            const factor = (pp) => {
+                if (facC.has(pp)) return facC.get(pp);
+                let f = 1;
+                try {
+                    const lp = pp.contexto && pp.contexto.ligaId != null && liga ? (liga.partidos || []).find(q => q.id === pp.contexto.ligaId) : null;
+                    const Rv = proRivalLiga(liga, pp), ri = Rv ? Rv.i : -1, hi = liga ? liga.equipos.findIndex(e => e.esHergar) : -1;
+                    const J = lp ? ligaNumJornadaGlobal(liga, lp) : null;
+                    if (J != null && ri >= 0 && hi >= 0) {
+                        if (J >= 9 && E && E.histT) {
+                            const h = E.histT.filter(x => x.jg < J).pop(), el = h ? h.elo : null;
+                            if (el) f = 1 + (el[ri] - el[hi]) / 600;
+                        } else if (J >= 4) {
+                            const tab = clasifFR({ equipos: liga.equipos, partidos: liga.partidos.filter(q => q.golesLocal != null && q.golesVisitante != null && ligaNumJornadaGlobal(liga, q) < J) });
+                            const pr = tab.find(x => x.id === liga.equipos[ri].id), ph = tab.find(x => x.id === liga.equipos[hi].id);
+                            if (pr && ph) f = 1 + (ph.pos - pr.pos) * 0.06;
+                        }
+                    }
+                    f = Math.max(0.5, Math.min(1.5, f));
+                } catch (e) { f = 1; }
+                facC.set(pp, f); return f;
+            };
+            P.mvp = fila.filter(x => x.LM.length).map(x => {
+                let tot = 0, bruto = 0, m = 0;
+                x.LM.forEach(r => { tot += r.v * factor(r.p); bruto += r.v; m += r.mins; });
+                return { x, tot, bruto, m };
+            }).sort((a, b) => b.tot - a.tot || b.x.nMvp - a.x.nMvp)
+                .map(r => ({ ids: [r.x.id], v: r.tot, dato: sg(r.tot), lab: 'puntos en el Ranking MVP', extras: [[r.x.mins + "'", 'minutos'], [String(r.x.nMvp), r.x.nMvp === 1 ? 'vez MVP' : 'veces MVP']], txt: `El que más ha sumado con sus acciones (goles, pases, regates, defensas…), que valen más contra los rivales más fuertes. Jugó ${r.x.pj} de ${ps.length} partidos.` }));
+        } catch (e) { console.error('Premios · MVP:', e); P.mvp = []; }
         // 🎯 Pichichi · 🅰️ El asistente · 🧤 El muro
         P.pichichi = top(fila, x => x.goles, x => x.goles > 0, (a, b) => b.v - a.v || a.mins - b.mins)
             .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'gol' : 'goles', extras: [[String(x.asis), x.asis === 1 ? 'asistencia' : 'asistencias'], [String(x.pj), 'partidos']], txt: `El máximo goleador de la ${d.nombre}.` }));
@@ -24271,10 +24308,13 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             P.amuleto = Object.values(MM).filter(r => r.minOn >= minMvp && r.minOn > 0 && r.on != null && r.on > 0).sort((a, b) => b.on - a.on)
                 .map(r => ({ ids: [String(r.id)], v: r.on, dato: sg(r.on), lab: "goles de diferencia por 70' con él", extras: [[`${r.gfOn}-${r.gcOn}`, 'con él en el campo'], [r.minOn + "'", 'minutos']], txt: 'Con él en el campo, el equipo saca la mejor diferencia de goles por cada 70 minutos.' }));
         } catch (e) { console.error('Premios · amuleto:', e); P.amuleto = []; }
-        // 🔋 El incombustible: más minutos como jugador de campo (no cuentan los partidos de portero)
-        P.incomb = fila.map(x => ({ x, m: x.L.reduce((s, { h }) => s + (jugoDePortero(h) ? 0 : Number(h.mins) || 0), 0), pj: x.L.filter(({ h }) => !jugoDePortero(h)).length }))
-            .filter(r => r.m > 0).sort((a, b) => b.m - a.m)
-            .map(r => ({ ids: [r.x.id], v: r.m, dato: r.m + "'", lab: 'jugados', extras: [[String(r.pj), 'partidos'], [(Math.round(r.m / 60 * 10) / 10).toString().replace('.', ',') + ' h', 'en el campo']], txt: 'El que nunca se cansa: el jugador de campo que más minutos ha jugado.' }));
+        // 🔋 El incombustible (v262): solo jugadores de campo (la mayoría de sus minutos de la vuelta fuera de la portería),
+        //   pero se cuentan TODOS sus minutos, también los que haya jugado de portero
+        P.incomb = fila.map(x => {
+            const por = x.L.reduce((s, { h }) => s + Math.min(Number(h.mins) || 0, minsPorteroPartido(h)), 0);
+            return { x, m: x.mins, por };
+        }).filter(r => r.m > 0 && r.por * 2 < r.m).sort((a, b) => b.m - a.m)
+            .map(r => ({ ids: [r.x.id], v: r.m, dato: r.m + "'", lab: 'jugados', extras: [[String(r.x.pj), 'partidos']].concat(r.por > 0 ? [[Math.round(r.por) + "'", 'de portero']] : [[(Math.round(r.m / 60 * 10) / 10).toString().replace('.', ',') + ' h', 'en el campo']]), txt: r.por > 0 ? `El que nunca se cansa: el jugador de campo que más minutos ha jugado (cuentan también sus ${Math.round(r.por)}' de portero).` : 'El que nunca se cansa: el jugador de campo que más minutos ha jugado.' }));
         // 📅 El fijo: la racha más larga de partidos seguidos de titular en la vuelta (partidos sin titulares guardados se saltan)
         P.fijo = fila.map(x => {
             let cur = 0, max = 0, nt = 0;
@@ -24340,7 +24380,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             <div class="pm-card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <select class="pm-sel" style="margin:0; flex:1; min-width:130px;" onchange="premiosVuelta(this.value)">${VUELTAS.map(([v, l]) => `<option value="${v}"${v === d.vuelta ? ' selected' : ''}>Premios de la ${l}</option>`).join('')}</select>
                 <label style="font-size:12px; color:#cbd5e1; display:flex; align-items:center; gap:6px;">desde la J<input type="number" min="1" max="${n}" value="${C.R0.desde + 1}" onchange="premiosDesde(this.value)" style="width:56px; min-height:38px; border-radius:9px; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,0.12); padding:0 6px;"></label>
-                <div style="width:100%; font-size:11px; color:#94a3b8;">Cuentan ${C.ps.length} ${C.ps.length === 1 ? 'partido' : 'partidos'} (J${C.R0.desde + 1}–J${C.R0.hasta}). Para el MVP hace falta jugar ${Math.round(C.posibles * 0.5)}' como poco (la mitad).</div>
+                <div style="width:100%; font-size:11px; color:#94a3b8;">Cuentan ${C.ps.length} ${C.ps.length === 1 ? 'partido' : 'partidos'} (J${C.R0.desde + 1}–J${C.R0.hasta}). El MVP sale del Ranking MVP (sus acciones, que valen más contra los rivales fuertes). Para El amuleto hace falta jugar ${Math.round(C.posibles * 0.5)}' como poco (la mitad).</div>
             </div>
             ${publicado ? `<div class="pm-card" style="border-color:rgba(46,213,115,.45); font-size:12px; color:#cbd5e1;">✅ Publicados en el visor el ${new Date(publicado.ts).toLocaleDateString('es-ES')}. Si los vuelves a publicar, se sustituyen. <button type="button" onclick="premiosQuitar()" style="margin-left:4px; background:none; border:none; color:#ff6b7a; font-weight:700; font-size:12px; text-decoration:underline;">Quitar del visor</button></div>` : ''}
             <div class="pm-card"><div class="pm-h">PREMIOS CALCULADOS</div>${filas}</div>
