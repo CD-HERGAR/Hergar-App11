@@ -24720,6 +24720,42 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 ${claves.length ? `<div class="vis-nota">Se cuenta desde el ${esc(fechaCorta(claves[0]))}.</div>` : ''}
             </div>`;
     }
+    // ════════ v264 · 🕐 A QUÉ HORA ENTRAN: las horas que apunta el visor (h/<hora>, desde la v237), en los últimos 30 días ════════
+    let vHora = 'todos'; // 'todos' · 'partido' (día de partido) · 'otros'
+    window.visHora = (k) => { vHora = k; render(); };
+    function bloqueHoras(dias, hoy, fp) {
+        const desde = masDias(hoy, -29), horas = new Array(24).fill(0), cuenta = { todos: 0, partido: 0, otros: 0 };
+        let nDias = 0;
+        Object.keys(dias).forEach(d => {
+            if (d < desde || d > hoy) return;
+            const esP = fp.has(d); cuenta.todos++; cuenta[esP ? 'partido' : 'otros']++;
+            if (vHora === 'partido' && !esP) return;
+            if (vHora === 'otros' && esP) return;
+            nDias++;
+            Object.values(dias[d] || {}).forEach(v => Object.keys((v && v.h) || {}).forEach(h => { const n = Number(h); if (n >= 0 && n < 24) horas[n]++; }));
+        });
+        const tot = horas.reduce((a, b) => a + b, 0), mx = Math.max(...horas), hTop = horas.indexOf(mx);
+        const chips = [['todos', 'Todos'], ['partido', 'Días de partido'], ['otros', 'Otros días']].filter(([k]) => k === 'todos' || cuenta[k]);
+        let h = `<div class="vis-card">
+                <div class="vis-tit">🕐 A qué hora entran <small>· últimos 30 días</small></div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">${chips.map(([k, t]) => `<button type="button" class="vis-chip${vHora === k ? ' on' : ''}" onclick="visHora('${k}')">${t}</button>`).join('')}</div>`;
+        if (!tot) return h + '<div class="vis-nota">Aún no hay entradas con hora en estos días.</div></div>';
+        const barras = horas.map((n, i) => `<div style="flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end;" aria-hidden="true"><i style="display:block; height:${n ? Math.max(3, Math.round(n / mx * 96)) : 1}px; background:${n === mx ? '#f5a623' : '#475569'}; border-radius:3px 3px 0 0;"></i></div>`).join('');
+        const FR = [['🌙 Madrugada', 0, 7], ['☀️ Mañana', 8, 13], ['🌤 Tarde', 14, 19], ['🌆 Noche', 20, 23]];
+        const fr = FR.map(([t, a, b]) => { let n = 0; for (let i = a; i <= b; i++) n += horas[i]; return { t, a, b, n }; });
+        const frTop = fr.reduce((x, y) => (y.n > x.n ? y : x));
+        // las 3 horas seguidas con más entradas
+        let v3 = -1, i3 = 0; for (let i = 0; i <= 21; i++) { const s = horas[i] + horas[i + 1] + horas[i + 2]; if (s > v3) { v3 = s; i3 = i; } }
+        const desc = horas.map((n, i) => `${i} h: ${n}`).filter((s, i) => horas[i]).join(', ');
+        h += `<div role="img" aria-label="Entradas por hora: ${esc(desc)}" style="display:flex; align-items:flex-end; gap:2px; height:100px; border-bottom:1px solid rgba(255,255,255,0.15);">${barras}</div>
+                <div style="display:flex; justify-content:space-between; font-size:9.5px; font-weight:700; color:#94a3b8; margin-top:-4px;"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>23 h</span></div>
+                <div class="vis-fila"><span>Hora punta</span><b>${hTop}:00 – ${hTop + 1 === 24 ? '0' : hTop + 1}:00 · ${pl(mx, 'entrada', 'entradas')}</b></div>
+                <div class="vis-fila"><span>Las 3 horas fuertes</span><b>de ${i3} a ${i3 + 3 === 24 ? 0 : i3 + 3} h · ${Math.round(v3 / tot * 100)} %</b></div>
+                ${fr.map(x => { const pc = Math.round(x.n / tot * 100); return `<div style="display:flex; flex-direction:column; gap:5px;"><div class="vis-fila"><span>${x.t} <small style="color:#64748b;">${x.a}–${x.b + 1 === 24 ? 0 : x.b + 1} h</small></span><b>${pc} %</b></div><div class="vis-barra"><i style="width:${pc}%; background:${x === frTop ? '#f5a623' : '#475569'};"></i></div></div>`; }).join('')}
+                <div class="vis-nota">${pl(tot, 'entrada', 'entradas')} en ${pl(nDias, 'día', 'días')}. Cada móvil cuenta una vez en cada hora en que entra (si entra a las 10 y a las 21, suma en las dos; si entra tres veces entre las 10 y las 11, solo una). Para ver un día suelto, toca su barra en el gráfico de arriba.</div>
+            </div>`;
+        return h;
+    }
     function ultimos30(dias, hoy) { // por móvil: su último registro · y todos los «móvil-día»
         const desde = masDias(hoy, -29), ult = {}, md = [], porMovil = {};
         Object.keys(dias).sort().forEach(d => { if (d < desde || d > hoy) return; Object.keys(dias[d] || {}).forEach(v => { const r = dias[d][v]; if (!r || typeof r !== 'object') return; ult[v] = r; md.push(r); (porMovil[v] = porMovil[v] || []).push(r); }); });
@@ -25025,7 +25061,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             return;
         }
         const fp = partidosFechas(), U = ultimos30(dias, hoy);
-        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
+        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueHoras(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
         html += `<div style="border:1px dashed rgba(255,255,255,0.2); border-radius:14px; padding:12px 14px; font-size:12px; line-height:1.5; color:#cbd5e1;">Cuenta móviles, no personas: quien entra con el móvil y con la tableta cuenta dos veces, y si alguien borra los datos del navegador cuenta como nuevo. No se guarda ningún nombre de quien entra; desde la v268 del visor sí qué niño tiene en «Mi hijo» y de qué niños abre la ficha (solo lo ves tú).</div>` + noContarHTML();
         cont.innerHTML = html;
     }
