@@ -23096,6 +23096,9 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         return { items, t };
     }
 
+    // v267 · LIMPIEZA: restos de la antigua página de pruebas (prueba.html, borrada el 16 nov 2026), guardados con el prefijo PRUEBA__
+    try { Object.keys(localStorage).filter(k => k.indexOf('PRUEBA__') === 0).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+
     // ── v206 · ESPACIO DE GUARDADO DE LA APP ──
     // El navegador deja unos 5 millones de caracteres por web. Se cuentan las claves y los valores guardados (2 bytes cada carácter).
     const ESPACIO_TOPE = 5 * 1024 * 1024;
