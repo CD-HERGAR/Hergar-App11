@@ -23110,9 +23110,15 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             const b = (k.length + v.length) * 2;
             total += b; lista.push({ k, b });
         }
-        const grupos = {};
-        lista.forEach(x => { const n = ESPACIO_NOMBRES[x.k] || (/liga/i.test(x.k) ? 'Liga' : 'Otros ajustes'); grupos[n] = (grupos[n] || 0) + x.b; });
-        const top = Object.keys(grupos).map(n => ({ n, b: grupos[n] })).sort((a, b) => b.b - a.b);
+        const grupos = {}, sueltos = [];
+        // v266: lo que no tiene nombre y ocupa 20 KB o más sale suelto, con su nombre interno, para saber qué es
+        lista.forEach(x => {
+            const n = ESPACIO_NOMBRES[x.k] || (/liga/i.test(x.k) ? 'Liga' : null);
+            if (n) { grupos[n] = (grupos[n] || 0) + x.b; return; }
+            if (x.b >= 20480) { sueltos.push({ n: x.k, b: x.b, clave: true }); return; }
+            grupos['Otros ajustes'] = (grupos['Otros ajustes'] || 0) + x.b;
+        });
+        const top = Object.keys(grupos).map(n => ({ n, b: grupos[n] })).concat(sueltos).sort((a, b) => b.b - a.b);
         const tope = ESPACIO_TOPE * 2;
         return { total, tope, pct: Math.min(100, Math.round(total / tope * 100)), top };
     }
@@ -23125,7 +23131,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;"><span style="font-family:'Montserrat',sans-serif; font-weight:800; font-size:12px; letter-spacing:1px; color:#e2e8f0;">💾 ESPACIO DE LA APP</span><span style="font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:${col};">${E.pct} %</span></div>
             <div style="height:10px; border-radius:5px; background:rgba(255,255,255,0.08); overflow:hidden;"><div style="height:100%; width:${Math.max(2, E.pct)}%; background:${col}; border-radius:5px;"></div></div>
             <div style="font-size:11.5px; color:#cbd5e1;">${fmtEsp(E.total)} de unos ${fmtEsp(E.tope)} que deja el móvil.</div>
-            <div style="display:flex; flex-direction:column; gap:3px;">${E.top.slice(0, 5).map(x => `<div style="display:flex; justify-content:space-between; font-size:11.5px; color:#94a3b8;"><span>${esc(x.n)}</span><span>${fmtEsp(x.b)}</span></div>`).join('')}</div>
+            <div style="display:flex; flex-direction:column; gap:3px;">${E.top.slice(0, 8).map(x => `<div style="display:flex; justify-content:space-between; gap:10px; font-size:11.5px; color:#94a3b8;">${x.clave ? `<span style="min-width:0; overflow-wrap:anywhere;"><span style="color:#f5a623;">🔎 Sin identificar:</span> <span style="font-family:monospace; color:#e2e8f0;">${esc(x.n)}</span></span>` : `<span>${esc(x.n)}</span>`}<span style="white-space:nowrap;">${fmtEsp(x.b)}</span></div>`).join('')}</div>
             ${fallo ? `<div style="font-size:11.5px; line-height:1.45; color:#ff9da4;">⚠️ Hoy ha fallado algún guardado (${fallo.n} ${fallo.n === 1 ? 'vez' : 'veces'}, la última a las ${new Date(fallo.t).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}).</div>` : ''}
             <div style="font-size:10.5px; line-height:1.45; color:#64748b;">Si se acerca al 90 %: sube la copia a la nube, haz una copia completa y archiva temporadas antiguas. Las fotos de los niños y las temporadas anteriores son lo que más suele ocupar.</div>
         </div>`;
