@@ -24686,9 +24686,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             const mh = Math.max(...horas), hTop = horas.indexOf(mh);
             det = `<div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:8px;">
                     <div class="vis-fila"><span><b style="text-align:left;">${esc(fechaCorta(cs.k))}</b>${cs.partido ? ' · día de partido' : ''}</span><b>${pl(cs.n, 'móvil', 'móviles')}${cs.nu ? ` <span style="color:#2ed573;">(${cs.nu} ${cs.nu === 1 ? 'nuevo' : 'nuevos'})</span>` : ''}</b></div>
-                    ${mh > 0 ? `<div role="img" aria-label="Entradas por hora del día" style="display:flex; align-items:flex-end; gap:2px; height:44px;">${horas.map(n => `<i style="flex:1; display:block; height:${n ? Math.max(3, Math.round(n / mh * 44)) : 1}px; background:${n === mh ? '#f5a623' : '#475569'}; border-radius:2px 2px 0 0;"></i>`).join('')}</div>
-                    <div style="display:flex; justify-content:space-between; font-size:9.5px; font-weight:700; color:#94a3b8;"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>23 h</span></div>
-                    <div class="vis-nota">Cuando más gente entró: sobre las <b style="color:#fff;">${hTop} h</b> (${pl(mh, 'móvil', 'móviles')}).</div>` : '<div class="vis-nota">Sin visitas ese día.</div>'}
+                    ${mh > 0 ? `<div class="vis-nota">Cuando más gente entró: sobre las <b style="color:#fff;">${hTop} h</b> (${pl(mh, 'móvil', 'móviles')}). <a href="#visHorasCard" onclick="event.preventDefault(); visIrHoras();" style="color:#f5a623; font-weight:700;">Ver sus horas ›</a></div>` : '<div class="vis-nota">Sin visitas ese día.</div>'}
                 </div>`;
         } else if (cs) {
             det = `<div style="background:rgba(0,0,0,0.25); border-radius:12px; padding:10px 12px;"><div class="vis-fila"><span>Semana del <b>${esc(fechaCorta(cs.k))}</b></span><b>${pl(cs.n, 'móvil distinto', 'móviles distintos')}${cs.nu ? ` <span style="color:#2ed573;">(${cs.nu} ${cs.nu === 1 ? 'nuevo' : 'nuevos'})</span>` : ''}</b></div></div>`;
@@ -24724,22 +24722,26 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     let vHora = 'todos'; // 'todos' · 'partido' (día de partido) · 'otros'
     window.visHora = (k) => { vHora = k; render(); };
     function bloqueHoras(dias, hoy, fp) {
+        const dSel = vSel && vModo === '14' && /^\d{4}-\d{2}-\d{2}$/.test(vSel) ? vSel : null; // v265: el día tocado en el gráfico
+        if (vHora === 'dia' && !dSel) vHora = 'todos';
         const desde = masDias(hoy, -29), horas = new Array(24).fill(0), cuenta = { todos: 0, partido: 0, otros: 0 };
         let nDias = 0;
         Object.keys(dias).forEach(d => {
+            if (d >= desde && d <= hoy) { cuenta.todos++; cuenta[fp.has(d) ? 'partido' : 'otros']++; }
+            if (vHora === 'dia') { if (d === dSel) { nDias++; Object.values(dias[d] || {}).forEach(v => Object.keys((v && v.h) || {}).forEach(h => { const n = Number(h); if (n >= 0 && n < 24) horas[n]++; })); } return; }
             if (d < desde || d > hoy) return;
-            const esP = fp.has(d); cuenta.todos++; cuenta[esP ? 'partido' : 'otros']++;
+            const esP = fp.has(d);
             if (vHora === 'partido' && !esP) return;
             if (vHora === 'otros' && esP) return;
             nDias++;
             Object.values(dias[d] || {}).forEach(v => Object.keys((v && v.h) || {}).forEach(h => { const n = Number(h); if (n >= 0 && n < 24) horas[n]++; }));
         });
         const tot = horas.reduce((a, b) => a + b, 0), mx = Math.max(...horas), hTop = horas.indexOf(mx);
-        const chips = [['todos', 'Todos'], ['partido', 'Días de partido'], ['otros', 'Otros días']].filter(([k]) => k === 'todos' || cuenta[k]);
-        let h = `<div class="vis-card">
-                <div class="vis-tit">🕐 A qué hora entran <small>· últimos 30 días</small></div>
+        const chips = (dSel ? [['dia', '📅 ' + fechaCorta(dSel) + (fp.has(dSel) ? ' ⚽' : '')]] : []).concat([['todos', 'Todos'], ['partido', 'Días de partido'], ['otros', 'Otros días']].filter(([k]) => k === 'todos' || cuenta[k]));
+        let h = `<div class="vis-card" id="visHorasCard">
+                <div class="vis-tit">🕐 A qué hora entran <small>· ${vHora === 'dia' ? 'el ' + esc(fechaCorta(dSel)) + (fp.has(dSel) ? ', día de partido' : '') : 'últimos 30 días'}</small></div>
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">${chips.map(([k, t]) => `<button type="button" class="vis-chip${vHora === k ? ' on' : ''}" onclick="visHora('${k}')">${t}</button>`).join('')}</div>`;
-        if (!tot) return h + '<div class="vis-nota">Aún no hay entradas con hora en estos días.</div></div>';
+        if (!tot) return h + `<div class="vis-nota">${vHora === 'dia' ? 'Ese día no hay entradas con hora.' : 'Aún no hay entradas con hora en estos días.'}</div></div>`;
         const barras = horas.map((n, i) => `<div style="flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end;" aria-hidden="true"><i style="display:block; height:${n ? Math.max(3, Math.round(n / mx * 96)) : 1}px; background:${n === mx ? '#f5a623' : '#475569'}; border-radius:3px 3px 0 0;"></i></div>`).join('');
         const FR = [['🌙 Madrugada', 0, 7], ['☀️ Mañana', 8, 13], ['🌤 Tarde', 14, 19], ['🌆 Noche', 20, 23]];
         const fr = FR.map(([t, a, b]) => { let n = 0; for (let i = a; i <= b; i++) n += horas[i]; return { t, a, b, n }; });
@@ -24752,7 +24754,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 <div class="vis-fila"><span>Hora punta</span><b>${hTop}:00 – ${hTop + 1 === 24 ? '0' : hTop + 1}:00 · ${pl(mx, 'entrada', 'entradas')}</b></div>
                 <div class="vis-fila"><span>Las 3 horas fuertes</span><b>de ${i3} a ${i3 + 3 === 24 ? 0 : i3 + 3} h · ${Math.round(v3 / tot * 100)} %</b></div>
                 ${fr.map(x => { const pc = Math.round(x.n / tot * 100); return `<div style="display:flex; flex-direction:column; gap:5px;"><div class="vis-fila"><span>${x.t} <small style="color:#64748b;">${x.a}–${x.b + 1 === 24 ? 0 : x.b + 1} h</small></span><b>${pc} %</b></div><div class="vis-barra"><i style="width:${pc}%; background:${x === frTop ? '#f5a623' : '#475569'};"></i></div></div>`; }).join('')}
-                <div class="vis-nota">${pl(tot, 'entrada', 'entradas')} en ${pl(nDias, 'día', 'días')}. Cada móvil cuenta una vez en cada hora en que entra (si entra a las 10 y a las 21, suma en las dos; si entra tres veces entre las 10 y las 11, solo una). Para ver un día suelto, toca su barra en el gráfico de arriba.</div>
+                <div class="vis-nota">${vHora === 'dia' ? pl(tot, 'entrada', 'entradas') + ' ese día' : pl(tot, 'entrada', 'entradas') + ' en ' + pl(nDias, 'día', 'días')}. Cada móvil cuenta una vez en cada hora en que entra (si entra a las 10 y a las 21, suma en las dos; si entra tres veces entre las 10 y las 11, solo una).${vHora === 'dia' ? '' : ' Para ver un día suelto, toca su barra en el gráfico de arriba (con 14 días).'}</div>
             </div>`;
         return h;
     }
@@ -25087,7 +25089,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     };
     window.cerrarVisitas = function () { document.getElementById('visModal').style.display = 'none'; };
     window.visModo = (m) => { vModo = m; vSel = null; render(); };
-    window.visSel = (k) => { vSel = vSel === k ? null : k; if (vSel && vModo === '14' && /^\d{4}-\d{2}-\d{2}$/.test(vSel)) vMh = vSel; else if (/^\d{4}-/.test(vMh)) vMh = '30'; render(); }; // v260: «Mi hijo» sigue al día marcado
+    window.visSel = (k) => { vSel = vSel === k ? null : k; if (vSel && vModo === '14' && /^\d{4}-\d{2}-\d{2}$/.test(vSel)) { vMh = vSel; vHora = 'dia'; } else { if (/^\d{4}-/.test(vMh)) vMh = '30'; if (vHora === 'dia') vHora = 'todos'; } render(); }; // v260: «Mi hijo» sigue al día marcado · v265: y «A qué hora entran» también
+    window.visIrHoras = () => { try { const c = document.getElementById('visHorasCard'), m = document.getElementById('visModal'); if (c && m) m.scrollTo({ top: c.offsetTop - 10, behavior: 'smooth' }); } catch (e) {} }; // v260: «Mi hijo» sigue al día marcado
     window.visTodas = () => { vTodas = !vTodas; render(); };
     window.visCurva = (d) => { const n = (V && V.curvas ? V.curvas.length : 0); vCurva = Math.max(0, Math.min(n - 1, vCurva + d)); render(); };
     window.visCopiarReglas = (btn) => {
