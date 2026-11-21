@@ -12792,6 +12792,66 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         }
     }
 
+    // ── v269 · PARTIDO GUARDADO DOS VECES ──────────────────────────────────
+    // Pasó con el 0-0 vs C.RODRIGO (21 nov 2026): al guardar, el envío al visor fallaba por el punto del nombre y cortaba
+    // el guardado a medias; al volver a guardar entró otra vez. Se rehace el partido con el mismo motor de «Revisar apuntes
+    // del delegado» para saber exactamente lo que sumó una vez, y se resta. Solo sirve para partidos con apuntes guardados.
+    function partidoRepetidoAlFinal(t) {
+        const ps = (t && t.partidos) || [], n = ps.length;
+        if (n < 2) return false;
+        const a = ps[n - 2], b = ps[n - 1];
+        if (!a || !b || !b.dlg) return false;
+        return a.fecha === b.fecha && a.rival === b.rival && Number(a.golesLocal) === Number(b.golesLocal) && Number(a.golesRival) === Number(b.golesRival)
+            && a.duracion === b.duracion && (a.dlgCode || null) === (b.dlgCode || null);
+    }
+    window.quitarPartidoRepetido = function () {
+        if (matchRunning || (partidoEmpezado && !matchFinished)) { alert('Hay un partido en marcha en la pantalla de partido. Hazlo cuando acabe.'); return; }
+        const Tcur = getTemporada();
+        if (!partidoRepetidoAlFinal(Tcur)) { alert('No hay ningún partido repetido.'); return; }
+        const k = Tcur.partidos.length - 1, P = Tcur.partidos[k];
+        const D = rvCopia(P.dlg);
+        if (!D || !Array.isArray(D.ev) || !Array.isArray(D.onceInicial) || D.onceInicial.length !== 11 || D.onceInicial.some(id => !playersData[id]) || (D.conv || []).some(id => !playersData[id])) {
+            alert('No se pueden rehacer los apuntes de este partido, así que no puedo saber qué restar. No se ha tocado nada.'); return;
+        }
+        if (D.fin2 == null) D.fin2 = rvDur(P.duracion) || 4200;
+        if (D.fin1 == null) D.fin1 = 2100;
+        if (!confirm(`¿Quitar el partido repetido?\n\nHERGAR ${P.golesLocal}-${P.golesRival} ${P.rival} (${P.fecha})\n\nSe queda uno y se resta lo que sumó el otro a cada niño.`)) return;
+        let Tx, X;
+        try { rvConMotor(() => { Tx = rvCopia(Tcur); X = rvSimular(D, D.ev, { t: Tx, fecha: P.fecha, rival: P.rival }); }); }
+        catch (e) { console.error('v269:', e); alert('No se pudo rehacer el partido. No se ha tocado nada.\n\n' + ((e && e.message) || e)); return; }
+        if (!X || !X.partido || Number(X.partido.golesLocal) !== Number(P.golesLocal) || Number(X.partido.golesRival) !== Number(P.golesRival)) {
+            alert('Al rehacer el partido no sale el mismo resultado, así que no lo quito para no descuadrar nada. No se ha tocado nada.'); return;
+        }
+        const neg = (o) => { const r = {}; Object.keys(o).forEach(c => { r[c] = typeof o[c] === 'number' ? -o[c] : neg(o[c]); }); return r; };
+        const cuantos = (j) => ((j && j.historial) || []).filter(h => h && h.fecha === P.fecha && h.rival === P.rival).length;
+        const T = rvCopia(Tcur);
+        Object.keys(Tx.jugadores || {}).forEach(id => {
+            const jx = Tx.jugadores[id], jc = Tcur.jugadores[id], j = T.jugadores[id];
+            if (!jc || !j) return;
+            const d = rvDelta(jc, jx); // lo que suma este partido una vez
+            if (d) rvSumar(j, neg(d));
+            if (cuantos(jx) > cuantos(jc)) { const ih = rvHistUlt(j, P); if (ih >= 0) j.historial.splice(ih, 1); }
+            // racha de titular: la copia repetida la subió una vez más
+            if ((jx.rachaActualTitular || 0) === (jc.rachaActualTitular || 0) + 1 && (j.rachaActualTitular || 0) > 0) {
+                if ((j.rachaMaxTitular || 0) === j.rachaActualTitular) j.rachaMaxTitular = Math.max(0, j.rachaMaxTitular - 1);
+                j.rachaActualTitular--;
+            }
+            rvLimpiar(j, false);
+            if (!(j.historial || []).length && !(j.partidos > 0)) delete T.jugadores[id];
+        });
+        ['sinergias', 'zonasEquipo', 'zonasPorRival', 'convocatorias'].forEach(c => {
+            const d = rvDelta(Tcur[c] || {}, Tx[c] || {});
+            if (d) { if (!T[c]) T[c] = {}; rvSumar(T[c], neg(d)); rvLimpiar(T[c], c === 'sinergias'); }
+        });
+        T.partidos.splice(k, 1);
+        saveTemporada(T);
+        try { renderPartidos(); } catch (e) {}
+        publicarTemporadaFirebase(T).then(res => {
+            const roja = (X.partido.acta && JSON.stringify(X.partido.acta).indexOf('🟥') >= 0) || Object.values(Tx.jugadores || {}).some(j => { const h = (j.historial || [])[rvHistUlt(j, P)]; return h && h.acc && h.acc.ro; });
+            alert(`✅ Partido repetido quitado.${res && res.ok ? ' El visor ya está al día.' : '\n\n⚠️ No se pudo actualizar el visor: ' + ((res && res.error) || 'sin conexión') + '. Pulsa «🔄 Sincronizar temporada con el visor».'}\n\nMira en Convocatoria si algún niño sancionado ha cumplido un partido de más${roja ? ' (y la sanción de la roja de este partido)' : ''}: eso no se puede deshacer solo.`);
+        });
+    };
+
     // ── Diferencias entre dos temporadas (solo números) ──
     const RV_SALTAR = new Set(['rachaActualTitular', 'rachaMaxTitular', 'id', 'dorsal', 'regla']);
     function rvDelta(x, y) {
@@ -16206,7 +16266,11 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const resLabel={V:'VICTORIA',D:'DERROTA',E:'EMPATE'};
         const total = t.partidos.length;
         let snCtx = null; try { snCtx = snPreparar(t, getLiga()); } catch (e) { console.error('Suerte y nivel:', e); } // v153
-        document.getElementById('partidosContainer').innerHTML = [...t.partidos].reverse().map((p,i)=>{
+        const avisoRepetido = partidoRepetidoAlFinal(t) ? `<div style="background:rgba(255,71,87,.1); border:1px solid rgba(255,71,87,.45); border-radius:12px; padding:12px; margin-bottom:12px;">
+                <div style="color:#ff6b7a; font-weight:800; font-size:13px;">⚠️ El último partido está guardado dos veces</div>
+                <div style="color:#cbd5e1; font-size:11.5px; margin:4px 0 10px; line-height:1.45;">Se quita la copia repetida y se resta lo que sumó a cada niño (minutos, goles, impacto, convocatorias…). El otro se queda tal cual.</div>
+                <button onclick="quitarPartidoRepetido()" style="width:100%; min-height:44px; border-radius:10px; border:0; background:#b41438; color:#fff; font-weight:800; font-size:13px;">🗑 Quitar el partido repetido</button></div>` : ''; // v269
+        document.getElementById('partidosContainer').innerHTML = avisoRepetido + [...t.partidos].reverse().map((p,i)=>{
             const origIndex = total - 1 - i; // índice real en t.partidos (la lista se muestra invertida)
             return `
             <div class="partido-row">
