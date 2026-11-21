@@ -8507,7 +8507,21 @@
         if (esPartidoPruebaDelegado()) return; // v182
         const payload = payloadPartidoActual();
         window.__hergarFirebaseSet(`matches/${matchShareCode}`, payload);
+        if (delegadoMandaEnVisor()) return; // v272: el visor sigue en el partido del delegado hasta que lo cargues
         window.__hergarFirebaseSet('lastMatchCode', { secret: HERGAR_LIVE_SECRET, code: matchShareCode, actualizado: Date.now() });
+    }
+    // v272 · Mientras haya un partido pasado al delegado que aún no has cargado (de los últimos 4 días), la app no cambia
+    // el partido que sigue el visor: ni al abrirla, ni al guardar, ni al publicar la previa. Sí lo cambia si empiezas
+    // tú un partido en directo (INICIAR) o cargas el del delegado.
+    function delegadoMandaEnVisor() {
+        try {
+            const cfg = dlgLeer(DLG_KEY);
+            if (!cfg || !cfg.code || cfg.cargado || !cfg.ts) return false;
+            if (Date.now() - cfg.ts > 4 * 86400000) return false;
+            if (cfg.code === matchShareCode) return false;
+            if (partidoEmpezado && !matchFinished) return false; // partido en directo en esta app: manda la app
+            return true;
+        } catch (e) { return false; }
     }
     // v190: lo que lee el visor del partido de la pantalla (separado para poder rehacerlo al revisar un partido guardado)
     function payloadPartidoActual() {
@@ -12363,7 +12377,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             } else if (cfg.rival && cfg.rival !== rival) cfg = null; // otro partido: enlace nuevo
         }
         if (!cfg) cfg = { code: generarCodigoPartido(), pin: String(1000 + Math.floor(Math.random() * 9000)) };
-        cfg.rival = rival;
+        cfg.rival = rival; cfg.ts = Date.now(); delete cfg.cargado; // v272
         const form = document.getElementById('formationSelector')?.value || '4-2-3-1';
         const once = onFieldIds.length === 11 && onFieldIds.every(id => playersData[id] && playersData[id].convocado) ? onFieldIds.slice() : null;
         let hora = '', fecha = '', campo = '';
@@ -12592,6 +12606,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         catch (e) { console.error('Delegado:', e); try { ltRestaurar(backup); } catch (e2) { console.error(e2); } }
         finally { reproduciendoPrevio = false; }
         if (!ok) { alert('Algo ha fallado al cargar el partido del delegado. No se ha cambiado nada.'); return; }
+        try { const c2 = dlgLeer(DLG_KEY); if (c2 && c2.code === code && !st.prueba) { c2.cargado = true; localStorage.setItem(DLG_KEY, JSON.stringify(c2)); } } catch (e) {} // v272: ya cargado, la app vuelve a mandar en el visor
         localStorage.setItem(DLG_PEND_KEY, JSON.stringify({ code, fecha: st.fecha || null, prueba: !!st.prueba, st: dlgCompactar(st, d, conv) })); // v190: con los apuntes, para guardarlos con el partido
         // v189: la convocatoria de la previa queda como la dejó el delegado
         if (ccTxt && !st.prueba) {
@@ -13334,6 +13349,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             const r = await window.__hergarFirebaseGet('matches/' + code);
             const m = r && r.ok && r.val;
             if (!m || !m.matchFinished || m.previa) return ocultar(); // en la previa o en directo el visor no enseña «Último partido»
+            if (m.delegado && !m.delegado.prueba && !m.prueba) return ocultar(); // v272: es el partido del delegado, aún sin cargar: no es un error
             const igual = normRivalVisor(m.rival) === normRivalVisor(ult.rival) && Number(m.golesLocal) === Number(ult.golesLocal) && Number(m.golesRival) === Number(ult.golesRival);
             if (igual || partidoEmpezado || matchFinished) return ocultar();
             visorPartidoMalo = { code, rival: m.rival, gl: m.golesLocal, gr: m.golesRival };
