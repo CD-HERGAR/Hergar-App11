@@ -12648,7 +12648,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         sub: ['🔄', 'Cambio'], swap: ['↔', 'Cambio de puesto'], form: ['🏟️', 'Cambio de sistema']
     };
     const RV_JUG = ['penFG', 'penFP', 'penFF', 'gol', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'fj', 'am', 'ro'];
-    const RV_ANADIR = ['sub', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'am', 'ro', 'gol', 'golP'];
+    const RV_ANADIR = ['sub', 'tp', 'palo', 'tf', 'pc', 'pa', 'def', 'defC', 'reg', 'fa', 'faI', 'am', 'ro', 'gol', 'golP', 'penFG', 'penFP', 'penFF', 'penRG', 'penRP', 'penRF']; // v270: + penaltis (a favor con el niño que lo tira; del rival sin niño)
     let rv = null;
     const rvNorm = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     const rvNom = (id) => { const p = playersData[id]; return p ? `${p.dorsal != null ? p.dorsal + ' ' : ''}${(p.name || '').split(' ')[0]}` : '¿?'; };
