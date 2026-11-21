@@ -12489,6 +12489,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 break;
             }
         }
+        if (e.k === 'sub' || e.k === 'swap' || e.k === 'form' || e.k === 'ro' || e.k === 'am') { try { pizarraRegistrar(); } catch (err) {} } // v271: la pizarra de cada momento (para la química por tramos) también en los partidos del delegado
         selectedPlayerId = null; activeActionPlayerId = null; pendingAction = null;
     }
     function dlgTramo(evs, desde, hasta) {
@@ -12512,6 +12513,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         congelarAlineacionInicial();
         partidoEmpezado = true;
         matchRunning = false; matchStartTimestamp = null; accumulatedSeconds = 0; ultimoSegundoProcesado = 0;
+        pizarraLog = []; try { pizarraRegistrar(); } catch (e) {} // v271: la pizarra del once inicial, en el minuto 0
         dlgTramo(e1, 0, fin1);
         let fin = fin1;
         if (hay2) {
@@ -12970,6 +12972,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         Pn.resultado = Pn.golesLocal > Pn.golesRival ? 'V' : Pn.golesLocal < Pn.golesRival ? 'D' : 'E';
         if (yP.acta) { const liga = Pn.acta && Pn.acta.liga; Pn.acta = yP.acta; if (liga) Pn.acta.liga = liga; else delete Pn.acta.liga; }
         if (yP.minutos) Pn.minutos = yP.minutos;
+        if (Array.isArray(yP.pizarra) && yP.pizarra.length) Pn.pizarra = yP.pizarra; // v271: química por tramos (once inicial y final)
         // goles: si se ha tocado alguno, se rehacen y se les pasa lo apuntado después (vídeo, origen, sitio…)
         const firmaG = (evs) => JSON.stringify(evs.filter(e => e.k === 'gol' || e.k === 'golR' || e.k === 'golP' || e.k === 'penFG' || e.k === 'penRG').map(e => [e.k, e.p, e.t, e.j || null, e.a || null]));
         let golesCambian = false;
