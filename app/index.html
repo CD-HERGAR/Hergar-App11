@@ -1542,8 +1542,23 @@
         // Puente hacia el script clásico (no-módulo) del resto de la app
         // Devuelve {ok:true} o {ok:false, error:'...'} para poder mostrar el motivo real
         // de un fallo (p.ej. permisos de Firebase) en vez de que se pierda en la consola.
+        // v268 · Firebase no admite claves con . # $ / [ ] (p. ej. el rival «C.RODRIGO» en zonasPorRival):
+        // antes de enviar se cambian esos caracteres por «_» (solo en lo que viaja, lo guardado en el móvil no cambia).
+        // Y un fallo al validar (que Firebase lanza en el acto) también vuelve como {ok:false} en vez de perderse.
+        const fbClaveMala = /[.#$\/\[\]]/;
+        const fbLimpiar = (v) => {
+            if (Array.isArray(v)) return v.map(fbLimpiar);
+            if (!v || typeof v !== 'object') return v;
+            const o = {};
+            Object.keys(v).forEach(k => {
+                let kk = k;
+                if (k === '' || fbClaveMala.test(k)) { kk = (k.replace(/[.#$\/\[\]]/g, '_') || '_'); while (Object.prototype.hasOwnProperty.call(v, kk) || Object.prototype.hasOwnProperty.call(o, kk)) kk += '_'; }
+                o[kk] = fbLimpiar(v[k]);
+            });
+            return o;
+        };
         window.__hergarFirebaseSet = (path, data) =>
-            set(ref(fbDb, path), data)
+            Promise.resolve().then(() => set(ref(fbDb, path), fbLimpiar(data)))
                 .then(() => ({ ok: true }))
                 .catch(err => { console.error("Firebase set error:", err); return { ok: false, error: (err && err.message) ? err.message : String(err) }; });
         // v109: lectura (para restaurar la copia de la nube)
