@@ -25177,10 +25177,11 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         h += `<div class="vis-card">
                 <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                     <button type="button" class="vis-chip" onclick="visCurva(1)" aria-label="Partido anterior" ${vCurva >= cs.length - 1 ? 'disabled style="opacity:.35;"' : ''}>‹</button>
-                    <div style="text-align:center; min-width:0;"><div class="vis-tit">Hergar ${c.gl || 0} – ${c.gr || 0} ${esc(c.rival || 'Rival')}</div><div class="vis-nota">${esc(fechaCorta(c.fecha))}${c.fin ? '' : ' · en juego o sin cerrar'}</div></div>
+                    <div style="text-align:center; min-width:0;"><div class="vis-tit">Hergar ${c.gl || 0} – ${c.gr || 0} ${esc(c.rival || 'Rival')}</div><div class="vis-nota">${esc(fechaCorta(c.fecha))}${c.rehecha ? ' · 📋 delegado' : (c.fin ? '' : ' · en juego o sin cerrar')}</div></div>
                     <button type="button" class="vis-chip" onclick="visCurva(-1)" aria-label="Partido siguiente" ${vCurva <= 0 ? 'disabled style="opacity:.35;"' : ''}>›</button>
                 </div>
                 ${svg}
+                ${c.rehecha ? '<div class="vis-nota" style="margin-top:6px;">Curva rehecha después (este partido no lo llevaba tu app): cuenta los minutos que cada móvil tuvo el visor a la vista, así que puede salir algo por debajo de lo real.</div>' : ''}
             </div>
             <div style="display:flex; gap:10px;">
                 <div class="vis-kpi"><div class="et">PICO</div><div class="n">${c.pico || 0}</div><div class="s">a la vez, min ${c.picoMin || 0}</div></div>
@@ -25220,6 +25221,45 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         html += `<div style="border:1px dashed rgba(255,255,255,0.2); border-radius:14px; padding:12px 14px; font-size:12px; line-height:1.5; color:#cbd5e1;">Cuenta móviles, no personas: quien entra con el móvil y con la tableta cuenta dos veces, y si alguien borra los datos del navegador cuenta como nuevo. No se guarda ningún nombre de quien entra; desde la v268 del visor sí qué niño tiene en «Mi hijo» y de qué niños abre la ficha (solo lo ves tú).</div>` + noContarHTML();
         cont.innerHTML = html;
     }
+    // v277 · Partidos sin curva (los que lleva el delegado: la app no está en directo y nadie cuenta la audiencia).
+    // Se rehace con los minutos que cada visor tuvo a la vista (dm, desde el visor v268): móviles por minuto, pico y cuántos lo siguieron.
+    function curvasRehechas(dias, curvas) {
+        const yaCodes = new Set(), yaFechas = new Set();
+        curvas.forEach(c => { yaCodes.add(String(c.code)); yaCodes.add(clave(c.code)); if (c.fecha) yaFechas.add(c.fecha); });
+        const P = {}; // código → { mins: {visor: Set}, vis: Set, fecha }
+        Object.keys(dias).forEach(d => Object.keys(dias[d] || {}).forEach(v => {
+            const r = dias[d][v]; if (!r || typeof r !== 'object') return;
+            const toca = (k) => { if (yaCodes.has(k)) return null; const p = P[k] = P[k] || { mins: {}, vis: new Set(), fecha: d }; if (d < p.fecha) p.fecha = d; return p; };
+            Object.keys(r.dm || {}).forEach(k => {
+                const p = toca(k); if (!p || !r.dm[k]) return;
+                Object.keys(r.dm[k]).forEach(m => { const n = Number(String(m).replace('m', '')); if (isNaN(n) || n < 0 || n > 90) return; (p.mins[v] = p.mins[v] || new Set()).add(n); });
+                p.vis.add(v);
+            });
+            Object.keys(r.d || {}).forEach(k => { if (P[k]) P[k].vis.add(v); });
+        }));
+        let ps = []; try { ps = getTemporada().partidos || []; } catch (e) {}
+        const fIso = (s) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s || '')); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : null; };
+        const out = [];
+        Object.keys(P).forEach(k => {
+            const p = P[k], ids = Object.keys(p.mins);
+            if (!ids.length || yaFechas.has(p.fecha)) return; // ese día ya hay una curva de verdad
+            const pt = ps.filter(x => fIso(x.fecha) === p.fecha).pop();
+            if (!pt && ids.length < 2) return; // un solo móvil y sin partido en la temporada: probablemente una prueba
+            const c = {}; let pico = 0, picoMin = 0;
+            const maxM = Math.max(...ids.map(v => Math.max(...p.mins[v])));
+            for (let m = 0; m <= maxM; m++) {
+                let n = 0; ids.forEach(v => { if (p.mins[v].has(m)) n++; });
+                if (n || m === 0) c['m' + m] = n;
+                if (n > pico) { pico = n; picoMin = m; }
+            }
+            const cur = { code: k, fecha: p.fecha, c, pico, picoMin, u: p.vis.size, fin: !!pt, rehecha: true, rival: pt ? (pt.rival || 'Rival') : 'Rival', gl: pt ? (Number(pt.golesLocal) || 0) : 0, gr: pt ? (Number(pt.golesRival) || 0) : 0 };
+            if (pt && Array.isArray(pt.goles)) cur.g = pt.goles.filter(g => g && g.min != null).map(g => ({ m: Number(g.min) || 0, e: g.equipo === 'rival' ? 'C' : 'F' }));
+            let hh = 12, mm = 0; try { if (pt && pt.horaInicio) [hh, mm] = String(pt.horaInicio).split(':').map(Number); } catch (e) {}
+            cur.t = new Date(`${p.fecha}T00:00:00`).getTime() + ((hh || 0) * 60 + (mm || 0) + 90) * 60000;
+            out.push(cur);
+        });
+        return out;
+    }
     async function cargar() {
         if (!window.__hergarFirebaseGet) { V = { error: 'Sin conexión con Firebase.' }; render(); return; }
         vCargando = true; render();
@@ -25229,7 +25269,9 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             else {
                 const cur = (b && b.ok && b.val && typeof b.val === 'object') ? b.val : {};
                 const curvas = Object.keys(cur).map(k => Object.assign({ code: k }, cur[k])).filter(c => c && c.fecha).sort((x, y) => (y.t || 0) - (x.t || 0));
-                V = { dias: (a.val && typeof a.val === 'object') ? a.val : {}, curvas };
+                const dias = (a.val && typeof a.val === 'object') ? a.val : {};
+                try { curvasRehechas(dias, curvas).forEach(c => curvas.push(c)); curvas.sort((x, y) => (y.t || 0) - (x.t || 0)); } catch (e) { console.warn('Curvas rehechas:', e); } // v277
+                V = { dias, curvas };
             }
         } catch (e) { V = { error: (e && e.message) || String(e) }; }
         vCargando = false; render();
