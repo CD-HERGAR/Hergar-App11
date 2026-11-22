@@ -24584,7 +24584,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         if (conAviso) {
             try {
                 await fetch('https://api.onesignal.com/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${oneSignalKey()}` },
-                    body: JSON.stringify({ app_id: ONESIGNAL_APP_ID, included_segments: ['Subscribed Users'], headings: { en: `🏆 Premios de la ${snap.nombre}` }, contents: { en: `Ya están los premios de la ${snap.nombre} del Hergar. ¡Entra a verlos!` }, url: LIVE_VIEWER_BASE_URL + '?premios=1' }) });
+                    body: JSON.stringify({ app_id: ONESIGNAL_APP_ID, included_segments: ['Subscribed Users'], headings: { en: `🏆 Premios de la ${snap.nombre}` }, contents: { en: `Ya están los premios de la ${snap.nombre} del Hergar.` } /* v274: sin «¡Entra a verlos!» */, url: LIVE_VIEWER_BASE_URL + '?premios=1' }) });
             } catch (e) { console.error('Aviso de premios:', e); }
         }
         render();
