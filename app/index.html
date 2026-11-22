@@ -24364,7 +24364,9 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             // 🔗 La pareja de la vuelta: la pareja de vecinos (en la pizarra) que más minutos ha jugado junta
             const vec = new Set();
             for (let k = Math.max(1, R0.desde); k < R0.hasta; k++) { const r = R.partidos[k]; if (r && r.tramos) r.tramos.forEach(tr => tr.enlaces.forEach(e => vec.add(qmClave(e.a, e.b)))); }
-            P.pareja = [...vec].map(c => ({ c, m: ven[c] || 0 })).filter(x => x.m > 0).sort((a, b) => b.m - a.m)
+            // v276: sin el portero (quien jugó la mayoría de sus minutos de la vuelta en la portería), ni de ganador ni en el podio
+            const porteros = new Set(fila.filter(x => x.mins > 0 && x.L.reduce((s, { h }) => s + Math.min(Number(h.mins) || 0, minsPorteroPartido(h)), 0) * 2 >= x.mins).map(x => String(x.id)));
+            P.pareja = [...vec].map(c => ({ c, m: ven[c] || 0 })).filter(x => x.m > 0 && !x.c.split('|').some(id => porteros.has(String(id)))).sort((a, b) => b.m - a.m)
                 .map(x => { const [a, b] = x.c.split('|'); return { ids: [a, b], v: x.m, dato: Math.round(x.m) + "'", lab: 'jugando juntos', extras: [], txt: 'La pareja de compañeros vecinos en el campo que más minutos ha compartido.' }; });
         } catch (e) { console.error('Premios · química:', e); P.pegamento = P.pegamento || []; P.pareja = P.pareja || []; }
         // 🔥 Se crece en los grandes (peso en el equipo contra los 4 rivales de más Elo, frente al resto)
@@ -24562,7 +24564,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             const podio = L.filter(o => o !== g).slice(0, 2);
             premios.push({ k, e, t: k === 'mvp' ? `MVP de la ${d.nombre}` : k === 'pareja' ? `La pareja de la ${d.nombre}` : k === 'partido' ? `El partido de la ${d.nombre}` : k === 'golazo' ? `El golazo de la ${d.nombre}` : tit,
                 ids: g.ids.map(String), nombre: nomOpc(t, g), dato: g.dato, lab: g.lab, extras: g.extras || [], txt: g.txt || '', partido: g.partido != null ? g.partido : null, video: g.video || null,
-                podio: k === 'pareja' ? [] : [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) }); // v275: la pareja, sin podio (salía el portero)
+                podio: [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) }); // v276: la pareja vuelve a tener podio (ya sin el portero)
         });
         let gol = null;
         if (ov.gol) {
