@@ -3936,6 +3936,20 @@
     }
     // Victorias añadidas
     function proNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(c\.?\s?d\.?|u\.?\s?d\.?|c\.?\s?f\.?|a\.?\s?d\.?|club|deportivo|futbol|f\.?c\.?)\b/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim(); }
+    // v331 · nombre corto (el del marcador) contra el nombre de la Liga: cada palabra del corto tiene que estar en el largo, en orden;
+    //  una inicial («C.») vale por cualquier palabra que empiece por esa letra y una palabra de 4+ letras vale por su comienzo
+    function proMismoEquipo(corto, largo) {
+        const pal = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+        const a = pal(corto), b = pal(largo).filter(w => !/^(cd|ud|cf|ad|sd|cdf|club|deportivo|futbol|fc)$/.test(w));
+        if (!a.length || !b.length || !a.some(w => w.length >= 3)) return false;
+        let j = 0;
+        for (const w of a) {
+            while (j < b.length && !(b[j] === w || (w.length === 1 && b[j][0] === w) || (w.length >= 4 && b[j].startsWith(w)))) j++;
+            if (j >= b.length) return false;
+            j++;
+        }
+        return true;
+    }
     function proRivalLiga(liga, p) {
         if (!liga || !liga.equipos) return { i: -1, casa: null };
         const H = liga.equipos.findIndex(e => e.esHergar);
@@ -3948,7 +3962,8 @@
             }
         }
         const nr = proNorm(p.rival);
-        const i = nr ? liga.equipos.findIndex((e, k) => k !== H && (proNorm(e.nombre) === nr || (proNorm(e.nombre).includes(nr) && nr.length >= 4) || (nr.includes(proNorm(e.nombre)) && proNorm(e.nombre).length >= 4))) : -1;
+        let i = nr ? liga.equipos.findIndex((e, k) => k !== H && (proNorm(e.nombre) === nr || (proNorm(e.nombre).includes(nr) && nr.length >= 4) || (nr.includes(proNorm(e.nombre)) && proNorm(e.nombre).length >= 4))) : -1;
+        if (i < 0 && nr) { const L = liga.equipos.map((e, k) => k !== H && (proMismoEquipo(p.rival, e.abrev) || proMismoEquipo(p.rival, e.nombre)) ? k : -1).filter(k => k >= 0); if (L.length === 1) i = L[0]; } // v331: «C.RODRIGO» = «Ciudad Rodrigo» (abreviaturas con inicial)
         return { i, casa: typeof c.casa === 'boolean' ? c.casa : null };
     }
     function wpaTemporada(t, liga) {
@@ -19512,7 +19527,8 @@ ${separador}`;
         const ab = (e) => e.abrev || abreviarNombreEquipoLiga(e.nombre);
         return eqs.find(e => ab(e) === n) || eqs.find(e => abreviarNombreEquipoLiga(e.nombre) === n)
             || eqs.find(e => ab(e).startsWith(n) || n.startsWith(ab(e)))
-            || eqs.find(e => abreviarNombreEquipoLiga(e.nombre).includes(n)) || null;
+            || eqs.find(e => abreviarNombreEquipoLiga(e.nombre).includes(n))
+            || (() => { const L = eqs.filter(e => proMismoEquipo(rival, e.abrev) || proMismoEquipo(rival, e.nombre)); return L.length === 1 ? L[0] : null; })() || null; // v331
     }
     function ctxFechaLigaPartido(p) {
         const iso = fechaLigaAISO(p.fechaPartido || '');
@@ -19536,8 +19552,13 @@ ${separador}`;
             const antes = JSON.stringify(p.contexto || null);
             const c = Object.assign({}, p.contexto || {});
             // partido de la Liga que le corresponde: mismo rival, fecha más cercana (±4 días) o, si no, por orden
-            const eq = ctxEquipoDeRival(liga, p.rival);
+            let eq = ctxEquipoDeRival(liga, p.rival);
             let lp = null;
+            // v331 · si el nombre no casa con ningún equipo (p. ej. el que puso el delegado), el partido de la Liga del Hergar de ese mismo día (±1)
+            if (!eq && h && d) {
+                const L = liga.partidos.filter(x => (x.local === h || x.visitante === h) && !usados.has(x.id)).filter(x => { const fx = ctxFechaLigaPartido(x); return fx && Math.abs(fx - d) / 86400000 <= 1; });
+                if (L.length === 1) { const rid = L[0].local === h ? L[0].visitante : L[0].local; eq = liga.equipos.find(e => e.id === rid) || null; }
+            }
             if (eq && h) {
                 const cand = liga.partidos.filter(x => ((x.local === h && x.visitante === eq.id) || (x.local === eq.id && x.visitante === h)) && !usados.has(x.id))
                     .sort((a, b) => a.vuelta - b.vuelta || a.jornada - b.jornada);
