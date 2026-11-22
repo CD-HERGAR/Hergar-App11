@@ -15155,9 +15155,9 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const iso = String(f || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
         return iso ? +iso[1] * 10000 + +iso[2] * 100 + +iso[3] : 0;
     }
-    function calcularStatsPorteros(t) {
+    function calcularStatsPorteros(t, soloPs) { // v275: con soloPs (partidos de una vuelta) solo devuelve las rachas, sin tocar la temporada
         if (!t || !t.jugadores) return;
-        const orden = (t.partidos || []).map((p, i) => ({ p, i })).filter(x => x.p)
+        const orden = (soloPs || t.partidos || []).map((p, i) => ({ p, i })).filter(x => x.p)
             .sort((a, b) => (fechaOrdenPartido(a.p.fecha) - fechaOrdenPartido(b.p.fecha)) || (a.i - b.i));
         const acc = {}, parCache = {};
         const de = (id) => acc[id] || (acc[id] = { tiros: 0, encajados: 0, cur: 0, rec: 0, desde: null, partidos: 0 });
@@ -15205,6 +15205,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                 a.rec = Math.max(a.rec, a.cur);
             });
         });
+        if (soloPs) return acc; // v275
         Object.values(t.jugadores).forEach(j => {
             const a = acc[j.id];
             if (!a) { delete j.porteroStats; return; }
@@ -24347,8 +24348,11 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'gol' : 'goles', extras: [[String(x.asis), x.asis === 1 ? 'asistencia' : 'asistencias'], [String(x.pj), 'partidos']], txt: `El máximo goleador de la ${d.nombre}.` }));
         P.asistente = top(fila, x => x.asis, x => x.asis > 0, (a, b) => b.v - a.v || a.mins - b.mins)
             .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: x.v === 1 ? 'asistencia' : 'asistencias', extras: [[String(x.goles), x.goles === 1 ? 'gol' : 'goles'], [String(x.pj), 'partidos']], txt: 'El que más goles ha dado a sus compañeros.' }));
+        // v275 · El muro, con su racha más larga sin encajar en la vuelta (minutos seguidos de portero)
+        let rachasPor = {}; try { rachasPor = calcularStatsPorteros(t, ps) || {}; } catch (e) { console.error('Premios · racha portero:', e); }
         P.muro = top(fila, x => x.par, x => x.par > 0)
-            .map(x => ({ ids: [x.id], v: x.v, dato: String(x.v), lab: 'paradas', extras: [[x.mins + "'", 'minutos'], [String(x.pj), 'partidos']], txt: 'Bajo palos, el que más balones ha sacado.' }));
+            .map(x => { const rr = rachasPor[x.j.id] || rachasPor[x.id], rec = rr ? Math.round(rr.rec) : 0;
+                return { ids: [x.id], v: x.v, dato: String(x.v), lab: 'paradas', extras: (rec > 0 ? [[rec + "'", 'su racha más larga sin encajar']] : [[x.mins + "'", 'minutos']]).concat([[String(x.pj), 'partidos']]), txt: rec > 0 ? `Bajo palos, el que más balones ha sacado. Su mejor racha: ${rec} minutos seguidos sin encajar.` : 'Bajo palos, el que más balones ha sacado.' }; });
         // 🧩 El pegamento: con cuántos compañeros forma pareja rodada en toda la vuelta
         //  v233: por zona (pgParejas). v232: solo minutos como VECINOS en la pizarra (enlaces de la química); antes el portero salía rodado con todos
         try {
@@ -24558,7 +24562,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             const podio = L.filter(o => o !== g).slice(0, 2);
             premios.push({ k, e, t: k === 'mvp' ? `MVP de la ${d.nombre}` : k === 'pareja' ? `La pareja de la ${d.nombre}` : k === 'partido' ? `El partido de la ${d.nombre}` : k === 'golazo' ? `El golazo de la ${d.nombre}` : tit,
                 ids: g.ids.map(String), nombre: nomOpc(t, g), dato: g.dato, lab: g.lab, extras: g.extras || [], txt: g.txt || '', partido: g.partido != null ? g.partido : null, video: g.video || null,
-                podio: [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) });
+                podio: k === 'pareja' ? [] : [g].concat(podio).map(o => ({ nombre: nomOpc(t, o), dato: o.dato })) }); // v275: la pareja, sin podio (salía el portero)
         });
         let gol = null;
         if (ov.gol) {
