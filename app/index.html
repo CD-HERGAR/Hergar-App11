@@ -24361,13 +24361,14 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             const G = pgParejas(R, R0.desde, R0.hasta), ids = Object.keys(G.mv).filter(id => G.mv[id] > 0), soc = {}; // v233: por zona
             ids.forEach(id => { soc[id] = G.socios[id].length; });
             P.pegamento = ids.filter(id => soc[id] > 0).map(id => ({ ids: [id], v: soc[id], dato: String(soc[id]), lab: 'compañeros con los que está rodado', extras: [[mj[id] + "'", 'minutos']], txt: 'El que más une al equipo: el que más parejas rodadas forma con los compañeros que juegan a su lado.' })).sort((a, b) => b.v - a.v);
-            // 🔗 La pareja de la vuelta: de las parejas que han sido vecinas en la pizarra, la que más minutos ha jugado a la vez en el campo
-            const vec = new Set();
-            for (let k = Math.max(1, R0.desde); k < R0.hasta; k++) { const r = R.partidos[k]; if (r && r.tramos) r.tramos.forEach(tr => tr.enlaces.forEach(e => vec.add(qmClave(e.a, e.b)))); }
+            // 🔗 La pareja de la vuelta: la pareja de vecinos que más minutos ha jugado pegada en la pizarra
+            //  v279: minutos como vecinos (porVecinos, lo mismo que «Tu socio» del visor); antes eran los minutos a la vez en el campo
+            const pv = {};
+            for (let k = R0.desde; k < R0.hasta; k++) Object.entries((R.porVecinos && R.porVecinos[k]) || {}).forEach(([c, m]) => { pv[c] = (pv[c] || 0) + m; });
             // v276: sin el portero (quien jugó la mayoría de sus minutos de la vuelta en la portería), ni de ganador ni en el podio
             const porteros = new Set(fila.filter(x => x.mins > 0 && x.L.reduce((s, { h }) => s + Math.min(Number(h.mins) || 0, minsPorteroPartido(h)), 0) * 2 >= x.mins).map(x => String(x.id)));
-            P.pareja = [...vec].map(c => ({ c, m: ven[c] || 0 })).filter(x => x.m > 0 && !x.c.split('|').some(id => porteros.has(String(id)))).sort((a, b) => b.m - a.m)
-                .map(x => { const [a, b] = x.c.split('|'); return { ids: [a, b], v: x.m, dato: Math.round(x.m) + "'", lab: 'a la vez en el campo', extras: [], txt: 'La pareja de compañeros que más minutos ha jugado a la vez en el campo.' }; }); // v278: el texto dice lo que cuenta (minutos a la vez, no solo pegados en la pizarra)
+            P.pareja = Object.keys(pv).map(c => ({ c, m: pv[c] || 0 })).filter(x => x.m > 0 && !x.c.split('|').some(id => porteros.has(String(id)))).sort((a, b) => b.m - a.m)
+                .map(x => { const [a, b] = x.c.split('|'); return { ids: [a, b], v: x.m, dato: Math.round(x.m) + "'", lab: 'uno al lado del otro', extras: [], txt: 'La pareja de compañeros vecinos en el campo que más minutos ha jugado uno al lado del otro.' }; });
         } catch (e) { console.error('Premios · química:', e); P.pegamento = P.pegamento || []; P.pareja = P.pareja || []; }
         // 🔥 Se crece en los grandes (peso en el equipo contra los 4 rivales de más Elo, frente al resto)
         try {
