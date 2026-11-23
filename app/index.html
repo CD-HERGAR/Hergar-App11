@@ -8706,7 +8706,7 @@
                     included_segments: ['Subscribed Users'],
                     headings: { en: '⚽ ¡GOOOL!' },
                     contents: { en: `${texto ? texto + ' ' : (jugadorNombre ? jugadorNombre + ' marca. ' : '')}HERGAR ${goalsLocal}-${goalsRival} ${rivalName}` },
-                    url: matchShareCode ? `${LIVE_VIEWER_BASE_URL}?m=${matchShareCode}` : LIVE_VIEWER_BASE_URL
+                    url: matchShareCode ? `${LIVE_VIEWER_BASE_URL}?m=${matchShareCode}&n=1` : `${LIVE_VIEWER_BASE_URL}?n=1` /* v281: n=1 → el visor sabe que se entró tocando la notificación */
                 }, golPushFoto(jugadorId))) // v263
             });
         } catch (e) { console.error('Error notificando gol:', e); }
@@ -13674,7 +13674,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                     included_segments: ['Subscribed Users'],
                     headings: { en: '📋 Alineación HERGAR' },
                     contents: { en: `HERGAR vs ${rivalName}: ya puedes ver la alineación` },
-                    url: matchShareCode ? `${LIVE_VIEWER_BASE_URL}?m=${matchShareCode}` : LIVE_VIEWER_BASE_URL
+                    url: matchShareCode ? `${LIVE_VIEWER_BASE_URL}?m=${matchShareCode}&n=1` : `${LIVE_VIEWER_BASE_URL}?n=1` /* v281: n=1 → el visor sabe que se entró tocando la notificación */
                 })
             });
             return res.ok;
@@ -24961,6 +24961,78 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
     const puntos = (n, max, col) => `<div class="vis-pts" aria-hidden="true">${Array.from({ length: Math.min(max, 8) }, (_, i) => `<i style="background:${i < n ? col : 'rgba(255,255,255,0.1)'};"></i>`).join('')}${n > 8 ? '<span style="font-size:10px; color:#94a3b8; margin-left:2px;">+</span>' : ''}</div>`;
     const sinDatos268 = (txt) => `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">${txt} Empieza a contarse con el visor v268: irá apareciendo según entre la gente con el visor nuevo.</div>`;
 
+
+    // ════════ v281 · cómo se enganchan: nuevos y habituales, tipos de seguidor, cómo llegan y tiempo dentro ════════
+    const lunesDe = (d) => masDias(d, -((deIso(d).getDay() + 6) % 7));
+    function bloqueNuevos(dias, hoy) {
+        const P = primeros(dias), ini = Object.keys(dias).sort()[0];
+        const lun = lunesDe(hoy), sems = [];
+        for (let k = 3; k >= 0; k--) {
+            const a = masDias(lun, -7 * k), b = k === 0 ? hoy : masDias(a, 6);
+            if (b < ini) continue;
+            const vs = vidsDe(dias, a, b); let nu = 0, vu = 0;
+            vs.forEach(v => { if (P[v] >= a) nu++; else vu++; });
+            sems.push({ a, b, nu, vu, primera: a <= ini });
+        }
+        const max = Math.max(1, ...sems.map(x => x.nu + x.vu));
+        const viejos = Object.keys(P).filter(v => P[v] <= masDias(hoy, -7));
+        const vuelven = viejos.filter(v => { // ¿ha vuelto en las 2 últimas semanas, en un día distinto del primero?
+            for (let i = 0; i < 14; i++) { const d = masDias(hoy, -i); if (d !== P[v] && dias[d] && dias[d][v]) return true; } return false; }).length;
+        let h = `<div class="vis-sec">📈 CÓMO SE ENGANCHAN</div><div class="vis-card"><div class="vis-tit">🆕 Nuevos y habituales <small>· por semanas (de lunes a domingo)</small></div>`;
+        h += sems.map(x => `<div style="display:flex; flex-direction:column; gap:4px;"><div class="vis-fila"><span>${x.a === lun ? 'Esta semana' : 'Sem. del ' + esc(fechaCorta(x.a))}</span><b><span style="color:#2ed573;">${x.nu} nuevos</span> · <span style="color:#60a5fa;">${x.vu} vuelven</span></b></div>
+            <div class="vis-barra" style="display:flex;"><i style="width:${Math.round(x.vu / max * 100)}%; background:#60a5fa; border-radius:0;"></i><i style="width:${Math.round(x.nu / max * 100)}%; background:#2ed573; border-radius:0;"></i></div></div>`).join('');
+        if (viejos.length) h += `<div class="vis-fila" style="margin-top:4px;"><span>Repiten (de los que llegaron hace más de una semana, han vuelto en los últimos 14 días)</span><b>${Math.round(vuelven / viejos.length * 100)} %</b></div>`;
+        return h + `<div class="vis-nota">Nuevo = móvil que entra por primera vez esa semana; vuelven = ya había entrado antes. ${sems.some(x => x.primera) ? 'La primera semana con datos (desde el ' + esc(fechaCorta(ini)) + ') salen todos como nuevos.' : ''}</div></div>`;
+    }
+    function bloqueTipos(U, dias, hoy, fp) {
+        const ini = Object.keys(dias).sort()[0], desde = masDias(hoy, -29) > ini ? masDias(hoy, -29) : ini;
+        const nDiasVentana = Math.round((deIso(hoy) - deIso(desde)) / 86400000) + 1;
+        const esPartido = (d) => fp.has(d) || fp.has(masDias(d, -1)); // el día del partido y el siguiente
+        const T = { fiel: 0, partido: 0, ocasional: 0, una: 0 };
+        Object.keys(U.porMovil).forEach(v => {
+            const ds = []; Object.keys(dias).forEach(d => { if (d >= desde && d <= hoy && dias[d] && dias[d][v]) ds.push(d); });
+            const n = ds.length; if (!n) return;
+            if (n === 1) { T.una++; return; }
+            if (n >= Math.max(3, Math.ceil(nDiasVentana * 0.4))) { T.fiel++; return; }
+            const enP = ds.filter(esPartido).length;
+            if (enP / n >= 0.6) T.partido++; else T.ocasional++;
+        });
+        const tot = T.fiel + T.partido + T.ocasional + T.una;
+        return `<div class="vis-card"><div class="vis-tit">👥 Tipos de seguidor <small>· ${pl(tot, 'móvil', 'móviles')} en ${pl(nDiasVentana, 'día', 'días')}</small></div>
+            ${filaBarra('⭐ Fieles · entran casi un día de cada dos o más', T.fiel, tot, '#f5a623')}
+            ${filaBarra('⚽ De partido · sobre todo el día del partido o el siguiente', T.partido, tot, '#e11d48')}
+            ${filaBarra('🌙 Ocasionales · de vez en cuando', T.ocasional, tot, '#60a5fa')}
+            ${filaBarra('👋 Una sola vez', T.una, tot, '#475569')}
+            <div class="vis-nota">Fieles: han entrado al menos el 40 % de los días. De partido: 6 de cada 10 de sus días son día de partido o el siguiente. ${nDiasVentana < 30 ? 'Aún hay pocos días con datos, así que los grupos se irán asentando.' : ''}</div></div>`;
+    }
+    function bloqueLlegan(U) {
+        const C = { noti: 0, enlace: 0, app: 0, web: 0 }; let conDato = 0;
+        U.md.forEach(r => { if (!r.ll) return; conDato++; Object.keys(r.ll).forEach(k => { if (k in C) C[k]++; }); });
+        let h = `<div class="vis-card"><div class="vis-tit">📲 Cómo llegan <small>· en cuántos «móvil-día» se usó cada vía</small></div>`;
+        if (!conDato) return h + `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">Aún no hay datos. Empieza a contarse con el visor v334 y las notificaciones enviadas desde la app v281.</div></div>`;
+        const max = Math.max(...Object.values(C));
+        h += filaBarra('🔔 Tocando una notificación (gol, alineación, premios)', C.noti, max, '#2ed573')
+            + filaBarra('🔗 Por un enlace de partido (p. ej. de WhatsApp)', C.enlace, max, '#a78bfa')
+            + filaBarra('📱 Abriendo el visor instalado', C.app, max, '#e11d48')
+            + filaBarra('🌐 Desde el navegador', C.web, max, '#94a3b8');
+        return h + `<div class="vis-nota">${pl(conDato, 'móvil-día', 'móviles-día')} con dato en 30 días. Un móvil puede llegar por varias vías el mismo día. Las notificaciones enviadas antes de la app v281 cuentan como «enlace».</div></div>`;
+    }
+    function bloqueTiempo(U, dias, hoy, fp) {
+        const reg = []; Object.keys(dias).forEach(d => { if (d < masDias(hoy, -29) || d > hoy) return; Object.values(dias[d] || {}).forEach(r => { if (r && typeof r === 'object' && r.tm) reg.push({ d, r }); }); });
+        let h = `<div class="vis-card"><div class="vis-tit">⏱️ Tiempo dentro <small>· minutos con el visor a la vista</small></div>`;
+        if (!reg.length) return h + `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">Aún no hay datos. Empieza a contarse con el visor v334.</div></div>`;
+        const med = (L) => { const tm = L.reduce((s, x) => s + (Number(x.r.tm) || 0), 0), vs = L.reduce((s, x) => s + Math.max(1, Number(x.r.vs) || 1), 0); return { porVis: tm / vs, porDia: tm / L.length, n: L.length }; };
+        const esP = (d) => fp.has(d), A = med(reg), P = reg.filter(x => esP(x.d)), O = reg.filter(x => !esP(x.d));
+        const fmt = (m) => m < 1 ? 'menos de 1 min' : (m >= 10 ? Math.round(m) : Math.round(m * 10) / 10).toString().replace('.', ',') + ' min';
+        h += `<div style="display:flex; gap:10px;"><div class="vis-kpi"><div class="et">POR VISITA</div><div class="n">${fmt(A.porVis)}</div><div class="s">de media</div></div><div class="vis-kpi"><div class="et">POR MÓVIL Y DÍA</div><div class="n">${fmt(A.porDia)}</div><div class="s">sumando sus visitas</div></div></div>`;
+        if (P.length && O.length) { const mp = med(P), mo = med(O); h += `<div class="vis-fila"><span>⚽ Días de partido</span><b>${fmt(mp.porDia)} por móvil</b></div><div class="vis-fila"><span>📅 Resto de días</span><b>${fmt(mo.porDia)} por móvil</b></div>`; }
+        const TT = {}; let tTot = 0; reg.forEach(x => Object.entries(x.r.tt || {}).forEach(([k, m]) => { TT[k] = (TT[k] || 0) + (Number(m) || 0); tTot += Number(m) || 0; }));
+        if (tTot) {
+            const nom = Object.fromEntries(PESTANAS);
+            h += `<div class="vis-tit" style="font-size:12.5px; margin-top:4px;">Dónde pasan el tiempo</div>` + Object.keys(TT).sort((a, b) => TT[b] - TT[a]).map(k => filaBarra(esc(nom[k] || k) + ` <small style="color:#64748b;">${Math.round(TT[k] / tTot * 100)} %</small>`, Math.round(TT[k]), tTot, k === 'partido' ? '#e11d48' : k === 'mihijo' ? '#f5a623' : k === 'temporada' ? '#60a5fa' : k === 'liga' ? '#2ed573' : '#94a3b8')).join('');
+        }
+        return h + `<div class="vis-nota">Cuenta un minuto por cada minuto con el visor en pantalla (si bloquean el móvil o cambian de app, para). Una visita nueva empieza al abrir el visor o al volver tras más de media hora fuera. ${pl(reg.length, 'móvil-día', 'móviles-día')} con dato.</div></div>`;
+    }
     function bloqueEmbudo(U) {
         const tot = U.ult.length, c = (f) => U.ult.filter(f).length;
         const pasos = [[tot, 'Entran al visor', '#475569'], [c(r => r.mh), 'Eligen a su hijo en «Mi hijo»', '#f5a623'], [c(r => r.a), 'Lo tienen instalado como app', '#e11d48'], [c(r => r.n), 'Con avisos de gol', '#2ed573']];
@@ -25239,7 +25311,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             return;
         }
         const fp = partidosFechas(), U = ultimos30(dias, hoy);
-        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueHoras(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
+        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueHoras(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueNuevos(dias, hoy) + bloqueTipos(U, dias, hoy, fp) + bloqueLlegan(U) + bloqueTiempo(U, dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
         html += `<div style="border:1px dashed rgba(255,255,255,0.2); border-radius:14px; padding:12px 14px; font-size:12px; line-height:1.5; color:#cbd5e1;">Cuenta móviles, no personas: quien entra con el móvil y con la tableta cuenta dos veces, y si alguien borra los datos del navegador cuenta como nuevo. No se guarda ningún nombre de quien entra; desde la v268 del visor sí qué niño tiene en «Mi hijo» y de qué niños abre la ficha (solo lo ves tú).</div>` + noContarHTML();
         cont.innerHTML = html;
     }
