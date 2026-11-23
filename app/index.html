@@ -25006,7 +25006,8 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             <div class="vis-nota">Fieles: han entrado al menos el 40 % de los días. De partido: 6 de cada 10 de sus días son día de partido o el siguiente. ${nDiasVentana < 30 ? 'Aún hay pocos días con datos, así que los grupos se irán asentando.' : ''}</div></div>`;
     }
     // v282 · «Cómo llegan» y «Tiempo dentro» también de un día: hoy, ayer, el día tocado en el gráfico o los 30 días (las dos tarjetas a la vez)
-    let vVia = '30';
+    let vVia = '30', vTsTodo = false;
+    window.visTsTodo = () => { vTsTodo = !vTsTodo; render(); };
     window.visVia = (k) => { vVia = k; render(); };
     function viaDia(hoy) { const ayer = masDias(hoy, -1); return vVia === 'hoy' ? hoy : vVia === 'ayer' ? ayer : /^\d{4}-\d{2}-\d{2}$/.test(vVia) ? vVia : null; }
     function viaChips(hoy) {
@@ -25045,6 +25046,15 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         if (tTot) {
             const nom = Object.fromEntries(PESTANAS);
             h += `<div class="vis-tit" style="font-size:12.5px; margin-top:4px;">Dónde pasan el tiempo</div>` + Object.keys(TT).sort((a, b) => TT[b] - TT[a]).map(k => filaBarra(esc(nom[k] || k) + ` <small style="color:#64748b;">${Math.round(TT[k] / tTot * 100)} %</small>`, Math.round(TT[k]), tTot, k === 'partido' ? '#e11d48' : k === 'mihijo' ? '#f5a623' : k === 'temporada' ? '#60a5fa' : k === 'liga' ? '#2ed573' : '#94a3b8')).join('');
+        }
+        // v283 · dentro de las pestañas: apartados (subpestañas) y lo que se abre encima (visor v337)
+        const TS = {}; let sTot = 0; reg.forEach(x => Object.entries(x.r.ts || {}).forEach(([k, m]) => { TS[k] = (TS[k] || 0) + (Number(m) || 0); sTot += Number(m) || 0; }));
+        if (sTot) {
+            const EXTRA = { ficha: 'Ficha de un niño', alineacion: 'Alineación del partido', fichaEquipo: 'Ficha de un equipo', video: 'Vídeo de un gol', resumen: 'Resumen tipo tele' };
+            const L = Object.keys(TS).sort((a, b) => TS[b] - TS[a]), top = L.slice(0, vTsTodo ? L.length : 8);
+            h += `<div class="vis-tit" style="font-size:12.5px; margin-top:4px;">Dentro de las pestañas <small>· apartados y lo que se abre encima</small></div>`
+                + top.map(k => filaBarra(esc(EXTRA[k] || SECCIONES[k] || k) + ` <small style="color:#64748b;">${Math.round(TS[k] / sTot * 100)} %</small>`, Math.round(TS[k]), TS[L[0]], '#a78bfa')).join('')
+                + (L.length > 8 ? `<button type="button" class="vis-chip" onclick="visTsTodo()">${vTsTodo ? 'Ver menos' : 'Ver los ' + L.length}</button>` : '');
         }
         return h + `<div class="vis-nota">Cuenta un minuto por cada minuto con el visor en pantalla (si bloquean el móvil o cambian de app, para). Una visita nueva empieza al abrir el visor o al volver tras más de media hora fuera. ${pl(reg.length, 'móvil-día', 'móviles-día')} con dato.</div></div>`;
     }
