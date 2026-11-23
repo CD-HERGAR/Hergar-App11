@@ -25005,27 +25005,42 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             ${filaBarra('👋 Una sola vez', T.una, tot, '#475569')}
             <div class="vis-nota">Fieles: han entrado al menos el 40 % de los días. De partido: 6 de cada 10 de sus días son día de partido o el siguiente. ${nDiasVentana < 30 ? 'Aún hay pocos días con datos, así que los grupos se irán asentando.' : ''}</div></div>`;
     }
-    function bloqueLlegan(U) {
+    // v282 · «Cómo llegan» y «Tiempo dentro» también de un día: hoy, ayer, el día tocado en el gráfico o los 30 días (las dos tarjetas a la vez)
+    let vVia = '30';
+    window.visVia = (k) => { vVia = k; render(); };
+    function viaDia(hoy) { const ayer = masDias(hoy, -1); return vVia === 'hoy' ? hoy : vVia === 'ayer' ? ayer : /^\d{4}-\d{2}-\d{2}$/.test(vVia) ? vVia : null; }
+    function viaChips(hoy) {
+        const ayer = masDias(hoy, -1), dia = viaDia(hoy);
+        const selDia = vSel && vModo === '14' && /^\d{4}-\d{2}-\d{2}$/.test(vSel) && vSel !== hoy && vSel !== ayer ? vSel : null;
+        const L = [['hoy', 'Hoy'], ['ayer', 'Ayer']].concat(selDia ? [[selDia, '📅 ' + fechaCorta(selDia)]] : []).concat(dia && dia !== hoy && dia !== ayer && dia !== selDia ? [[dia, '📅 ' + fechaCorta(dia)]] : []).concat([['30', '30 días']]);
+        const on = (k) => vVia === k || (k === dia && vVia !== 'hoy' && vVia !== 'ayer' && vVia !== '30');
+        return `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;">${L.map(([k, t]) => `<button type="button" class="vis-chip${on(k) ? ' on' : ''}" onclick="visVia('${k}')">${esc(t)}</button>`).join('')}</div>`;
+    }
+    function viaTexto(hoy) { const d = viaDia(hoy); return !d ? 'en 30 días' : d === hoy ? 'hoy' : d === masDias(hoy, -1) ? 'ayer' : 'el ' + esc(fechaCorta(d)); }
+    function bloqueLlegan(U, dias, hoy) {
         const C = { noti: 0, enlace: 0, app: 0, web: 0 }; let conDato = 0;
-        U.md.forEach(r => { if (!r.ll) return; conDato++; Object.keys(r.ll).forEach(k => { if (k in C) C[k]++; }); });
-        let h = `<div class="vis-card"><div class="vis-tit">📲 Cómo llegan <small>· en cuántos «móvil-día» se usó cada vía</small></div>`;
-        if (!conDato) return h + `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">Aún no hay datos. Empieza a contarse con el visor v334 y las notificaciones enviadas desde la app v281.</div></div>`;
+        const dia = viaDia(hoy), regs = dia ? Object.values((dias && dias[dia]) || {}).filter(r => r && typeof r === 'object') : U.md;
+        regs.forEach(r => { if (!r.ll) return; conDato++; Object.keys(r.ll).forEach(k => { if (k in C) C[k]++; }); });
+        let h = `<div class="vis-card"><div class="vis-tit">📲 Cómo llegan <small>· ${dia ? 'móviles ' + viaTexto(hoy) : 'en cuántos «móvil-día» se usó cada vía'}</small></div>` + viaChips(hoy);
+        if (!conDato) return h + `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">${dia ? 'Ese día no hay datos de cómo llegaron.' : 'Aún no hay datos.'} Empieza a contarse con el visor v334 y las notificaciones enviadas desde la app v281.</div></div>`;
         const max = Math.max(...Object.values(C));
         h += filaBarra('🔔 Tocando una notificación (gol, alineación, premios)', C.noti, max, '#2ed573')
             + filaBarra('🔗 Por un enlace de partido (p. ej. de WhatsApp)', C.enlace, max, '#a78bfa')
             + filaBarra('📱 Abriendo el visor instalado', C.app, max, '#e11d48')
             + filaBarra('🌐 Desde el navegador', C.web, max, '#94a3b8');
-        return h + `<div class="vis-nota">${pl(conDato, 'móvil-día', 'móviles-día')} con dato en 30 días. Un móvil puede llegar por varias vías el mismo día. Las notificaciones enviadas antes de la app v281 cuentan como «enlace».</div></div>`;
+        return h + `<div class="vis-nota">${dia ? pl(conDato, 'móvil', 'móviles') + ' con dato ' + viaTexto(hoy) : pl(conDato, 'móvil-día', 'móviles-día') + ' con dato en 30 días'}. Un móvil puede llegar por varias vías el mismo día. Las notificaciones enviadas antes de la app v281 cuentan como «enlace».</div></div>`;
     }
     function bloqueTiempo(U, dias, hoy, fp) {
-        const reg = []; Object.keys(dias).forEach(d => { if (d < masDias(hoy, -29) || d > hoy) return; Object.values(dias[d] || {}).forEach(r => { if (r && typeof r === 'object' && r.tm) reg.push({ d, r }); }); });
-        let h = `<div class="vis-card"><div class="vis-tit">⏱️ Tiempo dentro <small>· minutos con el visor a la vista</small></div>`;
-        if (!reg.length) return h + `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">Aún no hay datos. Empieza a contarse con el visor v334.</div></div>`;
+        const dia = viaDia(hoy);
+        const reg = []; Object.keys(dias).forEach(d => { if (dia ? d !== dia : (d < masDias(hoy, -29) || d > hoy)) return; Object.values(dias[d] || {}).forEach(r => { if (r && typeof r === 'object' && r.tm) reg.push({ d, r }); }); });
+        let h = `<div class="vis-card"><div class="vis-tit">⏱️ Tiempo dentro <small>· minutos con el visor a la vista ${viaTexto(hoy)}</small></div>` + viaChips(hoy);
+        if (!reg.length) return h + `<div class="vis-nota" style="font-size:12.5px; color:#cbd5e1;">${dia ? 'Ese día no hay minutos apuntados.' : 'Aún no hay datos.'} Empieza a contarse con el visor v334.</div></div>`;
         const med = (L) => { const tm = L.reduce((s, x) => s + (Number(x.r.tm) || 0), 0), vs = L.reduce((s, x) => s + Math.max(1, Number(x.r.vs) || 1), 0); return { porVis: tm / vs, porDia: tm / L.length, n: L.length }; };
         const esP = (d) => fp.has(d), A = med(reg), P = reg.filter(x => esP(x.d)), O = reg.filter(x => !esP(x.d));
         const fmt = (m) => m < 1 ? 'menos de 1 min' : (m >= 10 ? Math.round(m) : Math.round(m * 10) / 10).toString().replace('.', ',') + ' min';
         h += `<div style="display:flex; gap:10px;"><div class="vis-kpi"><div class="et">POR VISITA</div><div class="n">${fmt(A.porVis)}</div><div class="s">de media</div></div><div class="vis-kpi"><div class="et">POR MÓVIL Y DÍA</div><div class="n">${fmt(A.porDia)}</div><div class="s">sumando sus visitas</div></div></div>`;
-        if (P.length && O.length) { const mp = med(P), mo = med(O); h += `<div class="vis-fila"><span>⚽ Días de partido</span><b>${fmt(mp.porDia)} por móvil</b></div><div class="vis-fila"><span>📅 Resto de días</span><b>${fmt(mo.porDia)} por móvil</b></div>`; }
+        if (dia) { const tot = reg.reduce((s, x) => s + (Number(x.r.tm) || 0), 0); h += `<div class="vis-fila"><span>Minutos entre todos los móviles</span><b>${tot} min</b></div>`; }
+        if (!dia && P.length && O.length) { const mp = med(P), mo = med(O); h += `<div class="vis-fila"><span>⚽ Días de partido</span><b>${fmt(mp.porDia)} por móvil</b></div><div class="vis-fila"><span>📅 Resto de días</span><b>${fmt(mo.porDia)} por móvil</b></div>`; }
         const TT = {}; let tTot = 0; reg.forEach(x => Object.entries(x.r.tt || {}).forEach(([k, m]) => { TT[k] = (TT[k] || 0) + (Number(m) || 0); tTot += Number(m) || 0; }));
         if (tTot) {
             const nom = Object.fromEntries(PESTANAS);
@@ -25311,7 +25326,7 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
             return;
         }
         const fp = partidosFechas(), U = ultimos30(dias, hoy);
-        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueHoras(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueNuevos(dias, hoy) + bloqueTipos(U, dias, hoy, fp) + bloqueLlegan(U) + bloqueTiempo(U, dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
+        html += bloqueResumen(dias, hoy) + bloqueGrafico(dias, hoy, fp) + bloqueHoras(dias, hoy, fp) + bloqueRecords(dias, hoy, fp) + bloqueNuevos(dias, hoy) + bloqueTipos(U, dias, hoy, fp) + bloqueLlegan(U, dias, hoy) + bloqueTiempo(U, dias, hoy, fp) + bloqueEmbudo(U) + bloqueMiHijo(U, dias, hoy) + bloqueQuien(dias, hoy, fp) + bloqueQueSeMira(U) + bloqueDirecto(dias) + bloqueMoviles(U); // v257
         html += `<div style="border:1px dashed rgba(255,255,255,0.2); border-radius:14px; padding:12px 14px; font-size:12px; line-height:1.5; color:#cbd5e1;">Cuenta móviles, no personas: quien entra con el móvil y con la tableta cuenta dos veces, y si alguien borra los datos del navegador cuenta como nuevo. No se guarda ningún nombre de quien entra; desde la v268 del visor sí qué niño tiene en «Mi hijo» y de qué niños abre la ficha (solo lo ves tú).</div>` + noContarHTML();
         cont.innerHTML = html;
     }
