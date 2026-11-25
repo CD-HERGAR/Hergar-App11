@@ -24564,10 +24564,10 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
                 <label style="font-size:12px; color:#cbd5e1; display:flex; align-items:center; gap:6px;">desde la J<input type="number" min="1" max="${n}" value="${C.R0.desde + 1}" onchange="premiosDesde(this.value)" style="width:56px; min-height:38px; border-radius:9px; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,0.12); padding:0 6px;"></label>
                 <div style="width:100%; font-size:11px; color:#94a3b8;">Cuentan ${C.ps.length} ${C.ps.length === 1 ? 'partido' : 'partidos'} (J${C.R0.desde + 1}–J${C.R0.hasta}). El MVP sale del Ranking MVP (sus acciones, que valen más contra los rivales fuertes). Para El amuleto hace falta jugar ${Math.round(C.posibles * 0.5)}' como poco (la mitad).</div>
             </div>
-            ${publicado ? `<div class="pm-card" style="border-color:rgba(46,213,115,.45); font-size:12px; color:#cbd5e1;">✅ Publicados en el visor el ${new Date(publicado.ts).toLocaleDateString('es-ES')}. Si los vuelves a publicar, se sustituyen. <button type="button" onclick="premiosQuitar()" style="margin-left:4px; background:none; border:none; color:#ff6b7a; font-weight:700; font-size:12px; text-decoration:underline;">Quitar del visor</button></div>` : ''}
+            ${publicado ? `<div class="pm-card" style="border-color:rgba(46,213,115,.45); font-size:12px; color:#cbd5e1;">✅ Publicados en el visor el ${new Date(publicado.ts).toLocaleDateString('es-ES')}. Si los vuelves a publicar, se sustituyen sin que se abran otra vez solos a quien ya los vio (el aviso viene desmarcado). <button type="button" onclick="premiosQuitar()" style="margin-left:4px; background:none; border:none; color:#ff6b7a; font-weight:700; font-size:12px; text-decoration:underline;">Quitar del visor</button></div>` : ''}
             <div class="pm-card"><div class="pm-h">PREMIOS CALCULADOS</div>${filas}</div>
             <div class="pm-card"><div class="pm-h">⚽ GOL DE LA VUELTA · LO ELIGES TÚ</div>${golesHTML}</div>
-            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:${avisoOk ? '#e2e8f0' : '#64748b'}; min-height:40px;"><input type="checkbox" id="pmAviso" ${avisoOk ? 'checked' : 'disabled'} style="width:20px; height:20px; accent-color:#2ed573;"> Mandar aviso a las familias${avisoOk ? '' : ' (falta la clave de OneSignal en Ajustes)'}</label>
+            <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; color:${avisoOk ? '#e2e8f0' : '#64748b'}; min-height:40px;"><input type="checkbox" id="pmAviso" ${avisoOk ? (publicado ? '' : 'checked') : 'disabled'} style="width:20px; height:20px; accent-color:#2ed573;"> Mandar aviso a las familias${avisoOk ? '' : ' (falta la clave de OneSignal en Ajustes)'}</label>
             <button type="button" class="pm-btn" style="background:rgb(180,20,56); color:#fff;" onclick="premiosPublicar()">📢 ${publicado ? 'Volver a publicar' : 'Publicar en el visor'}</button>
             <div id="pmEstado" style="font-size:12px; color:#94a3b8; text-align:center; min-height:16px;"></div>`;
     }
@@ -24602,6 +24602,10 @@ Responde SOLO con este JSON, sin markdown ni texto fuera: {"partidos":[{"jornada
         const snap = construir();
         if (!snap.premios.length && !snap.gol) { alert('No hay ningún premio que publicar.'); return; }
         const d = leer();
+        // v284 · volver a publicar = corrección: se conserva la fecha de la 1.ª publicación, así en el visor
+        // no se vuelven a abrir solas las historias ni «Tu vuelta» sale otra vez como NUEVO en los móviles que ya las vieron
+        const previo = (d.publicados || []).find(x => x.vuelta === snap.vuelta);
+        if (previo && previo.ts) { snap.ts = previo.ts; snap.corregido = Date.now(); }
         d.publicados = (d.publicados || []).filter(x => x.vuelta !== snap.vuelta).concat([snap]);
         guardar(d);
         const st = document.getElementById('pmEstado'); if (st) { st.style.color = '#94a3b8'; st.textContent = 'Publicando…'; }
