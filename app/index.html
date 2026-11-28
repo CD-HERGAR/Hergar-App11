@@ -13449,6 +13449,8 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     document.getElementById("penaltiRivalBtn").onclick = () => { document.getElementById("penaltiRivalModal").style.display = "flex"; };
 
     // ── v63 · CORREGIR MINUTOS DE UN PARTIDO DE LA TEMPORADA ─────────
+    // v285: también se pueden SUMAR minutos a quien no jugó ese partido (convocado con 0', p. ej. por apuntar en un cambio
+    // a otro niño por error): se le crea el partido en su historial (sin impacto ni acciones) y le cuenta como partido jugado.
     function cmHistorialIdx(j, partido) {
         let k = -1;
         (j.historial || []).forEach((h, i) => { if (h.fecha === partido.fecha && h.rival === partido.rival) k = i; });
@@ -13459,10 +13461,22 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
     function cmAplicar(t, partido, ids, n) {
         const aplicados = [];
         ids.forEach(id => {
+            if (!t.jugadores[id] && n > 0 && typeof playersData !== 'undefined' && playersData[id]) { // v285: aún sin partidos en la temporada
+                const p = playersData[id];
+                t.jugadores[id] = { id: p.id, name: p.name, dorsal: p.dorsal, partidos: 0, minutos: 0, goles: 0, asistencias: 0, pasesArea: 0, pasesClave: 0, accionesDef: 0, amarillas: 0, rojas: 0, impactoAcum: 0, notaIAacum: 0, notaIApartidos: 0, paradas: 0, paradasDificiles: 0, disparosPuerta: 0, disparosFuera: 0, golesRecibidos: 0, historial: [] };
+            }
             const j = t.jugadores[id];
             if (!j) return;
-            const k = cmHistorialIdx(j, partido);
-            if (k < 0) return;
+            let k = cmHistorialIdx(j, partido);
+            if (k < 0) {
+                // v285: convocado que se quedó con 0 minutos (no tenía este partido): se le crea, sin impacto ni acciones
+                if (n <= 0) return;
+                if (!j.historial) j.historial = [];
+                j.historial.push({ fecha: partido.fecha, rival: partido.rival, mins: 0, impPond: 0, imp: 0, accImp: 0, acc: {}, gfCampo: 0, gcCampo: 0, corregido285: true });
+                j.historial.sort((a, b) => { const f = x => { const m = String(x.fecha || '').split('/'); return m.length === 3 ? new Date(+m[2], +m[1] - 1, +m[0]).getTime() : 0; }; return f(a) - f(b); });
+                j.partidos = (j.partidos || 0) + 1;
+                k = cmHistorialIdx(j, partido);
+            }
             const h = j.historial[k];
             const antes = h.mins || 0;
             const despues = Math.max(0, antes + n);
@@ -13545,14 +13559,26 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
             .map(j => { const k = cmHistorialIdx(j, partido); return k >= 0 ? { j, h: j.historial[k] } : null; })
             .filter(Boolean)
             .sort((a, b) => (b.h.mins || 0) - (a.h.mins || 0));
-        document.getElementById('cmJugadores').innerHTML = filas.length === 0
+        // v285: también los que no jugaron ese partido (p. ej. convocado con 0 minutos), para poder SUMARLES minutos
+        const conIds = new Set(filas.map(f => String(f.j.id)));
+        const otros = {};
+        Object.values(t.jugadores).forEach(j => { if (!conIds.has(String(j.id))) otros[j.id] = { id: j.id, name: j.name, dorsal: j.dorsal }; });
+        try { Object.values(playersData || {}).forEach(p => { if (p && p.id != null && !conIds.has(String(p.id)) && !otros[p.id]) otros[p.id] = { id: p.id, name: p.name, dorsal: p.dorsal }; }); } catch (e) {}
+        const otrosL = Object.values(otros).sort((a, b) => (Number(a.dorsal) || 99) - (Number(b.dorsal) || 99));
+        const otrosH = otrosL.length ? `<div style="margin:12px 0 4px; color:#94a3b8; font-size:11px; font-weight:800; letter-spacing:.5px;">NO JUGARON ESTE PARTIDO · solo para sumarles minutos</div>` + otrosL.map(j => `<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.05);color:#cbd5e1;font-size:13px;">
+                <input type="checkbox" value="${j.id}" data-nojugo="1" style="width:18px;height:18px;">
+                <span style="color:#f5a623;font-weight:900;width:24px;text-align:right;">${j.dorsal ?? ''}</span>
+                <span style="flex:1;">${(j.name || '').split(' ')[0]}</span>
+                <span style="color:#64748b;font-size:12px;">0 min</span>
+            </label>`).join('') : '';
+        document.getElementById('cmJugadores').innerHTML = (filas.length === 0
             ? '<div style="color:#52665c;font-size:12px;">No hay datos de minutos de este partido por jugador.</div>'
             : filas.map(f => `<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,0.05);color:#e2e8f0;font-size:13px;">
                 <input type="checkbox" value="${f.j.id}" style="width:18px;height:18px;">
                 <span style="color:#f5a623;font-weight:900;width:24px;text-align:right;">${f.j.dorsal ?? ''}</span>
                 <span style="flex:1;">${(f.j.name || '').split(' ')[0]}</span>
                 <span style="color:#94a3b8;font-size:12px;">${f.h.mins || 0} min</span>
-            </label>`).join('');
+            </label>`).join('')) + otrosH;
         const corr = partido.correccionMinutos || [];
         document.getElementById('cmAviso').innerText = corr.length
             ? `⚠️ A este partido ya se le aplicó una corrección (${corr.map(c => (c.min > 0 ? '+' : '') + c.min + ' min a ' + c.jugadores + ' jugadores' + (c.parejas ? ' y ' + c.parejas + ' parejas' : '')).join('; ')}). Si repites, se suma otra vez.`
@@ -13564,7 +13590,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         const cajas = [...document.querySelectorAll('#cmJugadores input[type=checkbox]')];
         cajas.forEach((c, i) => {
             if (modo === 'ninguno') c.checked = false;
-            else if (modo === 'top11') c.checked = i < 11;
+            else if (modo === 'top11') c.checked = i < 11 && !c.dataset.nojugo;
             else if (modo === 'titulares') c.checked = titularesIniciales.map(String).includes(String(c.value));
         });
     }
@@ -13578,6 +13604,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         if (!n || isNaN(n)) { alert("Indica los minutos a sumar (por ejemplo 9)."); return; }
         const ids = [...document.querySelectorAll('#cmJugadores input[type=checkbox]:checked')].map(c => c.value);
         if (ids.length === 0) { alert("Marca al menos un jugador."); return; }
+        if (n < 0 && document.querySelector('#cmJugadores input[data-nojugo]:checked')) { alert("A los que no jugaron ese partido solo se les pueden SUMAR minutos."); return; }
         const sumarDuracion = document.getElementById('cmDuracion').checked;
         const cargado = cmPartidoEsElCargado(t, idx);
         const clavesSin = document.getElementById('cmSinergias').checked ? cmParejasAfectadas(t, ids, cargado ? sinergias : null) : [];
