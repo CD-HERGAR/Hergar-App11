@@ -1737,6 +1737,7 @@
             <div id="temporadaMasSheet" style="display:none; position:absolute; top:38px; right:0; z-index:20; background:#132518; border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); min-width:240px; max-height:75vh; overflow-y:auto; overscroll-behavior:contain; flex-direction:column; gap:6px;">
                 <button id="cargaManualBtn" style="display:none; background:linear-gradient(135deg,#8e44ad,#9b59b6); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📝 Cargar partido manual</button>
                 <button id="corregirMinutosBtn" style="display:none; background:linear-gradient(135deg,#e67e22,#d35400); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">⏱ Corregir minutos de un partido</button>
+                <button id="corregirAccionesBtn" style="display:none; background:linear-gradient(135deg,#e67e22,#f5a623); color:#0a0e14; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">✏️ Corregir acciones de un niño</button>
                 <button id="titularesPartidosBtn" style="display:none; background:linear-gradient(135deg,#2980b9,#3498db); color:white; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">🧾 Titulares de partidos guardados</button>
                 <button id="corregirLineasBtn" style="display:none; background:linear-gradient(135deg,#27ae60,#2ed573); color:#0a0e14; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:700; text-align:left;">📍 Corregir puestos de un partido</button>
                 <div class="tmas-label" style="color:#64748b;">CONSULTAR</div>
@@ -13639,7 +13640,194 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
         alert(`✅ Minutos corregidos en ${aplicados.length} jugadores` + (nParejas ? ` y ${nParejas} parejas de sinergia.` : '.'));
     }
 
+
+    // ── v286 · ✏️ CORREGIR LAS ACCIONES DE UN NIÑO EN UN PARTIDO YA GUARDADO ─────────
+    // Para lo que se escapó en directo (o se apuntó al niño equivocado): − / + por acción. Al guardar se recalcula
+    // su impacto de ese partido con el valor de cada acción (la defensa según su puesto, los tiros fuera con la regla
+    // de la v194), sus totales de la temporada, los tiros / fueras de juego / faltas del equipo y el MVP de los partidos.
+    // No cambia el minuto a minuto, la química ni el momentum (no se sabe en qué minuto fue).
+    const CA286 = [
+        { k: 'pc', ic: '🔑', t: 'Pase clave', f: 'pasesClave' },
+        { k: 'pa', ic: '📯', t: 'Pase al área', f: 'pasesArea' },
+        { k: 'reg', ic: '🌀', t: 'Regate / jugada individual', f: 'regates' },
+        { k: 'dp', ic: '🎯', t: 'Disparo a puerta', f: 'disparosPuerta', eq: 'tirosNuestrosPuerta' },
+        { k: 'pal', ic: '🥅', t: 'Al palo', f: 'palos', eq: 'palosNuestros' },
+        { k: 'df', ic: '💨', t: 'Disparo fuera / sin peligro', f: 'disparosFuera', eq: 'tirosNuestrosFuera' },
+        { k: 'def', ic: '🛡️', t: 'Acción defensiva', f: 'accionesDef' },
+        { k: 'defC', ic: '🛡️⭐', t: 'Acción defensiva clave', f: 'accionesDefClave' },
+        { k: 'fr', ic: '🟡', t: 'Falta recibida', f: 'faltasRecibidas', eq: 'faltasFavor' },
+        { k: 'fj', ic: '🚩', t: 'Fuera de juego', f: 'fuerasJuego', eq: 'fuerasJuegoNuestros' },
+        { k: 'fa', ic: '❌', t: 'Fallo', f: 'fallos' },
+        { k: 'fi', ic: '💥', t: 'Fallo importante', f: 'fallosImportantes' }
+    ];
+    let ca286 = null; // { i, jid, d: { k: delta } }
+    function ca286Puesto(h) {
+        try {
+            if (h.puestos && Object.keys(h.puestos).length) {
+                const li = lineaPrincipal(h.lineas || lineasDesdePuestos(h.puestos));
+                return { puesto: puestoPrincipal(h.puestos, li) || null, linea: li };
+            }
+            return { puesto: null, linea: lineaPrincipal(h.lineas || {}) };
+        } catch (e) { return { puesto: null, linea: null }; }
+    }
+    // valor de UNA acción más (n = cuántas lleva contando esa)
+    function ca286Valor(k, h, n) {
+        const A = REGLAS_IMPACTO.acciones, P = ca286Puesto(h);
+        switch (k) {
+            case 'pc': return A.paseClave; case 'pa': return A.paseArea; case 'reg': return A.regate;
+            case 'dp': case 'pal': return A.disparoPuerta;
+            case 'df': return valorTiroFueraV194(n);
+            case 'def': return valorDefensaV207(false, P.puesto, P.linea);
+            case 'defC': return valorDefensaV207(true, P.puesto, P.linea);
+            case 'fj': return A.fueraJuego;
+            case 'fa': return A.fallo; case 'fi': return A.falloImportante;
+            default: return 0; // falta recibida: no puntúa
+        }
+    }
+    const ca286Num = (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace('.', ',');
+    function ca286Filas(t, P) {
+        return Object.values(t.jugadores || {}).map(j => { const k = cmHistorialIdx(j, P); return k >= 0 && (j.historial[k].mins || 0) > 0 ? { j, k, h: j.historial[k] } : null; })
+            .filter(Boolean).sort((a, b) => (Number(a.j.dorsal) || 99) - (Number(b.j.dorsal) || 99));
+    }
+    function ca286Modal() {
+        let m = document.getElementById('corregirAccionesModal');
+        if (m) return m;
+        document.body.insertAdjacentHTML('beforeend', `<div id="corregirAccionesModal" class="modal">
+            <div class="player-actions-modal" style="max-height:88vh; overflow-y:auto;">
+                <h3 style="margin-top:0; color:#f5a623; font-size:15px; font-family:'Montserrat',sans-serif;">✏️ CORREGIR ACCIONES</h3>
+                <div style="font-size:11.5px; color:#94a3b8; line-height:1.45; margin-bottom:10px;">Para lo que se escapó en directo o se apuntó a otro niño. Se recalcula su impacto de ese partido, sus totales de la temporada y el MVP. Los goles y asistencias se corrigen en ✏️ Editar partido.</div>
+                <div style="font-size:11px; color:#64748b; font-weight:800; letter-spacing:.5px;">PARTIDO</div>
+                <select id="caPartido" onchange="caPintar(true)" style="width:100%; margin:4px 0 10px; padding:10px; border-radius:9px; background:#0f1a14; color:#e2e8f0; border:1px solid rgba(255,255,255,0.14); font-size:13px;"></select>
+                <div style="font-size:11px; color:#64748b; font-weight:800; letter-spacing:.5px;">NIÑO</div>
+                <select id="caJugador" onchange="caPintar(false)" style="width:100%; margin:4px 0 10px; padding:10px; border-radius:9px; background:#0f1a14; color:#e2e8f0; border:1px solid rgba(255,255,255,0.14); font-size:13px;"></select>
+                <div id="caLista"></div>
+                <div id="caResumen" style="font-size:12px; color:#cbd5e1; text-align:center; margin:10px 0 6px; min-height:16px;"></div>
+                <button class="btn-modal-goal" style="width:100%;" id="caGuardar" onclick="caGuardar()">✅ GUARDAR CAMBIOS</button>
+                <button class="btn-modal-defense" style="width:100%; margin-top:6px;" onclick="caCerrar()">❌ CANCELAR</button>
+            </div></div>`);
+        return document.getElementById('corregirAccionesModal');
+    }
+    function abrirCorregirAcciones(iPartido) {
+        const t = getTemporada();
+        if (!t.partidos.length) { alert("Aún no hay partidos en la temporada."); return; }
+        try { document.getElementById('temporadaMasSheet').style.display = 'none'; } catch (e) {}
+        const m = ca286Modal();
+        const sel = document.getElementById('caPartido');
+        sel.innerHTML = t.partidos.map((p, i) => `<option value="${i}">${p.fecha} · HERGAR ${p.golesLocal}-${p.golesRival} ${p.rival}</option>`).join('');
+        sel.value = String(iPartido != null && t.partidos[iPartido] ? iPartido : t.partidos.length - 1);
+        ca286 = null;
+        caPintar(true);
+        m.style.display = 'flex';
+    }
+    window.abrirCorregirAcciones = abrirCorregirAcciones;
+    window.caCerrar = function () {
+        if (ca286 && Object.values(ca286.d).some(v => v) && !confirm('Hay cambios sin guardar. ¿Salir sin guardarlos?')) return;
+        ca286 = null; const m = document.getElementById('corregirAccionesModal'); if (m) m.style.display = 'none';
+    };
+    window.caPintar = function (cambioPartido) {
+        const t = getTemporada();
+        const i = parseInt(document.getElementById('caPartido').value), P = t.partidos[i];
+        if (!P) return;
+        const selJ = document.getElementById('caJugador');
+        if (cambioPartido) {
+            if (ca286 && Object.values(ca286.d).some(v => v) && !confirm('Hay cambios sin guardar de otro niño. ¿Descartarlos?')) { document.getElementById('caPartido').value = String(ca286.i); return; }
+            const F = ca286Filas(t, P);
+            selJ.innerHTML = F.length ? F.map(f => `<option value="${f.j.id}">#${f.j.dorsal ?? ''} ${(f.j.name || '').split(' ')[0]} · ${f.h.mins}'</option>`).join('') : '<option value="">(nadie con minutos)</option>';
+            ca286 = { i, jid: selJ.value, d: {} };
+        } else if (ca286 && String(ca286.jid) !== String(selJ.value)) {
+            if (Object.values(ca286.d).some(v => v) && !confirm('Hay cambios sin guardar de otro niño. ¿Descartarlos?')) { selJ.value = String(ca286.jid); return; }
+            ca286 = { i, jid: selJ.value, d: {} };
+        }
+        if (!ca286) ca286 = { i, jid: selJ.value, d: {} };
+        const j = t.jugadores[selJ.value];
+        const lista = document.getElementById('caLista');
+        if (!j) { lista.innerHTML = '<div style="color:#64748b; font-size:12px; padding:10px 0;">En este partido no hay niños con minutos. Si a alguien le faltan, primero ⏱ Minutos.</div>'; caResumen(); return; }
+        const h = j.historial[cmHistorialIdx(j, P)], a = h.acc || {};
+        const esPor = (h.lineas && lineaPrincipal(h.lineas) === 'portero');
+        lista.innerHTML = CA286.map(x => {
+            const antes = Number(a[x.k]) || 0, d = ca286.d[x.k] || 0, ahora = antes + d;
+            const v = ca286Valor(x.k, h, Math.max(1, ahora + (d >= 0 ? 1 : 0)));
+            const nota = x.k === 'fa' || x.k === 'fi' ? (antes ? '' : ' <span style="color:#64748b;">(los del directo no se ven aquí)</span>') : '';
+            return `<div style="display:flex; align-items:center; gap:8px; padding:7px 2px; border-bottom:1px solid rgba(255,255,255,0.05);${esPor && /^(def|defC)$/.test(x.k) ? ' opacity:.7;' : ''}">
+                <span style="width:26px; text-align:center;">${x.ic}</span>
+                <span style="flex:1; font-size:12.5px; color:#e2e8f0; line-height:1.25; text-align:left;">${x.t}<br><span style="font-size:10.5px; color:#94a3b8;">${v ? ca286Num(v) + ' cada una' : 'no puntúa'}${nota}</span></span>
+                <button type="button" onclick="caMas('${x.k}', -1)" ${ahora <= 0 ? 'disabled' : ''} style="width:38px; height:38px; border-radius:9px; background:rgba(255,92,122,0.14); border:1px solid rgba(255,92,122,0.4); color:#fff; font-size:18px; font-weight:800; ${ahora <= 0 ? 'opacity:.35;' : ''}">−</button>
+                <span style="width:44px; text-align:center; font-family:'Montserrat',sans-serif; font-weight:900; font-size:16px; color:${d > 0 ? '#2ed573' : d < 0 ? '#ff5c7a' : '#fff'};">${ahora}${d ? `<span style="display:block; font-size:9.5px; font-weight:700;">${d > 0 ? '+' : ''}${d}</span>` : ''}</span>
+                <button type="button" onclick="caMas('${x.k}', 1)" style="width:38px; height:38px; border-radius:9px; background:rgba(46,213,115,0.14); border:1px solid rgba(46,213,115,0.4); color:#fff; font-size:18px; font-weight:800;">+</button>
+            </div>`;
+        }).join('');
+        caResumen();
+    };
+    window.caMas = function (k, s) {
+        if (!ca286) return;
+        const t = getTemporada(), P = t.partidos[ca286.i], j = t.jugadores[ca286.jid]; if (!P || !j) return;
+        const h = j.historial[cmHistorialIdx(j, P)], antes = Number((h.acc || {})[k]) || 0, d = (ca286.d[k] || 0) + s;
+        if (antes + d < 0) return;
+        ca286.d[k] = d;
+        caPintar(false);
+    };
+    // Impacto que suman / restan los cambios pendientes (acción a acción, por si el valor depende de cuántas lleva)
+    function ca286Delta(h, d) {
+        let tot = 0; const a = h.acc || {};
+        Object.keys(d).forEach(k => {
+            let n = Number(a[k]) || 0; const v = d[k];
+            for (let s = 0; s < Math.abs(v); s++) {
+                if (v > 0) { n++; tot += ca286Valor(k, h, n); } else { tot -= ca286Valor(k, h, n); n--; }
+            }
+        });
+        return Math.round(tot * 100) / 100;
+    }
+    function caResumen() {
+        const r = document.getElementById('caResumen'), b = document.getElementById('caGuardar');
+        const t = getTemporada(), P = ca286 && t.partidos[ca286.i], j = P && t.jugadores[ca286.jid];
+        const hay = ca286 && Object.values(ca286.d).some(v => v);
+        b.disabled = !hay; b.style.opacity = hay ? '1' : '.45';
+        if (!hay || !j) { r.innerHTML = ''; return; }
+        const h = j.historial[cmHistorialIdx(j, P)], dl = ca286Delta(h, ca286.d), imp = Number(h.imp) || 0;
+        r.innerHTML = `Impacto de ${(j.name || '').split(' ')[0]} en este partido: <b>${ca286Num(imp)}</b> → <b style="color:${dl >= 0 ? '#2ed573' : '#ff5c7a'};">${ca286Num(imp + dl)}</b> (${ca286Num(dl)})`;
+    }
+    window.caGuardar = function () {
+        if (!ca286) return;
+        const t = getTemporada(), P = t.partidos[ca286.i], j = t.jugadores[ca286.jid];
+        if (!P || !j) return;
+        const k = cmHistorialIdx(j, P); if (k < 0) return;
+        const h = j.historial[k], d = Object.assign({}, ca286.d);
+        Object.keys(d).forEach(x => { if (!d[x]) delete d[x]; });
+        if (!Object.keys(d).length) return;
+        const txt = CA286.filter(x => d[x.k]).map(x => `${d[x.k] > 0 ? '+' : ''}${d[x.k]} ${x.t.toLowerCase()}`).join(', ');
+        const dl = ca286Delta(h, d);
+        if (!confirm(`¿Guardar para ${(j.name || '').split(' ')[0]} en el partido contra ${P.rival}?\n\n${txt}\n\nImpacto: ${ca286Num(dl)}`)) return;
+        // 1) impacto del partido (y de la temporada, por línea y puesto) + «sus acciones» (MVP)
+        aplicarDeltaHistorialV192(j, k, dl);
+        if (h.accImp !== undefined && h.accImp !== null) h.accImp = Math.round(((Number(h.accImp) || 0) + dl) * 100) / 100;
+        // 2) acciones del partido, totales del niño y del equipo
+        if (!h.acc) h.acc = {};
+        const cargado = cmPartidoEsElCargado(t, ca286.i), pl = cargado && typeof playersData !== 'undefined' ? playersData[j.id] : null;
+        CA286.forEach(x => {
+            const v = d[x.k]; if (!v) return;
+            const sum = (o, f, n) => { o[f] = Math.max(0, (Number(o[f]) || 0) + n); };
+            h.acc[x.k] = Math.max(0, (Number(h.acc[x.k]) || 0) + v); if (!h.acc[x.k]) delete h.acc[x.k];
+            sum(j, x.f, v);
+            if (x.k === 'pal') { h.acc.dp = Math.max(0, (Number(h.acc.dp) || 0) + v); if (!h.acc.dp) delete h.acc.dp; sum(j, 'disparosPuerta', v); if (P.tirosNuestrosPuerta != null) sum(P, 'tirosNuestrosPuerta', v); }
+            if (x.k === 'defC') { h.acc.def = Math.max(0, (Number(h.acc.def) || 0) + v); if (!h.acc.def) delete h.acc.def; sum(j, 'accionesDef', v); }
+            if (x.eq && P[x.eq] != null) sum(P, x.eq, v);
+            if (pl) { sum(pl, x.f, v); if (x.k === 'pal') sum(pl, 'disparosPuerta', v); if (x.k === 'defC') sum(pl, 'accionesDef', v); }
+        });
+        if (pl) { pl.impacto = (Number(pl.impacto) || 0) + dl; try { saveState(); } catch (e) {} }
+        P.correccionAcciones = (P.correccionAcciones || []).concat([{ jid: j.id, d, imp: dl, fecha: new Date().toLocaleDateString('es-ES') }]);
+        // 3) MVP de los partidos y el informe IA, que ya no cuadra
+        let mvp = []; try { mvp = recalcularMvpTemporada(t); } catch (e) { console.error('MVP tras corregir acciones:', e); }
+        if (P.analisisIA) P.analisisIADesactualizado = true;
+        saveTemporada(t);
+        try { publicarTemporadaFirebase(t); } catch (e) {}
+        try { renderPartidos(); } catch (e) {}
+        ca286 = null;
+        document.getElementById('corregirAccionesModal').style.display = 'none';
+        alert(`✅ Acciones corregidas: ${(j.name || '').split(' ')[0]} (${txt}).\nImpacto del partido: ${ca286Num(dl)}.` + (mvp.length ? `\n\n⭐ Cambia el MVP: ${mvp.join('; ')}` : '') + (P.analisisIA ? '\n\n🤖 El informe IA es de antes de esta corrección: puedes volver a generarlo.' : '') + '\n\nSe ha publicado en el visor.');
+    };
+
     document.getElementById("corregirMinutosBtn").onclick = abrirCorregirMinutos;
+    try { document.getElementById("corregirAccionesBtn").onclick = () => abrirCorregirAcciones(); } catch (e) {} // v286
     document.getElementById("titularesPartidosBtn").onclick = abrirTitularesPartidos; // v68
     document.getElementById("corregirLineasBtn").onclick = abrirCorregirLineas; // v94
 
@@ -16401,6 +16589,7 @@ Responde SOLO con este JSON exacto (sin markdown, sin texto fuera del JSON). En 
                     <div style="display:flex; gap:6px; margin-top:6px;">
                         <button type="button" onclick="corregirPartido('min', ${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.14); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">⏱ Minutos</button>
                         <button type="button" onclick="corregirPartido('tit', ${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.14); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">🧾 Titulares</button>
+                        <button type="button" onclick="abrirCorregirAcciones(${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(245,166,35,0.10); border:1px solid rgba(245,166,35,0.45); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">✏️ Acciones</button>
                         <button type="button" onclick="corregirPartido('pue', ${origIndex})" style="flex:1; min-height:44px; border-radius:9px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.14); color:#e2e8f0; font-weight:700; font-size:11.5px; cursor:pointer;">📍 Puestos</button>
                     </div>
                 </details>
